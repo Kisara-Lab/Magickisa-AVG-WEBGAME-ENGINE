@@ -1,0 +1,360 @@
+import { z } from "zod";
+import type { Condition, Effect, StoryProject, Value } from "./types";
+export const valueSchema: z.ZodType<Value> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(valueSchema),
+    z.record(z.string(), valueSchema),
+  ]),
+);
+const id = z.string().min(1);
+export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
+  z.discriminatedUnion("type", [
+    z.object({
+      type: z.literal("flag"),
+      key: id,
+      equals: valueSchema.optional(),
+    }),
+    z.object({ type: z.literal("not"), condition: conditionSchema }),
+    z.object({
+      type: z.enum(["all", "any"]),
+      conditions: z.array(conditionSchema),
+    }),
+    z.object({
+      type: z.literal("visited"),
+      nodeId: id,
+      value: z.boolean().optional(),
+    }),
+    z.object({
+      type: z.literal("count"),
+      key: id,
+      operator: z.enum(["eq", "gt", "gte", "lt", "lte"]),
+      value: z.number().finite(),
+    }),
+  ]),
+);
+export const effectSchema: z.ZodType<Effect> = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("set"), key: id, value: valueSchema }),
+  z.object({ type: z.literal("toggle"), key: id }),
+  z.object({
+    type: z.literal("increment"),
+    key: id,
+    amount: z.number().finite(),
+  }),
+  z.object({
+    type: z.enum(["addToList", "removeFromList"]),
+    key: id,
+    value: valueSchema,
+  }),
+  z.object({ type: z.enum(["unlockMaterial", "markRead"]), id }),
+  z.object({ type: z.literal("appendNote"), text: z.string() }),
+  z.object({ type: z.literal("setAudio"), trackId: id }),
+]);
+const layer = z
+  .object({
+    characterId: id,
+    position: z.string().optional(),
+    expression: z.string().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    scale: z.number().optional(),
+    opacity: z.number().min(0).max(1).optional(),
+    zIndex: z.number().optional(),
+    enter: z.string().optional(),
+  })
+  .strict();
+const line = z
+  .object({
+    id,
+    text: z.string(),
+    speaker: z.string().optional(),
+    characterId: id.optional(),
+    expression: z.string().optional(),
+    characterLayers: z.array(layer).optional(),
+    condition: conditionSchema.optional(),
+    input: z
+      .object({ key: id, label: id, maxLength: z.number().int().positive() })
+      .optional(),
+  })
+  .strict();
+const choice = z
+  .object({
+    id,
+    label: id,
+    target: id,
+    once: z.boolean().optional(),
+    condition: conditionSchema.optional(),
+    effects: z.array(effectSchema).optional(),
+  })
+  .strict();
+const node = z
+  .object({
+    id,
+    title: z.string(),
+    chapter: z.string().optional(),
+    sourceLevel: z.number().int().optional(),
+    sourceBody: z.string().optional(),
+    speaker: z.string().optional(),
+    lines: z.array(line),
+    next: id.optional(),
+    choices: z.array(choice).optional(),
+    onEnter: z.array(effectSchema).optional(),
+    onComplete: z.array(effectSchema).optional(),
+    condition: conditionSchema.optional(),
+    tags: z.array(z.string()).optional(),
+    playable: z.boolean().optional(),
+    presentation: z.enum(["dedication", "ending"]).optional(),
+    sequenceId: z.string().optional(),
+    ending: z.string().optional(),
+    background: z.string().optional(),
+  })
+  .strict();
+export const projectSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    id,
+    title: id,
+    version: id,
+    startNodeId: id,
+    nodes: z.array(node).min(1),
+    materials: z.array(
+      z
+        .object({
+          id,
+          title: z.string(),
+          body: z.string(),
+          category: id,
+          unlockNode: id.optional(),
+          unlock: conditionSchema.optional(),
+        })
+        .strict(),
+    ),
+    characters: z.array(
+      z
+        .object({
+          id,
+          name: id,
+          portrait: z.string().optional(),
+          expressions: z.record(z.string(), z.string()).optional(),
+          renderer: z.enum(["portrait", "live2d"]).optional(),
+          live2d: z.object({ model: id }).optional(),
+        })
+        .strict(),
+    ),
+    backdrops: z.array(z.object({ id, src: id })),
+    audio: z.array(
+      z.object({
+        id,
+        src: id,
+        group: z.string().optional(),
+        volume: z.number().min(0).max(1).optional(),
+      }),
+    ),
+    resources: z
+      .object({
+        assetsBase: z.string().optional(),
+        sceneRules: z
+          .array(z.object({ keywords: z.array(z.string()), asset: id }))
+          .optional(),
+      })
+      .strict(),
+    media: z
+      .object({
+        opening: z
+          .object({
+            audio: id.optional(),
+            duration: z.number().positive().optional(),
+            images: z.array(id).optional(),
+            lyrics: id.optional(),
+            title: z.string().optional(),
+            pages: z
+              .array(
+                z.object({ at: z.number().nonnegative(), text: z.string() }),
+              )
+              .optional(),
+            credits: z
+              .object({
+                artist: z.string().optional(),
+                website: z.string().optional(),
+                production: z.array(z.string()).optional(),
+                studio: z.string().optional(),
+                studioUrl: z.string().optional(),
+              })
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        ending: z
+          .object({
+            audio: id.optional(),
+            duration: z.number().positive().optional(),
+            lyrics: id.optional(),
+            image: id.optional(),
+            title: z.string().optional(),
+            creditsMode: z.string().optional(),
+            creditsDuration: z.number().positive().optional(),
+            credits: z.array(z.string()).optional(),
+            lines: z
+              .array(
+                z.object({
+                  at: z.number().nonnegative(),
+                  en: z.string(),
+                  zh: z.string(),
+                }),
+              )
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        dedication: z
+          .object({
+            title: z.string().optional(),
+            pages: z.array(z.array(z.string())).optional(),
+            hint: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+        chapterMusic: z.record(z.string(), z.string()).optional(),
+        chapterMusicRules: z
+          .array(z.object({ keywords: z.array(z.string()), track: id }))
+          .optional(),
+        musicGallery: z
+          .array(
+            z.object({
+              id,
+              title: id,
+              artist: z.string().optional(),
+              src: id,
+              mood: z.string().optional(),
+              unlockNode: id.optional(),
+            }),
+          )
+          .optional(),
+      })
+      .strict(),
+    titleScreen: z
+      .object({
+        backdrop: z.string().optional(),
+        music: z.string().optional(),
+        overline: z.string().optional(),
+        subtitle: z.string().optional(),
+        studio: z.string().optional(),
+        studioUrl: z.string().optional(),
+        galleryUrl: z.string().optional(),
+        aboutUrl: z.string().optional(),
+        footerLinks: z.array(z.object({ label: id, url: id })).optional(),
+        musicLabel: z.string().optional(),
+      })
+      .strict(),
+    ui: z
+      .object({
+        labels: z.record(z.string(), z.string()).optional(),
+        enabled: z.record(z.string(), z.boolean()).optional(),
+        notifications: z.record(z.string(), z.string()).optional(),
+      })
+      .optional(),
+  })
+  .strict();
+export interface ValidationIssue {
+  path: string;
+  message: string;
+}
+export function validateProject(input: unknown): ValidationIssue[] {
+  const parsed = projectSchema.safeParse(input);
+  if (!parsed.success)
+    return parsed.error.issues.map((e) => ({
+      path: e.path.join("."),
+      message: e.message,
+    }));
+  const p = parsed.data,
+    issues: ValidationIssue[] = [],
+    nodes = new Set(p.nodes.map((n) => n.id));
+  const duplicate = (ids: string[], path: string) => {
+    const seen = new Set<string>();
+    for (const id of ids) {
+      if (seen.has(id)) issues.push({ path, message: `duplicate id: ${id}` });
+      seen.add(id);
+    }
+  };
+  duplicate(
+    p.nodes.map((n) => n.id),
+    "nodes",
+  );
+  duplicate(
+    p.nodes.flatMap((n) => n.lines.map((l) => l.id)),
+    "lines",
+  );
+  duplicate(
+    p.nodes.flatMap((n) => (n.choices || []).map((c) => c.id)),
+    "choices",
+  );
+  for (const k of ["materials", "characters", "backdrops", "audio"] as const)
+    duplicate(
+      p[k].map((x) => x.id),
+      k,
+    );
+  const ref = (id: string | undefined, path: string) => {
+    if (id && !nodes.has(id))
+      issues.push({ path, message: `node does not exist: ${id}` });
+  };
+  ref(p.startNodeId, "startNodeId");
+  function condition(c: Condition | undefined, path: string) {
+    if (!c) return;
+    if (c.type === "visited") ref(c.nodeId, path);
+    if (c.type === "not") condition(c.condition, path);
+    if (c.type === "all" || c.type === "any")
+      c.conditions.forEach((x) => condition(x, path));
+  }
+  const chars = new Set(p.characters.map((c) => c.id)),
+    materials = new Set(p.materials.map((m) => m.id)),
+    tracks = new Set(p.audio.map((a) => a.id));
+  function effects(es: Effect[] | undefined, path: string) {
+    for (const e of es || []) {
+      if (
+        (e.type === "unlockMaterial" || e.type === "markRead") &&
+        !materials.has(e.id)
+      )
+        issues.push({ path, message: `material does not exist: ${e.id}` });
+      if (e.type === "setAudio" && !tracks.has(e.trackId))
+        issues.push({ path, message: `audio does not exist: ${e.trackId}` });
+    }
+  }
+  for (const n of p.nodes) {
+    ref(n.next, `nodes.${n.id}.next`);
+    condition(n.condition, n.id);
+    effects(n.onEnter, n.id);
+    effects(n.onComplete, n.id);
+    for (const c of n.choices || []) {
+      ref(c.target, `choices.${c.id}`);
+      condition(c.condition, c.id);
+      effects(c.effects, c.id);
+    }
+    for (const l of n.lines) {
+      condition(l.condition, l.id);
+      for (const c of [
+        l.characterId,
+        ...(l.characterLayers || []).map((x) => x.characterId),
+      ])
+        if (c && !chars.has(c))
+          issues.push({
+            path: l.id,
+            message: `character does not exist: ${c}`,
+          });
+    }
+  }
+  for (const m of p.materials) {
+    ref(m.unlockNode, m.id);
+    condition(m.unlock, m.id);
+  }
+  for (const m of p.media.musicGallery || []) ref(m.unlockNode, m.id);
+  return issues;
+}
+export function assertProject(input: unknown): StoryProject {
+  const issues = validateProject(input);
+  if (issues.length)
+    throw new Error(issues.map((e) => `${e.path}: ${e.message}`).join("\n"));
+  return projectSchema.parse(input);
+}

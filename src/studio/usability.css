@@ -1,0 +1,299 @@
+/* Authoring surfaces remain molten gold. Text and state colors use dark ink. */
+.studio-root {
+  --st-muted: #58401f;
+  color: #30200f;
+}
+.studio-root button.primary,
+.studio-root .st-upload.primary {
+  color: #291b0e;
+}
+.studio-root .st-dropzone {
+  color: #30200f;
+  background: #f2ce8380;
+}
+.studio-root input::placeholder,
+.studio-root textarea::placeholder {
+  color: #58401f;
+  opacity: 1;
+}
+.studio-root p,
+.studio-root small,
+.studio-root .st-muted,
+.studio-root .st-field > span,
+.studio-root .st-preview-sync,
+.studio-root .st-preview-heading,
+.studio-root .st-preview-meta,
+.studio-root .st-nav-group,
+.studio-root .st-save-state.dirty {
+  color: #58401f;
+}
+.studio-root .st-success,
+.studio-root .st-notice,
+.studio-root .st-save-state,
+.studio-root .st-release-steps .done {
+  color: #24482c;
+}
+.studio-root .st-error {
+  color: #fff1e9;
+  background: #6b2424;
+}
+.studio-root .st-error button {
+  background: #ffe3b1;
+  color: #4b1818;
+}
+.studio-root button:disabled {
+  opacity: 1;
+  color: #604c30;
+  border-style: dashed;
+  background: #e4c48c;
+  cursor: not-allowed;
+}
+.studio-root .st-rail button.active,
+.studio-root .st-node-tree button.selected,
+.studio-root .st-picker-grid button.selected,
+.studio-root .st-character-list button.selected,
+.studio-root .st-material-list button.selected,
+.studio-root .st-page-tabs button.selected,
+.studio-root .st-command-results button.selected {
+  color: #30200f;
+  background: #ffe5ad;
+  border-color: #704012;
+  box-shadow: inset 3px 0 #704012;
+}
+.studio-root .st-discovery-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #a87832;
+}
+.st-discovery-toolbar > span {
+  margin-right: auto;
+  font-weight: 650;
+}
+.studio-root .st-discovery-toolbar button {
+  font-size: 14px;
+}
+.studio-root .st-more-actions {
+  position: relative;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.studio-root .st-more-actions > summary {
+  cursor: pointer;
+  padding: 5px 9px;
+  border: 1px solid #a87832;
+  border-radius: 8px;
+  font-size: 14px;
+  margin: 0;
+}
+.st-more-actions > div {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  min-width: 190px;
+  z-index: 25;
+  display: grid;
+  gap: 6px;
+  background: #f2ce83;
+  border: 1px solid #704012;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 8px 25px #4b2e1233;
+}
+.studio-root .st-reference-results {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.studio-root .st-reference-results button {
+  display: grid;
+  justify-content: stretch;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  gap: 4px;
+}
+.st-reference-results span {
+  font-size: 14px;
+}
+.st-help-drawer .st-modal-backdrop {
+  justify-content: flex-end;
+  padding: 12px;
+}
+.studio-root .st-help-drawer .st-modal {
+  width: min(490px, 100%);
+  height: calc(100dvh - 24px);
+  max-height: none;
+  border-radius: 16px;
+  margin: 0;
+}
+.studio-root .st-fold {
+  padding-top: 0;
+}
+.studio-root .st-fold > summary {
+  font-size: 14px;
+  margin-bottom: 0;
+}
+.studio-root .st-event-history {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.studio-root .st-event-history > summary {
+  margin: 0;
+  font-size: 12px;
+}
+.studio-root .st-error-text {
+  color: #8c2020;
+}
+.st-help-drawer li {
+  margin-bottom: 12px;
+}
+.st-help-drawer h3 {
+  margin-top: 24px;
+}
+.st-field-help {
+  display: block;
+  font-size: 14px;
+  font-weight: normal;
+  white-space: normal;
+}
+.st-empty-actions {
+  padding: 16px;
+  border: 1px dashed #93682e;
+  border-radius: 10px;
+  margin: 12px 0;
+}
+.studio-root .st-operation-reason {
+  font-size: 14px;
+  padding: 8px 12px;
+  border-left: 3px solid #704012;
+  margin: 8px 0;
+}
+.studio-root .st-graph-node rect {
+  fill: #f2ce83;
+  stroke: #704012;
+}
+.studio-root .st-graph-node.selected rect,
+.studio-root .st-graph-node:focus rect {
+  fill: #ffe5ad;
+  stroke: #59320e;
+  stroke-width: 3;
+}
+.studio-root .st-graph-node text,
+.studio-root .st-graph-node .st-graph-id,
+.studio-root .st-graph-node .st-graph-meta {
+  fill: #30200f;
+}
+.studio-root .st-graph > path.active {
+  stroke: #59320e;
+  color: #59320e;
+}
+.studio-root .st-preview-dock .st-fold {
+  margin: 12px;
+}
+@media (max-width: 620px) {
+  .st-discovery-toolbar > span {
+    display: none;
+  }
+  .studio-root .st-discovery-toolbar {
+    gap: 4px;
+  }
+  .studio-root .st-discovery-toolbar button {
+    font-size: 13px;
+    padding: 6px;
+  }
+  .studio-root .st-help-drawer .st-modal {
+    padding: 18px;
+  }
+}
+.st-package-section {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #8a571a;
+  border-radius: 12px;
+  background: #ffe4a3;
+}
+.st-package-section h3 {
+  margin-top: 0;
+}
+.st-package-section p,
+.st-package-section li {
+  overflow-wrap: anywhere;
+}
+.st-package-section button {
+  margin: 4px;
+}
+.st-package-section input:not([type="file"]) {
+  width: 100%;
+  margin: 8px 0;
+}
+.st-package-project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #b48439;
+  padding: 12px 0;
+}
+.st-package-project small {
+  display: block;
+}
+.st-package-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.st-package-section a {
+  color: #442000;
+  text-decoration: underline;
+}
+.st-package-section progress {
+  width: 100%;
+  accent-color: #6a3a08;
+}
+.st-package-summary {
+  margin: 12px 0;
+}
+.st-contextbar .st-more > div {
+  top: 36px;
+  position: absolute;
+  z-index: 30;
+  background: #ffe4a3;
+  border: 1px solid #8a571a;
+  padding: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: calc(100vw - 40px);
+}
+.studio-root .st-contextbar .st-more {
+  position: relative;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.studio-root .st-contextbar .st-more > summary {
+  margin: 0;
+  padding: 5px 9px;
+  font-size: 14px;
+  border: 1px solid #a87832;
+  border-radius: 8px;
+}
+@media (max-width: 600px) {
+  .st-package-project {
+    flex-wrap: wrap;
+  }
+  .st-package-section {
+    padding: 10px;
+  }
+}
+.studio-root .st-top-actions .st-project-manager-trigger {
+  display: inline-flex !important;
+}

@@ -1,0 +1,16 @@
+node_modules/
+workspace-projects/
+.studio-transfers/
+dist-studio/
+test-results/
+backups/
+*.tmp
+*.local
+*.env
+.env*
+!.env.example
+*.pem
+*.key
+*.zip
+*.log
+game/project.schema.json
