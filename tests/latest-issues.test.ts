@@ -118,4 +118,13 @@ test("diagnostic locations distinguish layer/effect fields and tolerate missing 
   assert.doesNotThrow(() =>
     issuePosition({ ...p, nodes: undefined } as never, ["nodes", 99, "title"]),
   );
+  assert.equal(
+    issuePosition({ ...p, nodes: [{ ...p.nodes[0], choices: {} }] } as never, [
+      "nodes",
+      0,
+      "choices",
+    ]).section,
+    "json",
+  );
+  assert.equal(issuePosition(null as never, []).section, "json");
 });

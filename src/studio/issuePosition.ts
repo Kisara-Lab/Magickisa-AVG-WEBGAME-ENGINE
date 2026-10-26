@@ -53,6 +53,13 @@ export function issuePosition(
   };
   if (root === "nodes") {
     const n = at(p.nodes, index);
+    if (
+      !n ||
+      typeof n !== "object" ||
+      !Array.isArray(n.lines) ||
+      (n.choices !== undefined && !Array.isArray(n.choices))
+    )
+      return { section: "json", items: {} };
     const pos: EditorPosition = {
       section: "script",
       nodeId: n?.id,
@@ -130,7 +137,7 @@ export function issuePosition(
     }
     if (part === "choices" && leaf !== "condition" && leaf !== "effects") {
       const ci =
-        n?.choices?.findIndex((c) => c.id === at(n.choices, item)?.id) ?? -1;
+        n?.choices?.findIndex((c) => c?.id === at(n.choices, item)?.id) ?? -1;
       const field =
         leaf === "target"
           ? `分支 ${ci + 1} 目标`
