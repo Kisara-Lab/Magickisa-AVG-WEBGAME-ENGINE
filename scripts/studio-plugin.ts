@@ -18,6 +18,7 @@ import {
   type ProjectContext,
 } from "./workspaces";
 import { ProjectPackages } from "./project-packages";
+import { usages } from "../src/studio/discovery";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
 const read = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -88,6 +89,11 @@ function validate(
     }
   }
   const publicRoot = ctx.public;
+  for (const ref of usages(p))
+    if (ref.kind === "script" && !ids.has(ref.target))
+      throw new Error(
+        `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
+      );
   for (const ref of resourceReferences(
     p as Parameters<typeof resourceReferences>[0],
   )) {
@@ -209,6 +215,31 @@ function diagnostics(
         field: "media",
       })),
     );
+  }
+  for (const ref of usages(p)) {
+    if (ref.kind === "script" && !ids.has(ref.target))
+      issues.push({
+        code: "reference",
+        severity: "error",
+        message: `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
+        nodeId: ref.position.nodeId,
+        lineId: ref.position.lineId,
+        field: ref.position.field,
+      });
+  }
+  for (const n of p.nodes) {
+    if (
+      n.choices?.length &&
+      n.choices.every((c) => c.condition || c.once) &&
+      (!n.next || p.nodes.find((target) => target.id === n.next)?.condition)
+    )
+      issues.push({
+        code: "branch-fallback",
+        severity: "warning",
+        message: `${n.title} 的选项可能全部不可用，且没有无条件下一场景；请确认这是预期的停留或结局。`,
+        nodeId: n.id,
+        field: "下一场景",
+      });
   }
   return issues;
 }
@@ -527,7 +558,9 @@ export function studioPlugin(): Plugin {
           const data = JSON.parse(body);
           if (url.pathname === "/workspaces/create") {
             const created = createWorkspace(profile, data.name);
-            res.end(JSON.stringify({ id: created.id, profile, name: created.name }));
+            res.end(
+              JSON.stringify({ id: created.id, profile, name: created.name }),
+            );
             return;
           }
           if (url.pathname === "/packages/check") {
@@ -557,18 +590,27 @@ export function studioPlugin(): Plugin {
             return;
           }
           if (url.pathname === "/open-directory") {
+            if (
+              data.target !== undefined &&
+              data.target !== "project" &&
+              data.target !== "backups"
+            )
+              throw new Error("不支持的目录类型。");
+            const directory =
+              data.target === "backups" ? ctx.backups : ctx.directory;
+            fs.mkdirSync(directory, { recursive: true });
             const child = spawn(
               process.platform === "win32"
                 ? "explorer.exe"
                 : process.platform === "darwin"
                   ? "open"
                   : "xdg-open",
-              [ctx.directory],
+              [directory],
               { windowsHide: true, stdio: "ignore" },
             );
             child.on("error", () => {});
             child.unref();
-            res.end(JSON.stringify({ directory: ctx.directory }));
+            res.end(JSON.stringify({ directory }));
             return;
           }
           if (url.pathname === "/validate") {
@@ -602,7 +644,7 @@ export function studioPlugin(): Plugin {
             const p = validate(data.project, profile, [], ctx),
               backup = path.join(
                 ctx.backups,
-                `studio-${profile}-${Date.now()}`,
+                `studio-${profile}-${Date.now()}-${crypto.randomUUID()}`,
               );
             fs.mkdirSync(backup, { recursive: true });
             const files =
@@ -611,9 +653,7 @@ export function studioPlugin(): Plugin {
                 : fs
                     .readdirSync(ctx.content)
                     .map((f) => path.join(ctx.content, f))
-                    .concat(
-                      ctx.id.startsWith("builtin-") ? [] : [ctx.projectFile],
-                    );
+                    .concat([ctx.projectFile]);
             for (const f of files)
               fs.copyFileSync(f, path.join(backup, path.basename(f)));
             try {

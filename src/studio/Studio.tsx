@@ -13,7 +13,12 @@ import {
   useSequenceKeys,
 } from "./workspace";
 import type { EditorPosition } from "./workspace";
-import { destinations, usages, sectionNames } from "./discovery";
+import {
+  destinations,
+  usages,
+  sectionNames,
+  sceneDeletionReferences,
+} from "./discovery";
 import { DiscoveryPanels } from "./DiscoveryPanels";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -174,6 +179,7 @@ export function Studio() {
     at: 0,
   });
   const previewAction = useRef<() => void>(() => {});
+  const saving = useRef(false);
   const frameBox = useRef<HTMLDivElement>(null),
     iframe = useRef<HTMLIFrameElement>(null),
     ready = useRef(false),
@@ -671,11 +677,12 @@ export function Studio() {
     }
   }
   async function save() {
-    if (!project) return;
+    if (!project || saving.current || busy || job?.status === "running") return;
     if (rawDirty) {
       setError("请先在 JSON 工作区应用修改，再保存工程。");
       return;
     }
+    saving.current = true;
     setBusy(true);
     try {
       const data = await request(profile, "project", { project, revision });
@@ -689,6 +696,7 @@ export function Studio() {
       setError(String(e));
       return undefined;
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }
@@ -902,15 +910,12 @@ export function Studio() {
       setError("请先在工程设置中更换起始场景。");
       return;
     }
-    const incoming = project.nodes.filter(
-      (n) =>
-        n.id !== node.id &&
-        (n.next === node.id || n.choices?.some((c) => c.target === node.id)),
-    );
+    const incoming = sceneDeletionReferences(project, node.id);
     if (incoming.length) {
       setError(
-        `请先解除这些场景的跳转引用：${incoming.map((n) => `${n.title}（${n.id}）`).join("、")}`,
+        `请先解除这些引用：${incoming.map((r) => `${r.label}（${r.field}）`).join("、")}。可通过“在哪里使用”定位。`,
       );
+      setUsageOpen(true);
       return;
     }
     mutate((p) => {

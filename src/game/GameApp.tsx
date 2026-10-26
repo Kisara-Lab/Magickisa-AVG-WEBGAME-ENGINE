@@ -86,7 +86,7 @@ function LoadSession({
     <div className="recovery-error" role="alert">
       <h1>存档需要处理</h1>
       <p>{result.error}</p>
-      <p>原存档保持原样。可以打开临时新周目，再导入兼容存档。</p>
+      <p>原存档保持原样。可以打开临时新周目，再导入本工程当前版本导出的存档。</p>
       <button onClick={onFresh}>打开临时新周目</button>
     </div>
   ) : result.store ? (

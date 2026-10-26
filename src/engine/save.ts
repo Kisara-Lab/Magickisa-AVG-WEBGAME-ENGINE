@@ -119,13 +119,13 @@ export function importSave(
     if (save.projectId !== p.id) throw new Error("存档属于其他项目。");
     if (save.contentVersion !== p.version)
       throw new Error(
-        `存档内容版本 ${save.contentVersion} 与当前 ${p.version} 不同，请使用迁移工具。`,
+        `存档内容版本 ${save.contentVersion} 与当前 ${p.version} 不同。请使用对应内容版本的游戏读取，或导入当前版本导出的存档；本引擎不自动转换内容版本。`,
       );
     validPosition(save, p);
     save.history.forEach((s) => validPosition(s, p));
     return { ...save, slotId };
   }
-  throw new Error("Unsupported legacy save version");
+  throw new Error("不支持此存档版本。请导入本工程当前版本导出的存档；发行兼容版存档不能直接导入现代版。");
 }
 
 export function readSave(
@@ -134,15 +134,13 @@ export function readSave(
   storage: StorageAdapter,
 ): EngineSave | null {
   const key = slotKey(p.id, slotId);
-  let text = storage.getItem(key),
-    source = key;
+  const text = storage.getItem(key);
   if (!text) return null;
-  if (source !== key) storage.setItem(`${source}:backup:${Date.now()}`, text);
   try {
     return importSave(JSON.parse(text), p, slotId);
   } catch (e) {
     throw new Error(
-      `读取存档失败，原数据已保留：${e instanceof Error ? e.message : String(e)}`,
+      `读取存档失败，原数据未被覆盖：${e instanceof Error ? e.message : String(e)}`,
     );
   }
 }

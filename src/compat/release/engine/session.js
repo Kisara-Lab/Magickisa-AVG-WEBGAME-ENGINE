@@ -1,7 +1,7 @@
 // MAGICKISA release-compatible runtime.
 import { defineField } from "./fields.js";
 import { assertProject } from "./project.js";
-import { readSave } from "./save.js";
+import { readSave, importSave } from "./save.js";
 import { AvgEngine } from "./engine.js";
 import { createSave } from "./save.js";
 import { writeSave } from "./save.js";
@@ -16,17 +16,19 @@ export class EngineSession {
       (this.slotId = options.slotId || "auto"),
       (this.persist = options.persist ?? !0));
     const initialSave =
-      options.initialSave || (this.persist ? readSave(this.slotId) : null);
+      (options.initialSave
+        ? importSave(options.initialSave, project, { allowUnbound: true })
+        : null) || (this.persist ? readSave(this.slotId, project) : null);
     this.engine = new AvgEngine(
       project,
-      initialSave || createSave(project.startNodeId, this.slotId),
+      initialSave || createSave(project.startNodeId, this.slotId, project),
     );
   }
   get save() {
     return this.engine.runtime.save;
   }
   commit() {
-    return (this.persist && writeSave(this.save), this.save);
+    return (this.persist && writeSave(this.save, this.project), this.save);
   }
   advance() {
     const t = this.engine.advance();
@@ -49,6 +51,7 @@ export class EngineSession {
       (this.engine.runtime.save = createSave(
         this.project.startNodeId,
         this.slotId,
+        this.project,
       )),
       this.commit()
     );

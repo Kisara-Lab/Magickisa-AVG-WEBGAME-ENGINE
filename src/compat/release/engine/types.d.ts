@@ -31,6 +31,7 @@ export interface CharacterLayer {
   enter?: string;
 }
 export interface StoryLine {
+  input?: { key: string; label: string; maxLength: number };
   id?: string;
   text: string;
   speaker?: string;
@@ -110,6 +111,8 @@ export interface Checkpoint {
   text?: string;
 }
 export interface EngineSave {
+  projectId?: string;
+  contentVersion?: string;
   schemaVersion: number;
   slotId: string;
   savedAt: string;

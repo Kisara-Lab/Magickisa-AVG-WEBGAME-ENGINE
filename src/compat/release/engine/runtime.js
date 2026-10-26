@@ -44,13 +44,21 @@ export class StoryRuntime {
     );
   }
   advance() {
-    var t;
     if (!this.node) return this.save;
+    if (this.line?.input) {
+      const value = this.save.variables[this.line.input.key];
+      if (
+        typeof value !== "string" ||
+        !value.trim() ||
+        value.length > (this.line.input.maxLength ?? 80)
+      )
+        return this.save;
+    }
     if (
       (this.checkpoint(
         this.line
           ? {
-              speaker: this.line.speaker,
+              speaker: this.line.speaker || this.node.speaker,
               text: this.line.text,
             }
           : {},
@@ -67,7 +75,7 @@ export class StoryRuntime {
       );
     if (
       ((this.save = applyEffects(this.save, this.node.effects)),
-      !((t = this.node.choices) != null && t.length) && this.node.next)
+      !this.choices.length && this.node.next)
     ) {
       const n = this.project.nodes.find((r) => r.id === this.node.next);
       n &&

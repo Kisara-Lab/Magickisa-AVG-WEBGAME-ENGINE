@@ -141,7 +141,7 @@ export class StoryRuntime {
         return this.save;
       }
     }
-    if (this.node.choices?.length) return this.save;
+    if (this.choices.length) return this.save;
     const next = this.node.next;
     if (next) {
       const target = this.project.nodes.find((n) => n.id === next);

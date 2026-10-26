@@ -191,19 +191,42 @@ export function ProjectManager({
       <h2>项目与迁移</h2>
       <section className="st-package-section">
         <h3>创建空白工程</h3>
-        <label>工程名称
-          <input value={newName} maxLength={100} onChange={e => setNewName(e.target.value)} placeholder="我的新工程" />
+        <label>
+          工程名称
+          <input
+            value={newName}
+            maxLength={100}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="我的新工程"
+          />
         </label>
-        <label>运行模式
-          <select aria-label="运行模式" value={newProfile} onChange={e => setNewProfile(e.target.value as Profile)}>
+        <label>
+          运行模式
+          <select
+            aria-label="运行模式"
+            value={newProfile}
+            onChange={(e) => setNewProfile(e.target.value as Profile)}
+          >
             <option value="modern">现代版</option>
             <option value="release">发行兼容版</option>
           </select>
         </label>
-        <button className="primary" disabled={active || !project || !revision || !newName.trim()} onClick={() => void perform(async () => {
-          const created = await studioRequest(newProfile, "workspaces/create", { name: newName });
-          onOpen(created);
-        })}>创建并打开</button>
+        <button
+          className="primary"
+          disabled={active || !project || !revision || !newName.trim()}
+          onClick={() =>
+            void perform(async () => {
+              const created = await studioRequest(
+                newProfile,
+                "workspaces/create",
+                { name: newName },
+              );
+              onOpen(created);
+            })
+          }
+        >
+          创建并打开
+        </button>
         <p>创建独立工程，不附带剧情或素材。已有工程可通过下方工程包导入。</p>
       </section>
       <p>
@@ -420,6 +443,20 @@ export function ProjectManager({
         >
           打开当前项目目录
         </button>
+        <button
+          onClick={() =>
+            void perform(async () => {
+              const data = await api("open-directory", { target: "backups" });
+              setDirectory(data.directory);
+            })
+          }
+        >
+          打开保存备份目录
+        </button>
+        <p className="st-muted">
+          每次保存前保留磁盘副本。备份不会自动删除；恢复前请关闭
+          Studio，并先复制整个项目目录。
+        </p>
         {directory && <p className="st-muted">{directory}</p>}
       </section>
     </Modal>
