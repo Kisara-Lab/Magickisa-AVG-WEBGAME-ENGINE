@@ -67,13 +67,22 @@ export function createEngineHost(
   project: StoryProject,
   options?: SessionOptions,
 ): { session: EngineSession; start(): EngineSession; dispose(): void };
-export function createSave(nodeId: string, slotId?: string): EngineSave;
-export function readSave(slotId: string): EngineSave | null;
-export function writeSave(save: EngineSave): void;
-export function migrateLegacySave(
-  input: unknown,
-  nodeMap: Record<number, string>,
+export function createSave(
+  nodeId: string,
+  slotId?: string,
+  project?: StoryProject,
+): EngineSave;
+export function readSave(
+  slotId: string,
+  project?: StoryProject,
 ): EngineSave | null;
+export function writeSave(save: EngineSave, project?: StoryProject): void;
+export function slotKey(slotId: string, projectId?: string): string;
+export function importSave(
+  input: unknown,
+  project: StoryProject,
+  options?: { allowUnbound?: boolean },
+): EngineSave;
 export function evaluateCondition(
   condition: Condition | undefined,
   variables: Variables,

@@ -5,6 +5,7 @@ import { assetUrl, uniqueId, mediaUrl } from "./model";
 import { Card, Field, ConditionEditor } from "./fields";
 import { PickAsset } from "./AssetPicker";
 import { Fold } from "./components";
+import { expressionReferences } from "./discovery";
 export interface AssetFile {
   url: string;
   bytes: number;
@@ -472,6 +473,7 @@ export function CharacterEditor({
   project: AuthorProject;
   onChange: (p: AuthorProject) => void;
 }) {
+  const [expressionError, setExpressionError] = useState("");
   const [selected, setSelected] = useSelection(
     "characters",
     project.characters[0]?.id || "",
@@ -513,6 +515,11 @@ export function CharacterEditor({
           添加人物
         </button>
       </div>
+      {expressionError && (
+        <p role="alert" className="st-error">
+          {expressionError}
+        </p>
+      )}
       <div className="st-character-list">
         {project.characters.map((c) => (
           <button
@@ -669,6 +676,18 @@ export function CharacterEditor({
                 <button
                   className="danger"
                   onClick={() => {
+                    const refs = expressionReferences(
+                      project,
+                      character.id,
+                      key,
+                    );
+                    if (refs.length) {
+                      setExpressionError(
+                        `表情仍在使用，请先修改：${refs.map((r) => `${r.label}（${r.field}）`).join("、")}`,
+                      );
+                      return;
+                    }
+                    setExpressionError("");
                     const expressions = { ...character.expressions };
                     delete expressions[key];
                     update({ expressions });

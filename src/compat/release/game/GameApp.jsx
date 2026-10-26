@@ -4,7 +4,14 @@ import React from "react";
 import { AudioManager } from "../engine/audioManager.js";
 import { PresentationRegistry } from "../engine/presentation.js";
 import { EngineStore } from "../engine/store.js";
-import { createSave } from "../engine/save.js";
+import {
+  createSave,
+  readSave,
+  writeSave,
+  importSave as validateSave,
+  slotKey,
+} from "../engine/save.js";
+import { isMaterialAvailable, isMusicAvailable } from "../engine/unlocks.js";
 import { attachDebug } from "../engine/debug.js";
 import { preloadCharacters } from "../engine/resourceManager.js";
 import { resolveTrack } from "../engine/media.js";
@@ -56,7 +63,7 @@ export function syncLegacyView(view, save, project) {
     line: save.lineIndex,
     flags: save.variables,
     blackTide: Number(save.variables.blackTide || 0),
-    visited: [...new Set([...view.visited, ...visitedIndices])],
+    visited: visitedIndices,
     notes: save.notes.join(`
 
 `),
@@ -98,6 +105,7 @@ export function GameApp() {
   const [script, setScript] = React.useState(null),
     [project, setProject] = React.useState(null),
     [loadError, setLoadError] = React.useState(""),
+    [saveError, setSaveError] = React.useState(""),
     [chapterMenuOpen, setChapterMenuOpen] = React.useState(!1),
     [activePanel, setActivePanel] = React.useState(null),
     [chapterSearch, setChapterSearch] = React.useState(""),
@@ -123,38 +131,24 @@ export function GameApp() {
     audioManagerRef = React.useRef(new AudioManager()),
     backlogRef = React.useRef(null),
     engineStoreRef = React.useRef(null),
+    saveBlockedRef = React.useRef(false),
     presentationsRef = React.useRef(new PresentationRegistry()),
     [view, setView] = React.useState(() => {
-      try {
-        const f = JSON.parse(localStorage.getItem(LEGACY_SAVE_KEY) || "");
-        return {
-          ...f,
-          flags: f.flags || {},
-          blackTide: f.blackTide || 0,
-          history: f.history || [],
-          materialRead: f.materialRead || [],
-          notified: f.notified || [],
-          unlockedMaterials: f.unlockedMaterials || [],
-          npcTopics: f.npcTopics || [],
-          sealQuestions: f.sealQuestions || 0,
-        };
-      } catch {
-        return {
-          index: 0,
-          line: 0,
-          notes: "",
-          visited: [0],
-          flags: {},
-          blackTide: 0,
-          history: [],
-          materialRead: [],
-          notified: [],
-          unlockedMaterials: [],
-          version: 3,
-          npcTopics: [],
-          sealQuestions: 0,
-        };
-      }
+      return {
+        index: 0,
+        line: 0,
+        notes: "",
+        visited: [],
+        flags: {},
+        blackTide: 0,
+        history: [],
+        materialRead: [],
+        notified: [],
+        unlockedMaterials: [],
+        version: 3,
+        npcTopics: [],
+        sealQuestions: 0,
+      };
     });
   React.useEffect(() => {
     Promise.all([
@@ -175,16 +169,15 @@ export function GameApp() {
     const f = project;
     let g = null;
     try {
-      const P = JSON.parse(localStorage.getItem(AUTO_SAVE_KEY) || "null");
-      (P == null ? void 0 : P.schemaVersion) === 1 &&
-        typeof P.nodeId == "string" &&
-        (g = P);
-    } catch {
+      g = readSave("auto", f);
+    } catch (error) {
+      saveBlockedRef.current = true;
+      setSaveError(String(error));
       g = null;
     }
     return (
       (engineStoreRef.current = new EngineStore(f, {
-        initialSave: g || createSave(f.startNodeId),
+        initialSave: g || createSave(f.startNodeId, "auto", f),
         persist: !1,
       })),
       setView((P) => syncView(P, engineStoreRef.current.runtime.save)),
@@ -216,8 +209,14 @@ export function GameApp() {
     React.useEffect(() => {
       var g;
       const f = (g = engineStoreRef.current) == null ? void 0 : g.runtime.save;
-      f && localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(f));
-    }, [view]));
+      if (f && project && gameStarted && !saveBlockedRef.current) {
+        try {
+          writeSave(f, project);
+        } catch (error) {
+          setNotice(`存档未保存：${String(error)}`);
+        }
+      }
+    }, [view, gameStarted, project]));
   const section = sections[view.index],
     node = project == null ? void 0 : project.nodes[view.index],
     labels =
@@ -269,10 +268,7 @@ export function GameApp() {
           index: nodeIndex(project, project.startNodeId),
           line: 0,
           visited: [
-            ...new Set([
-              ...N.visited,
-              nodeIndex(project, project.startNodeId),
-            ]),
+            ...new Set([...N.visited, nodeIndex(project, project.startNodeId)]),
           ],
         };
       });
@@ -309,19 +305,8 @@ export function GameApp() {
     ),
     materialsByCategory = React.useMemo(() => {
       const g = ((project == null ? void 0 : project.materials) || []).filter(
-        (N) => {
-          var H;
-          if (N.unlockNode)
-            return view.visited.includes(
-              Number(
-                ((H = N.unlockNode.match(/node-(\d+)/)) == null
-                  ? void 0
-                  : H[1]) || -1,
-              ),
-            );
-          const P = sections.findIndex((be) => be.title === N.title);
-          return P < 0 || view.visited.includes(P);
-        },
+        (N) =>
+          isMaterialAvailable(project, N, engineStoreRef.current?.runtime.save),
       );
       return {
         encyclopedia: g.filter((N) => N.category === "encyclopedia"),
@@ -329,7 +314,7 @@ export function GameApp() {
         notes: g.filter((N) => N.category === "note"),
         clues: g.filter((N) => N.category === "clue"),
       };
-    }, [project, sections, view.visited]),
+    }, [project, sections, view.visited, view.flags, view.unlockedMaterials]),
     currentMaterialCategory = () => {
       var f, g, N;
       return (f = node == null ? void 0 : node.tags) != null &&
@@ -374,7 +359,15 @@ export function GameApp() {
   ]);
   const advance = () =>
     setView((f) => {
-      if (splashActive || !engineStoreRef.current) return f;
+      if (
+        !gameStarted ||
+        splashActive ||
+        settingsOpen ||
+        openingActive ||
+        endingActive ||
+        !engineStoreRef.current
+      )
+        return f;
       const g = engineStoreRef.current.runtime.save,
         N = engineStoreRef.current.advance(),
         P = syncView(f, N),
@@ -579,12 +572,13 @@ export function GameApp() {
     },
     syncView = (f, g) => (project ? syncLegacyView(f, g, project) : f),
     resetGame = () => {
+      saveBlockedRef.current = false;
+      setSaveError("");
       var N;
       const f = project ? nodeIndex(project, project.startNodeId) : 0,
-        g = project ? createSave(project.startNodeId) : null;
+        g = project ? createSave(project.startNodeId, "auto", project) : null;
       (g && engineStoreRef.current && (engineStoreRef.current.runtime.save = g),
-        localStorage.removeItem(LEGACY_SAVE_KEY),
-        localStorage.removeItem(AUTO_SAVE_KEY),
+        project && localStorage.removeItem(slotKey("auto", project.id)),
         setView((P) =>
           g
             ? {
@@ -692,20 +686,22 @@ export function GameApp() {
       ((g.onload = () => {
         try {
           const N = JSON.parse(String(g.result));
-          let P = null;
+          const P = validateSave(N, project, { allowUnbound: true });
+          P.slotId = "auto";
           if (
-            (N == null ? void 0 : N.schemaVersion) === 1 &&
-            typeof N.nodeId == "string" &&
-            Array.isArray(N.history)
+            !N.projectId &&
+            !window.confirm(
+              "此旧存档未记录工程归属。仅在确认它属于当前工程时继续导入；原全局存档不会被删除。",
+            )
           )
-            P = N;
-          if (!P || !project.nodes.some((H) => H.id === P.nodeId))
-            throw new Error();
+            return;
+          writeSave(P, project);
+          saveBlockedRef.current = false;
+          setSaveError("");
           ((engineStoreRef.current.runtime.save = P),
-            localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(P)),
-            setView((H) => syncView(H, P)));
-        } catch {
-          window.alert("存档格式无效，当前进度未改变。");
+            setView((H) => syncView({ ...H, visited: [], history: [] }, P)));
+        } catch (error) {
+          window.alert(`无法导入，当前进度未改变：${String(error)}`);
         }
       }),
         g.readAsText(f));
@@ -734,10 +730,28 @@ export function GameApp() {
   if (
     (React.useEffect(() => {
       const f = (g) => {
-        if (g.code === "Escape" && (activePanel || chapterMenuOpen)) {
-          (g.preventDefault(), setActivePanel(null), setChapterMenuOpen(!1));
+        if (g.isComposing) return;
+        if (
+          g.code === "Escape" &&
+          (activePanel || chapterMenuOpen || settingsOpen)
+        ) {
+          (g.preventDefault(),
+            setActivePanel(null),
+            setChapterMenuOpen(!1),
+            setSettingsOpen(!1));
           return;
         }
+        if (
+          !gameStarted ||
+          splashActive ||
+          openingActive ||
+          endingActive ||
+          settingsOpen ||
+          g.target?.closest?.(
+            "input,textarea,select,button,a,[contenteditable]:not([contenteditable=false])",
+          )
+        )
+          return;
         activePanel ||
           chapterMenuOpen ||
           ((g.code === "Space" || g.code === "ArrowRight") &&
@@ -765,9 +779,22 @@ export function GameApp() {
     return <div className="app loading">{loadError}</div>;
   if (!script || !section || !project)
     return <div className="app loading">{"Loading MAGICKISA..."}</div>;
+  if (saveError && !gameStarted)
+    return (
+      <div className="app loading" role="alert">
+        <h1>存档需要处理</h1>
+        <p>{saveError}</p>
+        <p>
+          原存档保留；在导入有效存档或明确重新开始前，临时周目不会覆盖原存档。
+        </p>
+        <button onClick={() => setGameStarted(true)}>打开临时新周目</button>
+      </div>
+    );
   if (!gameStarted) {
     const f = (project == null ? void 0 : project.titleScreen) || {},
-      g = f.backdrop ? gameAsset(f.backdrop, project) : resolveScene(project, "");
+      g = f.backdrop
+        ? gameAsset(f.backdrop, project)
+        : resolveScene(project, "");
     return (
       <TitleScreenHost
         project={project}
@@ -975,14 +1002,14 @@ export function GameApp() {
           : _o.enabled) == null
         ? void 0
         : Mo.musicGallery) !== !1 && (
-        <a
+        <button
           className="music-entry"
-          href="/music.html"
+          onClick={() => openPanel("music")}
           title={labels.music || "音乐鉴赏"}
         >
           <Music2 size={16} />
           <span>{labels.music || "音乐鉴赏"}</span>
-        </a>
+        </button>
       )}
       <main className="avg-shell">
         <section
@@ -1033,7 +1060,7 @@ export function GameApp() {
           </div>
           <div className="dialogue-box">
             <div className="speaker">
-              {(node == null ? void 0 : node.speaker) || "旁白"}
+              {line?.speaker || node?.speaker || "旁白"}
             </div>
             <div className="dialogue-text">
               {nodeDone ? (
@@ -1063,6 +1090,36 @@ export function GameApp() {
                 </span>
               )}
             </div>
+            {!nodeDone && line?.input && (
+              <label
+                className="story-input"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {line.input.label || "请输入"}
+                <input
+                  aria-label={line.input.label || "请输入"}
+                  maxLength={line.input.maxLength ?? 80}
+                  value={
+                    typeof view.flags[line.input.key] === "string"
+                      ? view.flags[line.input.key]
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const store = engineStoreRef.current;
+                    if (!store) return;
+                    store.runtime.save = {
+                      ...store.runtime.save,
+                      variables: {
+                        ...store.runtime.save.variables,
+                        [line.input.key]: event.target.value,
+                      },
+                    };
+                    store.emit(store.runtime.save);
+                    setView((v) => syncView(v, store.runtime.save));
+                  }}
+                />
+              </label>
+            )}
             <div className="advance-mark">
               {nodeDone && !choices.length ? "›" : "▼"}
             </div>
@@ -1247,19 +1304,44 @@ export function GameApp() {
           >
             <div className="drawer-head">
               <strong>
-                {activePanel === "encyclopedia"
-                  ? "《阿努拉志》百科"
-                  : activePanel === "newspaper"
-                    ? "报刊"
-                    : activePanel === "notes"
-                      ? "旅者笔记"
-                      : "证据与线索"}
+                {activePanel === "music"
+                  ? labels.music || "音乐鉴赏"
+                  : activePanel === "encyclopedia"
+                    ? "《阿努拉志》百科"
+                    : activePanel === "newspaper"
+                      ? "报刊"
+                      : activePanel === "notes"
+                        ? "旅者笔记"
+                        : "证据与线索"}
               </strong>
               <button title="关闭面板" onClick={() => setActivePanel(null)}>
                 <X size={18} />
               </button>
             </div>
-            {activePanel === "notes" ? (
+            {activePanel === "music" ? (
+              <div className="material-list">
+                {(media.musicGallery || [])
+                  .filter((track) =>
+                    isMusicAvailable(
+                      track,
+                      engineStoreRef.current?.runtime.save,
+                    ),
+                  )
+                  .map((track) => (
+                    <article key={track.id || track.src}>
+                      <h3>{track.title}</h3>
+                      <audio
+                        controls
+                        preload="none"
+                        src={gameAsset(track.src, project)}
+                      />
+                    </article>
+                  ))}
+                {!(media.musicGallery || []).some((track) =>
+                  isMusicAvailable(track, engineStoreRef.current?.runtime.save),
+                ) && <p>尚未解锁曲目。</p>}
+              </div>
+            ) : activePanel === "notes" ? (
               <div className="notes-modal">
                 <textarea
                   value={view.notes}

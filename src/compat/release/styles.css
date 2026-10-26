@@ -514,6 +514,18 @@ button {
   white-space: normal;
   word-break: break-word;
 }
+.story-input {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+.story-input input {
+  color: #f6ddb0;
+  background: #111b22;
+  border: 1px solid #ac914f;
+  padding: 12px;
+  width: 100%;
+}
 .choice-list {
   width: 100%;
   display: grid;

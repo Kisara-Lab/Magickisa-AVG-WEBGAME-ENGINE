@@ -18,6 +18,50 @@ export interface Usage {
   derived?: boolean;
   position: EditorPosition;
 }
+export function sceneDeletionReferences(
+  p: AuthorProject,
+  nodeId: string,
+): Usage[] {
+  return usages(p).filter(
+    (r) =>
+      r.kind === "script" &&
+      r.target === nodeId &&
+      r.position.nodeId !== nodeId,
+  );
+}
+export function expressionReferences(
+  p: AuthorProject,
+  characterId: string,
+  expression: string,
+): Usage[] {
+  return p.nodes.flatMap((n) =>
+    n.lines.flatMap((l) => {
+      const fields: string[] = [];
+      if (l.characterId === characterId && l.expression === expression)
+        fields.push("本句人物表情");
+      l.characterLayers?.forEach((layer, i) => {
+        if (
+          layer.characterId === characterId &&
+          layer.expression === expression
+        )
+          fields.push(`立绘图层 ${i + 1} 表情`);
+      });
+      return fields.map((field) => ({
+        kind: "characters" as const,
+        target: characterId,
+        label: `${n.title} · ${l.id}`,
+        field,
+        position: {
+          section: "script" as const,
+          nodeId: n.id,
+          lineId: l.id,
+          items: {},
+          field: "人物图层与位置",
+        },
+      }));
+    }),
+  );
+}
 export const sectionNames: Record<Section, string> = {
   script: "剧本",
   graph: "流程图",
@@ -313,6 +357,7 @@ export const helpContent: Record<
       "从章节树选择场景，点击台词直接输入。",
       "选中台词后展开立绘与高级属性；预览按钮才会更新画面。",
       "条件控制是否显示，例如 visited 判断已访问场景；效果改变变量或解锁资料。",
+      "所有选项被条件隐藏或已用尽时，会尝试进入下一场景；未设置下一场景或其条件不满足时停留当前节点。",
     ],
     advanced:
       "展开场景属性、条件、效果和图层；完整结构可在 JSON 编辑。兼容版保留节点 effects 原有时机。",

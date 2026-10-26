@@ -47,6 +47,10 @@ try {
     assert.equal(before.project.nodes[0].lines[0].text, "");
     const draft = structuredClone(before.project);
     draft.nodes[0].lines[0].text = `未保存 ${profile}`;
+    draft.nodes[0].speaker = "NODE SPEAKER";
+    draft.nodes[0].lines[0].speaker = "FIRST SPEAKER";
+    draft.nodes[0].lines[0].input = { key: "playerName", label: "测试姓名", maxLength: 8 };
+    draft.nodes[0].lines.push({ id: "input-accepted", text: "INPUT ACCEPTED", speaker: "SECOND SPEAKER" });
     draft.media.opening = { duration: 10, pages: [{ at: 0, text: "TEST OP" }] };
     draft.media.ending = { duration: 10, lines: [{ at: 0, en: "TEST ED", zh: "TEST END" }] };
     draft.media.dedication = { pages: [["TEST DEDICATION"]] };
@@ -83,14 +87,43 @@ try {
     await page.goto(`${origin}/engine.html?profile=${profile}&workspaceId=${next.id}`);
     const line = page.locator(".st-line textarea").first();
     await line.fill(`继续编辑 ${profile}`);
-    await page.keyboard.press("Control+s");
+    let writes = 0;
+    let unblock;
+    const gate = new Promise(resolve => { unblock = resolve; });
+    const delaySave = async route => {
+      if (route.request().method() === "POST") { writes++; await gate; }
+      await route.continue();
+    };
+    await page.route("**/__studio/project?*", delaySave);
+    try {
+      await page.keyboard.press("Control+s");
+      await poll(async () => writes > 0);
+      for (let press = 0; press < 5; press++) await page.keyboard.press("Control+s");
+      await page.waitForTimeout(100);
+      assert.equal(writes, 1, "repeated Ctrl+S must share one in-flight save");
+    } finally { unblock(); }
     await poll(async () => (await api(profile, "project", undefined, next.id)).project.nodes[0].lines[0].text === `继续编辑 ${profile}`);
+    await page.unroute("**/__studio/project?*", delaySave);
+    const backupRoot = path.join("workspace-projects", next.id, "backups");
+    const backups = fs.readdirSync(backupRoot);
+    assert.equal(backups.length, 1, "one save must produce one backup");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(backupRoot, backups[0], "project.json"), "utf8")).nodes[0].lines[0].text, `未保存 ${profile}`);
     await page.keyboard.press("Control+Enter");
     await poll(async () => {
       const frames = page.frames().filter(f => f.url().includes("studio-preview.html"));
       return frames.length && await frames[0].getByText(`继续编辑 ${profile}`, { exact: true }).count();
     });
     const saved = await api(profile, "project", undefined, next.id);
+    const conditional = structuredClone(saved.project);
+    conditional.nodes[0].choices = [{ id: "optional", label: "optional", target: conditional.startNodeId, condition: { type: "flag", key: "ready" } }];
+    assert.ok((await api(profile, "validate", { project: conditional }, next.id)).issues.some(i => i.code === "branch-fallback"));
+    const invalid = structuredClone(saved.project);
+    invalid.materials.push({ id: "bad-reference", title: "Bad reference", body: "", category: "clue", unlockNode: "missing-scene" });
+    const rejected = await fetch(`${origin}/__studio/project?profile=${profile}&workspaceId=${next.id}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: invalid, revision: saved.revision }),
+    });
+    assert.equal(rejected.status, 400, "dangling unlock references must not be saved");
+    assert.equal((await api(profile, "project", undefined, next.id)).revision, saved.revision);
     for (const [mode, text] of [["opening", "TEST OP"], ["ending", "TEST ED"], ["dedication", "TEST DEDICATION"]]) {
       await page.evaluate(data => {
         document.querySelector("iframe").contentWindow.postMessage(data, location.origin);
@@ -123,10 +156,68 @@ try {
     await new Promise(resolve => gameServer.listen(0, "127.0.0.1", resolve));
     try {
       await page.goto(`http://127.0.0.1:${gameServer.address().port}/`);
+      await page.locator('[data-action="new-game"]').waitFor();
+      if (profile === "release") {
+        await page.waitForFunction(() => window.__MAGICKISA_ENGINE__);
+        const beforeKeys = await page.evaluate(() => JSON.stringify(window.__MAGICKISA_ENGINE__.getSnapshot()));
+        await page.keyboard.press("Space");
+        await page.keyboard.press("ArrowRight");
+        assert.equal(await page.evaluate(() => JSON.stringify(window.__MAGICKISA_ENGINE__.getSnapshot())), beforeKeys, "title-screen shortcuts must not advance");
+        assert.equal(await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith("magickisa-avg:release:"))), false, "title screen must not create an autosave");
+        await page.evaluate(() => { localStorage.setItem("magickisa:view", "old-view"); localStorage.setItem("magickisa-avg:slot:auto", "old-save"); });
+      }
       await page.locator('[data-action="new-game"]').click();
       await page.locator(".engine-splash").waitFor({ state: "visible" });
       await page.locator(".engine-splash").waitFor({ state: "detached" });
       await page.getByText(`继续编辑 ${profile}`, { exact: true }).waitFor();
+      assert.equal(await page.locator(".speaker").innerText(), "FIRST SPEAKER");
+      const input = page.getByLabel("测试姓名", { exact: true });
+      await input.fill("   ");
+      await page.locator(".scene-caption").click();
+      assert.equal(await input.count(), 1, "blank input must block advance");
+      await input.fill("小 明");
+      await input.press("Space");
+      await input.press("ArrowRight");
+      assert.equal(await input.count(), 1, "text-editing keys must not advance");
+      assert.equal(await input.inputValue(), "小 明 ");
+      if (profile === "release") {
+        const beforeControls = await page.evaluate(() => window.__MAGICKISA_ENGINE__.getSnapshot().lineIndex);
+        const notebook = page.locator(".notebook-strip input");
+        await notebook.fill("note");
+        await notebook.press("Space");
+        await notebook.press("ArrowLeft");
+        assert.equal(await notebook.inputValue(), "note ");
+        await page.getByTitle("演出设置", { exact: true }).click();
+        const auto = page.getByLabel("自动播放", { exact: true });
+        await auto.press("Space");
+        assert.equal(await auto.isChecked(), true);
+        await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true })));
+        assert.equal(await page.evaluate(() => window.__MAGICKISA_ENGINE__.getSnapshot().lineIndex), beforeControls);
+        await auto.press("Space");
+        assert.equal(await auto.isChecked(), false);
+        await auto.press("Escape");
+        await page.locator(".settings-panel").waitFor({ state: "detached" });
+      }
+      await page.locator(".scene-caption").click();
+      await page.getByText("INPUT ACCEPTED", { exact: true }).waitFor();
+      assert.equal(await page.locator(".speaker").innerText(), "SECOND SPEAKER");
+      if (profile === "release") {
+        const key = await page.evaluate(() => {
+          const save = window.__MAGICKISA_ENGINE__.getSnapshot();
+          const key = `magickisa-avg:release:${encodeURIComponent(save.projectId)}:auto`;
+          localStorage.setItem(key, "{broken-save"); return key;
+        });
+        await page.reload();
+        await page.getByRole("heading", { name: "存档需要处理", exact: true }).waitFor();
+        assert.equal(await page.evaluate(k => localStorage.getItem(k), key), "{broken-save");
+        await page.getByRole("button", { name: "打开临时新周目", exact: true }).click();
+        await page.getByLabel("测试姓名", { exact: true }).fill("临时");
+        await page.locator(".scene-caption").click();
+        await page.getByText("INPUT ACCEPTED", { exact: true }).waitFor();
+        assert.equal(await page.evaluate(k => localStorage.getItem(k), key), "{broken-save", "temporary progress must not overwrite unreadable saves");
+        assert.equal(await page.evaluate(() => localStorage.getItem("magickisa:view")), "old-view");
+        assert.equal(await page.evaluate(() => localStorage.getItem("magickisa-avg:slot:auto")), "old-save");
+      }
     } finally { await new Promise(resolve => gameServer.close(resolve)); }
     await api(profile, "packages/cancel", { id: task.id }, id);
     console.log(`PASS ${profile}: create, unsaved export, checksum, independent import, edit, save, scene/OP/ED/dedication preview, build, startup animation, mobile`);
