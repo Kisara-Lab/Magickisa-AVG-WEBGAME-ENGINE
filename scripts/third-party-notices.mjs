@@ -23,6 +23,10 @@ if (process.argv.includes("--check")) {
   const actual = committed
     .split("## Locked dependency inventory\n\n")[1]
     ?.split("\n\n## Installed dependency license texts")[0];
+  if (actual === undefined)
+    throw new Error(
+      "Third-party inventory section not found. Run npm run notices:update and review the file structure.",
+    );
   if (actual !== inventory)
     throw new Error(
       "Third-party inventory is stale or malformed. Run npm run notices:update and review license texts.",

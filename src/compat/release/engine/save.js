@@ -67,6 +67,8 @@ export function importSave(input, project, { allowUnbound = false } = {}) {
     throw new Error("旧存档未绑定工程，请通过导入存档确认归属。");
   if (save.projectId && save.projectId !== project.id)
     throw new Error("存档属于其他工程。");
+  if (save.projectId && save.contentVersion === undefined)
+    throw new Error("已绑定工程的存档缺少内容版本。");
   if (
     save.contentVersion !== undefined &&
     save.contentVersion !== (project.version || "")

@@ -170,6 +170,14 @@ test("release saves isolate projects, preserve global keys, and validate all che
     ])
       assert.throws(() => release.importSave({ ...first.save, ...patch }, p));
     const legacy = release.createSave(p.startNodeId);
+    const missingVersion = { ...first.save };
+    delete missingVersion.contentVersion;
+    assert.throws(() => release.importSave(missingVersion, p), /缺少内容版本/);
+    assert.throws(
+      () =>
+        new release.EngineSession(p, { initialSave: legacy, persist: false }),
+      /未绑定/,
+    );
     assert.throws(() => release.importSave(legacy, p), /未绑定/);
     assert.equal(
       release.importSave(legacy, p, { allowUnbound: true }).projectId,

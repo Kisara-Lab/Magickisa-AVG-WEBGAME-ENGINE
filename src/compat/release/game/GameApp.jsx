@@ -105,6 +105,7 @@ export function GameApp() {
   const [script, setScript] = React.useState(null),
     [project, setProject] = React.useState(null),
     [loadError, setLoadError] = React.useState(""),
+    [saveError, setSaveError] = React.useState(""),
     [chapterMenuOpen, setChapterMenuOpen] = React.useState(!1),
     [activePanel, setActivePanel] = React.useState(null),
     [chapterSearch, setChapterSearch] = React.useState(""),
@@ -171,7 +172,7 @@ export function GameApp() {
       g = readSave("auto", f);
     } catch (error) {
       saveBlockedRef.current = true;
-      setNotice(String(error));
+      setSaveError(String(error));
       g = null;
     }
     return (
@@ -208,14 +209,14 @@ export function GameApp() {
     React.useEffect(() => {
       var g;
       const f = (g = engineStoreRef.current) == null ? void 0 : g.runtime.save;
-      if (f && project && !saveBlockedRef.current) {
+      if (f && project && gameStarted && !saveBlockedRef.current) {
         try {
           writeSave(f, project);
         } catch (error) {
           setNotice(`存档未保存：${String(error)}`);
         }
       }
-    }, [view]));
+    }, [view, gameStarted, project]));
   const section = sections[view.index],
     node = project == null ? void 0 : project.nodes[view.index],
     labels =
@@ -358,7 +359,15 @@ export function GameApp() {
   ]);
   const advance = () =>
     setView((f) => {
-      if (splashActive || !engineStoreRef.current) return f;
+      if (
+        !gameStarted ||
+        splashActive ||
+        settingsOpen ||
+        openingActive ||
+        endingActive ||
+        !engineStoreRef.current
+      )
+        return f;
       const g = engineStoreRef.current.runtime.save,
         N = engineStoreRef.current.advance(),
         P = syncView(f, N),
@@ -564,6 +573,7 @@ export function GameApp() {
     syncView = (f, g) => (project ? syncLegacyView(f, g, project) : f),
     resetGame = () => {
       saveBlockedRef.current = false;
+      setSaveError("");
       var N;
       const f = project ? nodeIndex(project, project.startNodeId) : 0,
         g = project ? createSave(project.startNodeId, "auto", project) : null;
@@ -677,6 +687,7 @@ export function GameApp() {
         try {
           const N = JSON.parse(String(g.result));
           const P = validateSave(N, project, { allowUnbound: true });
+          P.slotId = "auto";
           if (
             !N.projectId &&
             !window.confirm(
@@ -686,6 +697,7 @@ export function GameApp() {
             return;
           writeSave(P, project);
           saveBlockedRef.current = false;
+          setSaveError("");
           ((engineStoreRef.current.runtime.save = P),
             setView((H) => syncView({ ...H, visited: [], history: [] }, P)));
         } catch (error) {
@@ -718,15 +730,28 @@ export function GameApp() {
   if (
     (React.useEffect(() => {
       const f = (g) => {
+        if (g.isComposing) return;
         if (
-          g.isComposing ||
-          g.target?.closest?.("input,textarea,select,[contenteditable=true]")
-        )
-          return;
-        if (g.code === "Escape" && (activePanel || chapterMenuOpen)) {
-          (g.preventDefault(), setActivePanel(null), setChapterMenuOpen(!1));
+          g.code === "Escape" &&
+          (activePanel || chapterMenuOpen || settingsOpen)
+        ) {
+          (g.preventDefault(),
+            setActivePanel(null),
+            setChapterMenuOpen(!1),
+            setSettingsOpen(!1));
           return;
         }
+        if (
+          !gameStarted ||
+          splashActive ||
+          openingActive ||
+          endingActive ||
+          settingsOpen ||
+          g.target?.closest?.(
+            "input,textarea,select,button,a,[contenteditable]:not([contenteditable=false])",
+          )
+        )
+          return;
         activePanel ||
           chapterMenuOpen ||
           ((g.code === "Space" || g.code === "ArrowRight") &&
@@ -754,6 +779,17 @@ export function GameApp() {
     return <div className="app loading">{loadError}</div>;
   if (!script || !section || !project)
     return <div className="app loading">{"Loading MAGICKISA..."}</div>;
+  if (saveError && !gameStarted)
+    return (
+      <div className="app loading" role="alert">
+        <h1>存档需要处理</h1>
+        <p>{saveError}</p>
+        <p>
+          原存档保留；临时周目不会自动覆盖它。进入后可导入有效存档，或明确重新开始。
+        </p>
+        <button onClick={() => setGameStarted(true)}>打开临时新周目</button>
+      </div>
+    );
   if (!gameStarted) {
     const f = (project == null ? void 0 : project.titleScreen) || {},
       g = f.backdrop

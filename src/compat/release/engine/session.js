@@ -17,7 +17,7 @@ export class EngineSession {
       (this.persist = options.persist ?? !0));
     const initialSave =
       (options.initialSave
-        ? importSave(options.initialSave, project, { allowUnbound: true })
+        ? importSave(options.initialSave, project)
         : null) || (this.persist ? readSave(this.slotId, project) : null);
     this.engine = new AvgEngine(
       project,

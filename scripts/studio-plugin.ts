@@ -189,6 +189,17 @@ function diagnostics(
           field,
         });
   }
+  for (const ref of usages(p)) {
+    if (ref.kind === "script" && !ids.has(ref.target))
+      issues.push({
+        code: "reference",
+        severity: "error",
+        message: `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
+        nodeId: ref.position.nodeId,
+        lineId: ref.position.lineId,
+        field: ref.position.field,
+      });
+  }
   if (!issues.length) {
     const warnings: string[] = [];
     try {
@@ -216,17 +227,19 @@ function diagnostics(
       })),
     );
   }
-  for (const ref of usages(p)) {
-    if (ref.kind === "script" && !ids.has(ref.target))
-      issues.push({
-        code: "reference",
-        severity: "error",
-        message: `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
-        nodeId: ref.position.nodeId,
-        lineId: ref.position.lineId,
-        field: ref.position.field,
-      });
-  }
+  if (profile === "release")
+    for (const material of p.materials)
+      if (
+        !material.unlockNode &&
+        !material.unlock &&
+        p.nodes.some((n) => n.title === material.title)
+      )
+        issues.push({
+          code: "legacy-title-unlock",
+          severity: "warning",
+          message: `资料 ${material.title} 未设置解锁条件，兼容版沿用同名场景访问后解锁规则；建议明确设置解锁场景。`,
+          field: "materials",
+        });
   for (const n of p.nodes) {
     if (
       n.choices?.length &&
@@ -654,6 +667,18 @@ export function studioPlugin(): Plugin {
                     .readdirSync(ctx.content)
                     .map((f) => path.join(ctx.content, f))
                     .concat([ctx.projectFile]);
+            for (const f of files)
+              if (
+                files.some(
+                  (other) =>
+                    other !== f &&
+                    path.basename(other).toLowerCase() ===
+                      path.basename(f).toLowerCase(),
+                )
+              )
+                throw new Error(
+                  "备份文件名冲突，请先重命名 content 内与工程根文件同名的文件。",
+                );
             for (const f of files)
               fs.copyFileSync(f, path.join(backup, path.basename(f)));
             try {
