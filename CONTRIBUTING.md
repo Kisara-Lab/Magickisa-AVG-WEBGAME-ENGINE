@@ -25,9 +25,22 @@ git push -u origin feat/my-change
 # 在 GitHub 发起 Pull Request，目标分支选择 main
 ```
 
+上述命令适用于 `origin` 直接指向本仓库的维护者。Fork 贡献者的 `origin` 指向自己的仓库，应先添加并同步官方上游，再创建工作分支：
+
+```sh
+# 仅首次添加；已配置 upstream 时检查其地址即可
+git remote add upstream https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE.git
+git fetch upstream
+git switch -c feat/my-change upstream/main
+# 修改、提交后推送到自己的 Fork
+git push -u origin feat/my-change
+```
+
+已有工作分支需要同步时，先 `git fetch upstream`，再在工作分支执行 `git merge upstream/main`，解决冲突后推送并等待 CI。
+
 ## 开发与验证
 
-使用 Node.js 22+，执行 `npm ci`。修改后运行 `npm run typecheck`、`npm test`、`npm run test:studio` 和 `npm run build:studio`。工程写入与浏览器验收应串行执行。
+使用 Node.js 22+，执行 `npm ci`，再执行 `npx playwright install chromium` 安装浏览器验收需要的 Chromium。Linux 如需同时安装系统依赖，使用 `npx playwright install --with-deps chromium`；也可以设置 `MAGICKISA_BROWSER` 指向已安装的 Chromium / Edge 可执行文件。修改后运行 `npm run typecheck`、`npm test`、`npm run test:studio` 和 `npm run build:studio`。工程写入与浏览器验收应串行执行。
 
 新增测试使用生成的最小数据，不引入原游戏剧情、素材或发行包。请保持稳定 ID、工程格式、两种模式的运行语义和 Studio 预览消息协议兼容；格式变化需要单独说明兼容方案。
 
