@@ -785,7 +785,7 @@ export function GameApp() {
         <h1>存档需要处理</h1>
         <p>{saveError}</p>
         <p>
-          原存档保留；临时周目不会自动覆盖它。进入后可导入有效存档，或明确重新开始。
+          原存档保留；在导入有效存档或明确重新开始前，临时周目不会覆盖原存档。
         </p>
         <button onClick={() => setGameStarted(true)}>打开临时新周目</button>
       </div>

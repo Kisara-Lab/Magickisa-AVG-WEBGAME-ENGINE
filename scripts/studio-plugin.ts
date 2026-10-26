@@ -667,6 +667,7 @@ export function studioPlugin(): Plugin {
                     .readdirSync(ctx.content)
                     .map((f) => path.join(ctx.content, f))
                     .concat([ctx.projectFile]);
+            // Flat backups must reject root/content basename collisions before any write.
             for (const f of files)
               if (
                 files.some(
