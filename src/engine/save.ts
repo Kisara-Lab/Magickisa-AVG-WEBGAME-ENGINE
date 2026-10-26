@@ -123,9 +123,14 @@ export function importSave(
       );
     validPosition(save, p);
     save.history.forEach((s) => validPosition(s, p));
+    // Completed self-target saves from older versions could retain entered=false.
+    for (const state of [save, ...save.history])
+      if (state.completed) state.entered = true;
     return { ...save, slotId };
   }
-  throw new Error("不支持此存档版本。请导入本工程当前版本导出的存档；发行兼容版存档不能直接导入现代版。");
+  throw new Error(
+    "不支持此存档版本。请导入本工程当前版本导出的存档；发行兼容版存档不能直接导入现代版。",
+  );
 }
 
 export function readSave(

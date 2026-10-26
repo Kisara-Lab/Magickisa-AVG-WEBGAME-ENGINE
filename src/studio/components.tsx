@@ -150,6 +150,13 @@ export function CommandPalette({
         <input
           autoFocus
           aria-label="搜索场景与操作"
+          role="combobox"
+          aria-expanded="true"
+          aria-autocomplete="list"
+          aria-controls="st-command-results"
+          aria-activedescendant={
+            visible[index] ? `st-command-${index}` : undefined
+          }
           value={query}
           placeholder="场景、台词、人物、资料、素材或操作…"
           onChange={(e) => {
@@ -174,11 +181,20 @@ export function CommandPalette({
           }}
         />
       </label>
-      <div className="st-command-results" ref={results}>
+      <div
+        className="st-command-results"
+        id="st-command-results"
+        role="listbox"
+        aria-label="搜索结果"
+        ref={results}
+      >
         {visible.length ? (
           visible.map((c, i) => (
             <button
               data-command-index={i}
+              id={`st-command-${i}`}
+              role="option"
+              aria-selected={i === index}
               key={c.id}
               className={i === index ? "selected" : ""}
               onMouseEnter={() => setIndex(i)}
@@ -198,7 +214,7 @@ export function CommandPalette({
             </button>
           ))
         ) : (
-          <p>没有找到结果，试试场景标题或“保存”。</p>
+          <p role="status">没有找到结果，试试场景标题或“保存”。</p>
         )}
       </div>
       {!needle && onClearRecent && (
@@ -366,6 +382,7 @@ export function StatusBar({
       </span>
       <span>{source}</span>
       <span
+        role="status"
         className={
           draftState.includes("失败") || draftState.includes("不可用")
             ? "st-error-text"

@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import type { AssetFile } from "./LibraryEditors";
 import type { Profile, AuthorProject } from "./model";
-import { mediaUrl } from "./model";
+import { mediaUrl, uniqueId } from "./model";
 import { Modal } from "./components";
 type Kind = "image" | "audio" | "lyrics";
 interface Pick {
@@ -48,7 +48,8 @@ export function AssetPickerProvider({
       : pick?.kind === "audio"
         ? /\.(mp3|ogg|wav)$/i
         : /\.lrc$/i
-    ).test(f.url) && f.url.toLowerCase().includes(query.toLowerCase());
+    ).test(f.url.split(/[?#]/)[0]) &&
+    f.url.toLowerCase().includes(query.toLowerCase());
   return (
     <PickerContext.Provider
       value={(p) => {
@@ -86,7 +87,9 @@ export function AssetPickerProvider({
             ))}
           </div>
           {!files.some(matches) && (
-            <p>没有符合条件的素材。可先前往资源库导入。</p>
+            <p role="status">
+              没有符合类型与搜索条件的素材。选择器按文件扩展名筛选；可在资源库导入，外链或无扩展名资源请直接填写路径字段。
+            </p>
           )}
           {selected && (
             <div className="st-picker-detail">
@@ -118,9 +121,10 @@ export function AssetPickerProvider({
 export function registerBackdrop(project: AuthorProject, url: string) {
   const existing = project.backdrops.find((b) => b.src === url);
   if (existing) return existing.id;
-  let i = 1;
-  while (project.backdrops.some((b) => b.id === `backdrop-${i}`)) i++;
-  const id = `backdrop-${i}`;
+  const id = uniqueId(
+    "backdrop",
+    project.backdrops.map((b) => b.id),
+  );
   project.backdrops.push({ id, src: url });
   return id;
 }

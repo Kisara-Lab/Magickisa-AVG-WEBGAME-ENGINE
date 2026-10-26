@@ -1,4 +1,5 @@
 import type { StoryProject, StoryNode, Effect } from "../engine/types";
+import { randomId } from "../engine/id";
 export type AuthorNode = StoryNode & { effects?: Effect[]; act?: string };
 export type Profile = "modern" | "release";
 export type AuthorProject = Omit<StoryProject, "schemaVersion" | "nodes"> & {
@@ -17,16 +18,17 @@ export type Section =
   | "publish";
 export const copy = <T>(value: T): T => structuredClone(value);
 export function uniqueId(prefix: string, ids: string[]) {
-  let i = 1;
-  while (ids.includes(`${prefix}-${String(i).padStart(3, "0")}`)) i++;
-  return `${prefix}-${String(i).padStart(3, "0")}`;
+  let id: string;
+  do {
+    id = `${prefix}-${randomId()}`;
+  } while (ids.includes(id));
+  return id;
 }
 export function newNode(p: AuthorProject): StoryNode {
-  const numeric = p.nodes
-    .map((n) => /^node-(\d+)$/.exec(n.id))
-    .filter(Boolean)
-    .map((m) => Number(m![1]));
-  const id = `node-${String(Math.max(-1, ...numeric) + 1).padStart(3, "0")}`;
+  const id = uniqueId(
+    "node",
+    p.nodes.map((n) => n.id),
+  );
   return {
     id,
     title: "新的场景",

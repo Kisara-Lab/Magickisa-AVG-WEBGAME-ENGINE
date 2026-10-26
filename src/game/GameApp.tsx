@@ -8,7 +8,9 @@ import {
 import { EngineStore } from "../engine/store";
 import { assertProject } from "../engine/schema";
 import { selectContext, selectUnlockedMaterials } from "../engine/selectors";
-import { resolveAsset, resolveTrack } from "../engine/media";
+import { resolveAsset } from "../engine/media";
+import { resolvePlayback, playbackVolume } from "../engine/playback.js";
+import { GalleryAudio } from "../engine/GalleryAudio";
 import { EngineViewport } from "../engine/EngineViewport";
 import { TitleScreenHost } from "../engine/TitleScreenHost";
 import { EngineSplash } from "../engine/EngineSplash";
@@ -86,7 +88,9 @@ function LoadSession({
     <div className="recovery-error" role="alert">
       <h1>存档需要处理</h1>
       <p>{result.error}</p>
-      <p>原存档保持原样。可以打开临时新周目，再导入本工程当前版本导出的存档。</p>
+      <p>
+        原存档保持原样。可以打开临时新周目，再导入本工程当前版本导出的存档。
+      </p>
       <button onClick={onFresh}>打开临时新周目</button>
     </div>
   ) : result.store ? (
@@ -230,18 +234,31 @@ export function GameSession({
     line?.input,
     store,
   ]);
-  const bgm = !started
-    ? project.titleScreen.music
-    : save.presentation
+  const playback = resolvePlayback(
+    project,
+    node?.title || "",
+    save.audio.currentTrackId,
+  );
+  const musicRef = useRef<HTMLAudioElement | null>(null);
+  const bgm =
+    panel === "music"
       ? undefined
-      : project.audio.find((a) => a.id === save.audio.currentTrackId)?.src ||
-        resolveTrack(project, node?.title || "");
+      : !started
+        ? project.titleScreen.music
+        : save.presentation
+          ? undefined
+          : playback.src;
   useEffect(() => {
     const src = bgm;
     if (!src) return;
     const audio = new Audio(src);
+    musicRef.current = audio;
     audio.loop = true;
-    audio.volume = save.audio.muted ? 0 : save.audio.volume * 0.65;
+    audio.volume = playbackVolume(
+      save.audio,
+      started ? playback.volume : 1,
+      0.65,
+    );
     void audio
       .play()
       .then(() => setBlocked(false))
@@ -255,11 +272,20 @@ export function GameSession({
     window.addEventListener("pointerdown", enable, { once: true });
     return () => {
       audio.pause();
+      if (musicRef.current === audio) musicRef.current = null;
       audio.removeAttribute("src");
       audio.load();
       window.removeEventListener("pointerdown", enable);
     };
-  }, [bgm, save.audio.muted, save.audio.volume]);
+  }, [bgm]);
+  useEffect(() => {
+    if (musicRef.current)
+      musicRef.current.volume = playbackVolume(
+        save.audio,
+        started ? playback.volume : 1,
+        0.65,
+      );
+  }, [save.audio.muted, save.audio.volume, playback.volume, started, bgm]);
   const materials = selectUnlockedMaterials(project, save);
   const unread = (category: string) =>
     materials.some(
@@ -328,7 +354,7 @@ export function GameSession({
       >
         {import.meta.env.DEV && (
           <a href="/engine.html">
-          {project.ui?.labels?.development || "开发预览"}
+            {project.ui?.labels?.development || "开发预览"}
           </a>
         )}
       </TitleScreenHost>
@@ -725,7 +751,13 @@ export function GameSession({
                   .map((t) => (
                     <article key={t.id}>
                       <h3>{t.title}</h3>
-                      <audio controls src={t.src} />
+                      <GalleryAudio
+                        src={t.src}
+                        audio={save.audio}
+                        volume={
+                          project.audio.find((a) => a.src === t.src)?.volume
+                        }
+                      />
                     </article>
                   ))}
               </div>

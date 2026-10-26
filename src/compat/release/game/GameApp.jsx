@@ -14,7 +14,8 @@ import {
 import { isMaterialAvailable, isMusicAvailable } from "../engine/unlocks.js";
 import { attachDebug } from "../engine/debug.js";
 import { preloadCharacters } from "../engine/resourceManager.js";
-import { resolveTrack } from "../engine/media.js";
+import { resolvePlayback, playbackVolume } from "../../../engine/playback.js";
+import { GalleryAudio } from "../../../engine/GalleryAudio";
 import { TitleScreenHost } from "../engine/TitleScreenHost.jsx";
 import { PresentationHost } from "../engine/PresentationHost.jsx";
 import { Music2 } from "lucide-react";
@@ -64,9 +65,7 @@ export function syncLegacyView(view, save, project) {
     flags: save.variables,
     blackTide: Number(save.variables.blackTide || 0),
     visited: visitedIndices,
-    notes: save.notes.join(`
-
-`),
+    notes: save.playerNotes ?? "",
     unlockedMaterials: [...save.unlockedMaterials],
   };
 }
@@ -162,6 +161,45 @@ export function GameApp() {
       .catch(() => setLoadError("正式文案加载失败，请刷新页面重试。"));
   }, []);
   const sections = (script == null ? void 0 : script.sections) ?? [];
+  const currentAudio = engineStoreRef.current?.runtime.save.audio || {
+    volume: 1,
+    muted: false,
+  };
+  const captureTitleAudio = React.useCallback((element) => {
+    if (!element) titleAudioRef.current?.pause();
+    titleAudioRef.current = element;
+  }, []);
+  const playback = project
+    ? resolvePlayback(
+        project,
+        project.nodes[view.index]?.title || "",
+        currentAudio.currentTrackId,
+      )
+    : { src: "", volume: 1 };
+  const setPlayerNotes = (text) => {
+    const store = engineStoreRef.current;
+    if (!store) return;
+    store.runtime.save = { ...store.runtime.save, playerNotes: text };
+    store.emit(store.runtime.save);
+    setView((v) => syncView(v, store.runtime.save));
+  };
+  const setAudioSettings = (patch) => {
+    const store = engineStoreRef.current;
+    if (!store) return;
+    store.runtime.save = {
+      ...store.runtime.save,
+      audio: { ...store.runtime.save.audio, ...patch },
+    };
+    store.emit(store.runtime.save);
+    setView((v) => syncView(v, store.runtime.save));
+  };
+  React.useEffect(
+    () => () => {
+      titleAudioRef.current?.pause();
+      audioManagerRef.current.stopAll();
+    },
+    [],
+  );
   (React.useEffect(() => {
     var N;
     if (!((N = project == null ? void 0 : project.nodes) != null && N.length))
@@ -461,12 +499,16 @@ export function GameApp() {
     React.useEffect(() => {
       gameStarted ||
         !titleAudioRef.current ||
-        ((titleAudioRef.current.volume = 0.72),
+        ((titleAudioRef.current.volume = playbackVolume(currentAudio, 1, 0.72)),
         titleAudioRef.current
           .play()
           .then(() => setAudioBlocked(!1))
           .catch(() => setAudioBlocked(!0)));
-    }, [gameStarted]),
+    }, [gameStarted, project?.id, currentAudio.volume, currentAudio.muted]),
+    React.useEffect(() => {
+      for (const audio of [openingAudioRef.current, endingAudioRef.current])
+        if (audio) audio.volume = playbackVolume(currentAudio);
+    }, [openingActive, endingActive, currentAudio.volume, currentAudio.muted]),
     React.useEffect(() => {
       if (!gameStarted) return;
       if (splashActive) {
@@ -477,16 +519,11 @@ export function GameApp() {
         (audioManagerRef.current.stop("chapter"), setCurrentMusicTitle(""));
         return;
       }
-      if (openingActive || endingActive) {
+      if (openingActive || endingActive || activePanel === "music") {
         audioManagerRef.current.pause("chapter");
         return;
       }
-      const f = project
-        ? resolveTrack(
-            project,
-            (section == null ? void 0 : section.title) || "",
-          )
-        : "";
+      const f = playback.src;
       if (!f) {
         (audioManagerRef.current.pause("chapter"), setCurrentMusicTitle(""));
         return;
@@ -497,7 +534,7 @@ export function GameApp() {
             window.setTimeout(() => setCurrentMusicTitle(""), 5200))
           : setCurrentMusicTitle(""),
         audioManagerRef.current.play("chapter", f, {
-          volume: 0.6,
+          volume: playbackVolume(currentAudio, playback.volume, 0.6),
           loop: !0,
         }),
         () => audioManagerRef.current.pause("chapter")
@@ -509,6 +546,11 @@ export function GameApp() {
       endingActive,
       section == null ? void 0 : section.title,
       showMusicLabel,
+      playback.src,
+      playback.volume,
+      currentAudio.volume,
+      currentAudio.muted,
+      activePanel,
     ]),
     React.useEffect(() => {
       if (!splashActive) return;
@@ -799,14 +841,12 @@ export function GameApp() {
       <TitleScreenHost
         project={project}
         backdrop={g}
-        audioRef={(N) => {
-          titleAudioRef.current = N;
-        }}
+        audioRef={captureTitleAudio}
         audioBlocked={audioBlocked}
         onStart={startNewGame}
         onContinue={() => {
           var N;
-          ((N = titleAudioRef.current) == null || N.play().catch(() => {}),
+          ((N = titleAudioRef.current) == null || N.pause(),
             setGameStarted(!0));
         }}
         onEnableAudio={() => {
@@ -1153,13 +1193,9 @@ export function GameApp() {
           <FileText size={16} />
           <span>{"旅者笔记"}</span>
           <input
+            aria-label="旅者笔记"
             value={view.notes}
-            onChange={(f) =>
-              setView((g) => ({
-                ...g,
-                notes: f.target.value,
-              }))
-            }
+            onChange={(f) => setPlayerNotes(f.target.value)}
             placeholder="写下你的推理……"
           />
         </section>
@@ -1237,6 +1273,28 @@ export function GameApp() {
                 }}
               />
               {" 快进已读文本"}
+            </label>
+            <label>
+              音量{" "}
+              <input
+                aria-label="音量"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={currentAudio.volume}
+                onChange={(e) =>
+                  setAudioSettings({ volume: Number(e.target.value) })
+                }
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={currentAudio.muted}
+                onChange={(e) => setAudioSettings({ muted: e.target.checked })}
+              />
+              静音
             </label>
             <p>
               {"快捷键：Space / 右方向键继续，左方向键回退，Esc 关闭面板。"}
@@ -1330,10 +1388,13 @@ export function GameApp() {
                   .map((track) => (
                     <article key={track.id || track.src}>
                       <h3>{track.title}</h3>
-                      <audio
-                        controls
-                        preload="none"
+                      <GalleryAudio
                         src={gameAsset(track.src, project)}
+                        audio={currentAudio}
+                        volume={
+                          project.audio?.find((a) => a.src === track.src)
+                            ?.volume
+                        }
                       />
                     </article>
                   ))}
@@ -1343,14 +1404,15 @@ export function GameApp() {
               </div>
             ) : activePanel === "notes" ? (
               <div className="notes-modal">
+                {(engineStoreRef.current?.runtime.save.notes || []).map(
+                  (note, index) => (
+                    <p key={index}>{note}</p>
+                  ),
+                )}
                 <textarea
+                  aria-label="旅者笔记"
                   value={view.notes}
-                  onChange={(f) =>
-                    setView((g) => ({
-                      ...g,
-                      notes: f.target.value,
-                    }))
-                  }
+                  onChange={(f) => setPlayerNotes(f.target.value)}
                   placeholder="写下你的推理……"
                 />
               </div>

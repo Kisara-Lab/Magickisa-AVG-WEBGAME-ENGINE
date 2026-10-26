@@ -166,6 +166,8 @@ export function Studio() {
       nodeId?: string;
       lineId?: string;
       field?: string;
+      position?: EditorPosition;
+      path?: (string | number)[];
     }[]
   >([]);
   const [events, setEvents] = useState<string[]>([]);
@@ -264,11 +266,15 @@ export function Studio() {
         const candidates = Array.from(
           document.querySelectorAll<HTMLElement>(".st-content [aria-label]"),
         );
-        let input = target.field
-          ? candidates.find(
-              (e) => e.getAttribute("aria-label") === target.field,
-            )
-          : undefined;
+        let input = target.selector
+          ? document
+              .querySelector(".st-content")
+              ?.querySelector<HTMLElement>(target.selector) || undefined
+          : target.field
+            ? candidates.find(
+                (e) => e.getAttribute("aria-label") === target.field,
+              )
+            : undefined;
         if (!input && target.field) {
           const heading = Array.from(
             document.querySelectorAll<HTMLElement>(
@@ -280,7 +286,7 @@ export function Studio() {
             input = heading;
           }
         }
-        if (target.field?.startsWith("分支:")) {
+        if (!input && target.field?.startsWith("分支:")) {
           const [, id, part] = target.field.split(":");
           const branch = Array.from(
             document.querySelectorAll<HTMLElement>("[data-branch-id]"),
@@ -358,6 +364,9 @@ export function Studio() {
       setDraftState(`草稿保留失败：${String(e)}；原草稿仍保留。`);
     }
     setProject(d.project);
+    setPast([]);
+    setFuture([]);
+    editGroup.current = { field: null, at: 0 };
     setSaved(d.saved);
     setRevision(d.revision);
     setRaw(d.raw);
@@ -645,15 +654,30 @@ export function Studio() {
     editGroup.current = { field: null, at: 0 };
     if (!past.length || !project) return;
     setFuture([project, ...future].slice(0, 40));
-    setProject(past[past.length - 1]);
+    restoreEdit(past[past.length - 1]);
     setPast(past.slice(0, -1));
   }
   function redo() {
     editGroup.current = { field: null, at: 0 };
     if (!future.length || !project) return;
     setPast([...past, project].slice(-40));
-    setProject(future[0]);
+    restoreEdit(future[0]);
     setFuture(future.slice(1));
+  }
+  function restoreEdit(next: AuthorProject) {
+    const target =
+      next.nodes.find((n) => n.id === selected) ||
+      next.nodes.find((n) => n.id === next.startNodeId) ||
+      next.nodes[0];
+    const lineId = node?.lines[lineIndex]?.id;
+    const found = target?.lines.findIndex((l) => l.id === lineId) ?? -1;
+    setSelected(target?.id || "");
+    setLine(
+      found >= 0
+        ? found
+        : Math.max(0, Math.min(lineIndex, (target?.lines.length || 1) - 1)),
+    );
+    setProject(next);
   }
   async function validate(p = project) {
     if (!p) return false;
@@ -955,6 +979,26 @@ export function Studio() {
     );
   };
   const commandItems = [
+    ...(past.length
+      ? [
+          {
+            id: "undo",
+            label: "撤销工程修改",
+            hint: "输入框外 Ctrl+Z；输入框内保留原生文字撤销",
+            run: undo,
+          },
+        ]
+      : []),
+    ...(future.length
+      ? [
+          {
+            id: "redo",
+            label: "重做工程修改",
+            hint: "输入框外 Ctrl+Y",
+            run: redo,
+          },
+        ]
+      : []),
     ...tabs.map(([id, label]) => ({
       id,
       label: `打开${label}`,
@@ -1107,7 +1151,10 @@ export function Studio() {
                 <option value="modern">现代开发版</option>
                 <option value="release">原发行兼容版</option>
               </select>
-              <span className={`st-save-state ${dirty ? "dirty" : ""}`}>
+              <span
+                role="status"
+                className={`st-save-state ${dirty ? "dirty" : ""}`}
+              >
                 {dirty ? "● 工程未保存" : "✓ 工程已保存"}
               </span>
               <button
@@ -1361,6 +1408,18 @@ export function Studio() {
                           });
                           return;
                         }
+                        if (issue.position) {
+                          visit(issue.position);
+                          return;
+                        }
+                        if (issue.field === "startNodeId") {
+                          visit({
+                            section: "project",
+                            items: {},
+                            field: "起始场景",
+                          });
+                          return;
+                        }
                         if (issue.nodeId) {
                           const labels: Record<string, string> = {
                             next: "下一场景",
@@ -1368,6 +1427,14 @@ export function Studio() {
                             text: "台词正文",
                             speaker: "默认说话人",
                             background: "场景背景",
+                            condition: issue.lineId
+                              ? "本句条件与玩家输入"
+                              : "进入条件",
+                            input: "本句条件与玩家输入",
+                            characterLayers: "人物图层与位置",
+                            onEnter: "进入时效果",
+                            onComplete: "完成时效果",
+                            effects: "场景效果",
                           };
                           visit({
                             section: "script",
@@ -1442,6 +1509,7 @@ export function Studio() {
                       "assets",
                       "characters",
                       "materials",
+                      "project",
                     ].includes(section) && (
                       <button onClick={() => setUsageOpen(true)}>
                         在哪里使用
@@ -1978,7 +2046,9 @@ export function Studio() {
                 onError={setError}
               />
               <pre data-testid="preview-state">
-                {JSON.stringify(runtime, null, 2) || "等待预览启动…"}
+                {runtime === null
+                  ? "等待预览启动…"
+                  : JSON.stringify(runtime, null, 2)}
               </pre>
             </Fold>
             <p className="st-preview-hint">

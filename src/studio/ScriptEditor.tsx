@@ -168,10 +168,8 @@ export function ScriptEditor({
                 const n = { ...node };
                 if (v) {
                   n.presentation = v as "dedication" | "ending";
-                  n.sequenceId = v;
                 } else {
                   delete n.presentation;
-                  delete n.sequenceId;
                 }
                 onChange(n);
               }}
@@ -434,7 +432,7 @@ export function ScriptEditor({
                       ),
                     });
                   return (
-                    <div className="st-rule" key={i}>
+                    <div className="st-rule" key={i} data-layer-index={i}>
                       <div className="st-fields">
                         <Field
                           label={`图层 ${i + 1} 人物`}
@@ -484,11 +482,25 @@ export function ScriptEditor({
                               ][i]
                             }
                             type="number"
+                            allowEmpty
+                            min={
+                              key === "scale"
+                                ? 0.01
+                                : key === "opacity"
+                                  ? 0
+                                  : undefined
+                            }
+                            max={key === "opacity" ? 1 : undefined}
                             step={
                               key === "scale" || key === "opacity" ? 0.1 : 1
                             }
-                            value={layer[key] ?? [50, 100, 1, 1, 2][i]}
-                            onChange={(v) => update({ [key]: Number(v) })}
+                            value={layer[key]}
+                            placeholder="自动（清空以使用运行时默认值）"
+                            onChange={(v) =>
+                              update({
+                                [key]: v === "" ? undefined : Number(v),
+                              })
+                            }
                           />
                         ))}
                         <Field
@@ -591,6 +603,7 @@ export function ScriptEditor({
                         label="输入长度上限"
                         type="number"
                         min={1}
+                        step={1}
                         value={line.input.maxLength}
                         onChange={(v) =>
                           changeLine({
@@ -693,6 +706,8 @@ export function ScriptEditor({
                   }}
                 />
                 <EffectsEditor
+                  audio={project.audio}
+                  materials={project.materials}
                   label="选择后效果"
                   value={c.effects}
                   onChange={(effects) => change({ ...c, effects })}
@@ -723,6 +738,8 @@ export function ScriptEditor({
         {project.schemaVersion !== 2 ? (
           <>
             <EffectsEditor
+              audio={project.audio}
+              materials={project.materials}
               label="场景效果"
               value={node.effects}
               onChange={(effects) => onChange({ ...node, effects })}
@@ -734,11 +751,15 @@ export function ScriptEditor({
         ) : (
           <>
             <EffectsEditor
+              audio={project.audio}
+              materials={project.materials}
               label="进入时效果"
               value={node.onEnter}
               onChange={(onEnter) => onChange({ ...node, onEnter })}
             />
             <EffectsEditor
+              audio={project.audio}
+              materials={project.materials}
               label="完成时效果"
               value={node.onComplete}
               onChange={(onComplete) => onChange({ ...node, onComplete })}

@@ -19,6 +19,9 @@ import {
 } from "./workspaces";
 import { ProjectPackages } from "./project-packages";
 import { usages } from "../src/studio/discovery";
+import { authorWarnings } from "../src/studio/authorWarnings";
+import { issuePosition } from "../src/studio/issuePosition";
+import type { EditorPosition } from "../src/studio/workspace";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
 const read = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -65,6 +68,17 @@ function revision(profile: Profile, ctx = projectContext(profile)) {
             .join("\0"),
   );
 }
+function invalidReferences(p: AuthorProject) {
+  const targets: Record<string, Set<string>> = {
+    script: new Set(p.nodes.map((n) => n.id)),
+    characters: new Set(p.characters.map((c) => c.id)),
+    materials: new Set(p.materials.map((m) => m.id)),
+    audio: new Set(p.audio.map((a) => a.id)),
+  };
+  return usages(p).filter(
+    (ref) => targets[ref.kind] && !targets[ref.kind].has(ref.target),
+  );
+}
 function validate(
   input: unknown,
   profile: Profile,
@@ -75,8 +89,9 @@ function validate(
   const p =
     profile === "modern" ? assertProject(input) : (input as AuthorProject);
   const ids = new Set(p.nodes.map((n) => n.id));
-  if (ids.size !== p.nodes.length || !ids.has(p.startNodeId))
-    throw new Error("节点 ID 重复或起点不存在。");
+  if (ids.size !== p.nodes.length) throw new Error("节点 ID 重复。");
+  if (!ids.has(p.startNodeId))
+    throw new Error(`起始场景不存在：${p.startNodeId}`);
   const lineIds = new Set<string>();
   for (const n of p.nodes) {
     for (const t of [n.next, ...(n.choices || []).map((c) => c.target)].filter(
@@ -89,11 +104,10 @@ function validate(
     }
   }
   const publicRoot = ctx.public;
-  for (const ref of usages(p))
-    if (ref.kind === "script" && !ids.has(ref.target))
-      throw new Error(
-        `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
-      );
+  for (const ref of invalidReferences(p))
+    throw new Error(
+      `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
+    );
   for (const ref of resourceReferences(
     p as Parameters<typeof resourceReferences>[0],
   )) {
@@ -128,6 +142,8 @@ interface StudioIssue {
   nodeId?: string;
   lineId?: string;
   field?: string;
+  position?: EditorPosition;
+  path?: (string | number)[];
 }
 function diagnostics(
   input: unknown,
@@ -151,6 +167,11 @@ function diagnostics(
         nodeId: node?.id,
         lineId: li >= 0 ? node?.lines?.[Number(path[li + 1])]?.id : undefined,
         field: String(path.at(-1) || ""),
+        path: path.map((p) => (typeof p === "number" ? p : String(p))),
+        position: issuePosition(
+          p,
+          path.map((p) => (typeof p === "number" ? p : String(p))),
+        ),
       };
     });
   const issues: StudioIssue[] = [],
@@ -162,6 +183,7 @@ function diagnostics(
       severity: "error",
       message: "起始场景不存在",
       field: "startNodeId",
+      position: { section: "project", items: {}, field: "起始场景" },
     });
   for (const n of p.nodes) {
     if (seen.has(n.id))
@@ -189,16 +211,16 @@ function diagnostics(
           field,
         });
   }
-  for (const ref of usages(p)) {
-    if (ref.kind === "script" && !ids.has(ref.target))
-      issues.push({
-        code: "reference",
-        severity: "error",
-        message: `${ref.label} 的${ref.field}引用了不存在的场景 ${ref.target}`,
-        nodeId: ref.position.nodeId,
-        lineId: ref.position.lineId,
-        field: ref.position.field,
-      });
+  for (const ref of invalidReferences(p)) {
+    issues.push({
+      code: "reference",
+      severity: "error",
+      message: `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
+      nodeId: ref.position.nodeId,
+      lineId: ref.position.lineId,
+      field: ref.position.field,
+      position: ref.position,
+    });
   }
   if (!issues.length) {
     const warnings: string[] = [];
@@ -240,20 +262,7 @@ function diagnostics(
           message: `资料 ${material.title} 未设置解锁条件，兼容版沿用同名场景访问后解锁规则；建议明确设置解锁场景。`,
           field: "materials",
         });
-  for (const n of p.nodes) {
-    if (
-      n.choices?.length &&
-      n.choices.every((c) => c.condition || c.once) &&
-      (!n.next || p.nodes.find((target) => target.id === n.next)?.condition)
-    )
-      issues.push({
-        code: "branch-fallback",
-        severity: "warning",
-        message: `${n.title} 的选项可能全部不可用，且没有无条件下一场景；请确认这是预期的停留或结局。`,
-        nodeId: n.id,
-        field: "下一场景",
-      });
-  }
+  issues.push(...authorWarnings(p, profile));
   return issues;
 }
 function saveRelease(p: AuthorProject, ctx = projectContext("release")) {
