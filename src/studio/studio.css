@@ -443,7 +443,15 @@ body {
   color: #553a20;
 }
 .st-upload input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.st-upload:focus-within {
+  outline: 3px solid #392306;
+  outline-offset: 3px;
 }
 .st-feedback {
   padding: 0 22px;

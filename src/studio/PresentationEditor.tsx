@@ -33,8 +33,13 @@ export function PresentationEditor({
   const opening = media.opening || {},
     ending = media.ending || {},
     dedication = media.dedication || {};
+  const configuredDuration =
+    (mode === "opening" ? opening.duration : ending.duration) ??
+    (mode === "opening" ? 89 : 198);
   const duration =
-    (mode === "opening" ? opening.duration : ending.duration) || 1;
+    Number.isFinite(configuredDuration) && configuredDuration > 0
+      ? configuredDuration
+      : 1;
   const cues =
     mode === "opening"
       ? (opening.pages || []).map((c) => ({ at: c.at, text: c.text }))
@@ -51,6 +56,11 @@ export function PresentationEditor({
           应用并预览演出
         </button>
       </div>
+      {configuredDuration <= 0 && (
+        <p role="alert">
+          总时长必须大于 0；时间轴暂按 1 秒显示，请修正总时长后预览。
+        </p>
+      )}
       <div className="st-tabs">
         {(["dedication", "opening", "ending"] as const).map((m, i) => (
           <button
@@ -583,21 +593,18 @@ export function PresentationEditor({
               <Card
                 title="OP 镜头 · 每 14 秒轮换"
                 action={
-                  <button
-                    onClick={() =>
+                  <PickAsset
+                    kind="image"
+                    label="添加镜头"
+                    onPick={(url) =>
                       change({
                         opening: {
                           ...opening,
-                          images: [
-                            ...(opening.images || []),
-                            project.backdrops[0]?.id || "",
-                          ],
+                          images: [...(opening.images || []), url],
                         },
                       })
                     }
-                  >
-                    添加镜头
-                  </button>
+                  />
                 }
               >
                 <div className="st-filmstrip">
@@ -792,7 +799,7 @@ export function PresentationEditor({
                   label="鸣谢滚动时长（秒）"
                   type="number"
                   min={1}
-                  value={ending.creditsDuration || 42}
+                  value={ending.creditsDuration ?? 42}
                   onChange={(v) =>
                     change({
                       ending: { ...ending, creditsDuration: Number(v) },

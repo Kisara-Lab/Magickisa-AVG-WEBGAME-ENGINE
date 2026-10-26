@@ -91,6 +91,15 @@ export function AssetEditor({
     );
   }
   function assign(target: string) {
+    if (
+      !selected ||
+      (target === "character" &&
+        !project.characters.some((c) => c.id === character)) ||
+      (target === "scene" && !project.nodes.some((n) => n.id === nodeId))
+    ) {
+      notice("未找到所选素材或目标，未做任何修改。请重新选择。");
+      return;
+    }
     const p = structuredClone(project),
       id = backdrop();
     if (
@@ -324,8 +333,10 @@ export function AssetEditor({
         collapsible
         summary={`${project.backdrops.length} 项 · 高级资源映射`}
         action={
-          <button
-            onClick={() =>
+          <PickAsset
+            kind="image"
+            label="添加背景"
+            onPick={(src) =>
               onChange({
                 ...project,
                 backdrops: [
@@ -335,14 +346,12 @@ export function AssetEditor({
                       "backdrop",
                       project.backdrops.map((b) => b.id),
                     ),
-                    src: "/assets/generated/city-ruins.png",
+                    src,
                   },
                 ],
               })
             }
-          >
-            添加背景
-          </button>
+          />
         }
       >
         {project.backdrops.map((b, i) => (
@@ -379,25 +388,22 @@ export function AssetEditor({
         collapsible
         summary={`${project.resources.sceneRules?.length || 0} 条 · 按关键词匹配`}
         action={
-          <button
-            onClick={() =>
+          <PickAsset
+            kind="image"
+            label="添加规则"
+            onPick={(asset) =>
               onChange({
                 ...project,
                 resources: {
                   ...project.resources,
                   sceneRules: [
                     ...(project.resources.sceneRules || []),
-                    {
-                      keywords: ["新场景"],
-                      asset: project.backdrops[0]?.id || "",
-                    },
+                    { keywords: ["新场景"], asset },
                   ],
                 },
               })
             }
-          >
-            添加规则
-          </button>
+          />
         }
       >
         {(project.resources.sceneRules || []).map((r, i) => (

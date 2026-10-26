@@ -11,7 +11,7 @@ export interface Destination {
   position: EditorPosition;
 }
 export interface Usage {
-  kind: "assets" | "characters" | "materials" | "script";
+  kind: "assets" | "characters" | "materials" | "script" | "audio";
   target: string;
   label: string;
   field: string;
@@ -174,12 +174,14 @@ export function usages(p: AuthorProject): Usage[] {
         add("materials", e.id, label, field, position);
       if (e.type === "setAudio") {
         const track = p.audio.find((a) => a.id === e.trackId);
-        asset(
-          track?.src || p.media.chapterMusic?.[e.trackId],
+        add(
+          "audio",
+          e.trackId,
           label,
-          field,
+          `${field} · 音轨 ${e.trackId}${track ? "" : "（已失效）"}`,
           position,
         );
+        asset(track?.src, label, field, position);
       }
     });
   };

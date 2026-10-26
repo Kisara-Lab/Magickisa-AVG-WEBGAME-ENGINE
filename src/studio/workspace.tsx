@@ -9,6 +9,7 @@ export interface EditorPosition {
   mode?: "dedication" | "opening" | "ending";
   items: Record<string, string>;
   field?: string;
+  selector?: string;
 }
 interface Bookmark {
   position: EditorPosition;

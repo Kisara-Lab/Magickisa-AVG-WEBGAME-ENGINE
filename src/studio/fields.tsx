@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
-import type { Condition, Effect, StoryNode, Value } from "../engine/types";
+import type {
+  Condition,
+  Effect,
+  StoryNode,
+  Value,
+  StoryProject,
+} from "../engine/types";
 import { Fold } from "./components";
 export function Field({
   label,
@@ -13,6 +19,7 @@ export function Field({
   min,
   max,
   step,
+  allowEmpty = false,
 }: {
   label: string;
   value?: string | number;
@@ -24,7 +31,14 @@ export function Field({
   min?: number;
   max?: number;
   step?: number;
+  allowEmpty?: boolean;
 }) {
+  const [numberText, setNumberText] = useState(String(value ?? ""));
+  const [numberError, setNumberError] = useState("");
+  useEffect(() => {
+    setNumberText(String(value ?? ""));
+    setNumberError("");
+  }, [value]);
   const explanation = /路径|目录/.test(label)
     ? "可用资源 ID 或路径，例如 /assets/imported/scene.png；素材选择器可自动回填。"
     : /字幕.*时间|时长/.test(label)
@@ -39,6 +53,9 @@ export function Field({
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
         >
+          {!options.some((o) => o.value === String(value ?? "")) && (
+            <option value={value ?? ""}>未设置或已失效：{value}</option>
+          )}
           {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -60,11 +77,36 @@ export function Field({
           min={min}
           max={max}
           step={step}
-          value={value ?? ""}
+          value={type === "number" ? numberText : (value ?? "")}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={!!numberError}
+          onChange={(e) => {
+            const text = e.target.value;
+            if (type !== "number") {
+              onChange(text);
+              return;
+            }
+            setNumberText(text);
+            const n = Number(text);
+            if (
+              (!text && !allowEmpty) ||
+              (text &&
+                (!Number.isFinite(n) ||
+                  (min !== undefined && n < min) ||
+                  (max !== undefined && n > max) ||
+                  (step === 1 && !Number.isInteger(n))))
+            ) {
+              setNumberError(
+                `尚未应用：请输入${min !== undefined ? ` ≥ ${min}` : "有效"}${max !== undefined ? `、≤ ${max}` : ""}的${step === 1 ? "整数" : "数字"}；工程保留原值。`,
+              );
+              return;
+            }
+            setNumberError("");
+            onChange(text);
+          }}
         />
       )}
+      {numberError && <small role="alert">{numberError}</small>}
       {explanation && <small className="st-field-help">{explanation}</small>}
     </label>
   );
@@ -128,16 +170,53 @@ export function JsonField({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
-  const [text, setText] = useState(JSON.stringify(value ?? null, null, 2)),
+  const serialized = JSON.stringify(value ?? null, null, 2);
+  const base = useRef(serialized);
+  const [dirty, setDirty] = useState(false);
+  const [text, setText] = useState(serialized),
     [error, setError] = useState("");
-  useEffect(() => setText(JSON.stringify(value ?? null, null, 2)), [value]);
+  useEffect(() => {
+    if (!dirty) {
+      setText(serialized);
+      base.current = serialized;
+    }
+  }, [serialized, dirty]);
   return (
     <div className="st-json-field">
-      <Field label={label} value={text} multiline onChange={setText} />
+      <Field
+        label={label}
+        value={text}
+        multiline
+        onChange={(v) => {
+          setText(v);
+          setDirty(v !== base.current);
+        }}
+      />
+      {dirty && (
+        <p role="status">
+          此项 JSON 尚未应用。
+          {serialized !== base.current
+            ? "工程中的此项已变化，请核对后应用或重新载入。"
+            : "应用后才会参与保存、预览与导出。"}
+        </p>
+      )}
+      {dirty && (
+        <button
+          onClick={() => {
+            setText(serialized);
+            base.current = serialized;
+            setDirty(false);
+            setError("");
+          }}
+        >
+          丢弃此项输入并重新载入
+        </button>
+      )}
       <button
         onClick={() => {
           try {
             onChange(JSON.parse(text));
+            setDirty(false);
             setError("");
           } catch (e) {
             setError(String(e));
@@ -219,16 +298,16 @@ const conditionTypes = [
   ["any", "满足任一"],
   ["not", "取反"],
 ];
-function makeCondition(type: string): Condition {
+export function makeCondition(type: string, nodeId = ""): Condition {
   return type === "all" || type === "any"
-    ? { type, conditions: [] }
+    ? { type, conditions: [{ type: "flag", key: "flag", equals: true }] }
     : type === "not"
-      ? { type, condition: { type: "flag", key: "", equals: true } }
+      ? { type, condition: { type: "flag", key: "flag", equals: true } }
       : type === "visited"
-        ? { type, nodeId: "", value: true }
+        ? { type, nodeId, value: true }
         : type === "count"
-          ? { type, key: "", operator: "gte", value: 1 }
-          : { type: "flag", key: "", equals: true };
+          ? { type, key: "count", operator: "gte", value: 1 }
+          : { type: "flag", key: "flag", equals: true };
 }
 export function ConditionEditor({
   value,
@@ -242,7 +321,7 @@ export function ConditionEditor({
   label?: string;
 }) {
   return (
-    <div className="st-rule">
+    <div className="st-rule" data-rule-label={label}>
       <div className="st-inline">
         <strong>{label}</strong>
         <button
@@ -260,7 +339,7 @@ export function ConditionEditor({
             label={`${label}类型`}
             value={value.type}
             options={conditionTypes.map(([value, label]) => ({ value, label }))}
-            onChange={(v) => onChange(makeCondition(v))}
+            onChange={(v) => onChange(makeCondition(v, nodes[0]?.id))}
           />
           {value.type === "flag" || value.type === "count" ? (
             <Field
@@ -323,6 +402,15 @@ export function ConditionEditor({
           )}
           {(value.type === "all" || value.type === "any") && (
             <>
+              {!value.conditions.length && (
+                <p role="status">
+                  空组合：
+                  {value.type === "all"
+                    ? "同时满足将始终成立"
+                    : "满足任一将始终不成立"}
+                  。请添加子条件或移除组合。
+                </p>
+              )}
               <div className="st-subrules">
                 {value.conditions.map((v, i) => (
                   <ConditionEditor
@@ -382,30 +470,38 @@ const effectTypes = [
   ["appendNote", "追加笔记"],
   ["setAudio", "切换音轨"],
 ];
-function makeEffect(type: string): Effect {
+function makeEffect(
+  type: string,
+  audio: { id: string }[] = [],
+  materials: { id: string }[] = [],
+): Effect {
   return type === "unlockMaterial" || type === "markRead"
-    ? { type, id: "" }
+    ? { type, id: materials[0]?.id || "" }
     : type === "appendNote"
       ? { type, text: "" }
       : type === "setAudio"
-        ? { type, trackId: "" }
+        ? { type, trackId: audio[0]?.id || "" }
         : type === "increment"
-          ? { type, key: "", amount: 1 }
+          ? { type, key: "count", amount: 1 }
           : type === "toggle"
-            ? { type, key: "" }
-            : { type: type as "set", key: "", value: true };
+            ? { type, key: "flag" }
+            : { type: type as "set", key: "flag", value: true };
 }
 export function EffectsEditor({
   value = [],
   onChange,
   label,
+  audio = [],
+  materials = [],
 }: {
   value?: Effect[];
   onChange: (v: Effect[]) => void;
   label: string;
+  audio?: StoryProject["audio"];
+  materials?: StoryProject["materials"];
 }) {
   return (
-    <div className="st-rule">
+    <div className="st-rule" data-rule-label={label}>
       <div className="st-inline">
         <strong>
           {label} <small>{value.length}</small>
@@ -421,16 +517,23 @@ export function EffectsEditor({
         const change = (v: Effect) =>
           onChange(value.map((e, j) => (j === i ? v : e)));
         return (
-          <div className="st-effect" key={i}>
+          <div className="st-effect" key={i} data-effect-index={i}>
             <div className="st-inline">
               <Field
                 label={`效果 ${i + 1} 类型`}
                 value={effect.type}
-                options={effectTypes.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                onChange={(v) => change(makeEffect(v))}
+                options={effectTypes
+                  .filter(
+                    ([type]) =>
+                      (type !== "setAudio" || audio.length) &&
+                      (!["unlockMaterial", "markRead"].includes(type) ||
+                        materials.length),
+                  )
+                  .map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                onChange={(v) => change(makeEffect(v, audio, materials))}
               />
               <button
                 className="danger"
@@ -465,6 +568,10 @@ export function EffectsEditor({
               <Field
                 label="资料 ID"
                 value={effect.id}
+                options={materials.map((m) => ({
+                  value: m.id,
+                  label: `${m.id} · ${m.title}`,
+                }))}
                 onChange={(id) => change({ ...effect, id })}
               />
             )}
@@ -480,6 +587,7 @@ export function EffectsEditor({
               <Field
                 label="音轨 ID"
                 value={effect.trackId}
+                options={audio.map((a) => ({ value: a.id, label: a.id }))}
                 onChange={(trackId) => change({ ...effect, trackId })}
               />
             )}

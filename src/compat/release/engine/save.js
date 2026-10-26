@@ -21,6 +21,7 @@ export function createSave(nodeId, slotId = "auto", project) {
     unlockedMaterials: [],
     readMaterials: [],
     notes: [],
+    playerNotes: "",
     usedChoices: [],
     audio: {
       volume: 1,
@@ -37,6 +38,7 @@ const stateSchema = z.object({
   unlockedMaterials: strings,
   readMaterials: strings,
   notes: strings,
+  playerNotes: z.string().default(""),
   usedChoices: strings,
   audio: z.object({
     volume: z.number().min(0).max(1),

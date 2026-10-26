@@ -30,7 +30,8 @@ export function DiscoveryPanels({
   profile: Profile;
 }) {
   const help = helpContent[section];
-  const kind = section === "graph" ? "script" : section;
+  const kind =
+    section === "graph" ? "script" : section === "project" ? "audio" : section;
   const target =
     kind === "script"
       ? position.nodeId
@@ -41,7 +42,8 @@ export function DiscoveryPanels({
             ? project?.materials[0]?.id
             : "");
   const matches = references.filter(
-    (r) => r.kind === kind && r.target === target,
+    (r) =>
+      r.kind === kind && (r.target === target || (kind === "audio" && !target)),
   );
   const label =
     kind === "script"
@@ -86,7 +88,10 @@ export function DiscoveryPanels({
       )}
       {usageOpen && (
         <Modal title="在哪里使用" onClose={onCloseUsage}>
-          <h3>{label || "请先选择条目"}</h3>
+          <h3>
+            {label ||
+              (kind === "audio" ? "工程音轨引用（含失效 ID）" : "请先选择条目")}
+          </h3>
           <p>
             引用基于已应用草稿。
             {rawDirty

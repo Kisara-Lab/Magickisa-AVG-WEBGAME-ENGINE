@@ -98,7 +98,7 @@ export class StoryRuntime {
   private move(id: string, same = false) {
     this.save.nodeId = id;
     this.save.lineIndex = same ? (this.node?.lines.length ?? 0) : 0;
-    this.save.entered = false;
+    this.save.entered = same;
     this.save.completed = same;
     this.save.visitedNodes = [...new Set([...this.save.visitedNodes, id])];
     if (!same) this.enter();

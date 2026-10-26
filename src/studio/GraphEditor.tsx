@@ -46,11 +46,32 @@ export function GraphEditor({
   const width = 1160,
     height = Math.max(400, Math.ceil(nodes.length / 4) * 160 + 40);
   const links = nodes.flatMap((n) => [
-    ...(n.next ? [{ from: n.id, to: n.next, label: "继续" }] : []),
+    ...(n.next
+      ? [
+          {
+            from: n.id,
+            to: n.next,
+            label: "继续",
+            conditional: !!project.nodes.find((t) => t.id === n.next)
+              ?.condition,
+            condition: project.nodes.find((t) => t.id === n.next)?.condition,
+          },
+        ]
+      : []),
     ...(n.choices || []).map((c) => ({
       from: n.id,
       to: c.target,
       label: c.label,
+      conditional: !!(
+        c.condition ||
+        c.once ||
+        project.nodes.find((t) => t.id === c.target)?.condition
+      ),
+      condition: {
+        choice: c.condition,
+        once: c.once,
+        target: project.nodes.find((t) => t.id === c.target)?.condition,
+      },
     })),
   ]);
   return (
@@ -156,8 +177,14 @@ export function GraphEditor({
                   className={active ? "active" : ""}
                   d={`M${a.x + 240} ${a.y + 58} C${a.x + 275} ${a.y + 58},${b.x - 30} ${b.y + 58},${b.x} ${b.y + 58}`}
                   markerEnd="url(#st-arrow)"
+                  strokeDasharray={l.conditional ? "7 5" : undefined}
                 >
-                  <title>{l.label}</title>
+                  <title>
+                    {l.label}
+                    {l.conditional
+                      ? ` · 条件连接：${JSON.stringify(l.condition)}`
+                      : " · 无条件"}
+                  </title>
                 </path>
               );
             })}
@@ -188,6 +215,7 @@ export function GraphEditor({
                   <text className="st-graph-meta" x="16" y="84">
                     {n.lines.length} 句 · {n.choices?.length || 0} 个分支
                     {n.presentation ? " · " + n.presentation : ""}
+                    {n.condition ? " · 进入条件" : ""}
                   </text>
                   <circle cx="0" cy="58" r="5" />
                   <circle cx="240" cy="58" r="5" />
@@ -198,7 +226,7 @@ export function GraphEditor({
         </div>
       </div>
       <p className="st-muted">
-        点击节点查看连接，双击进入编辑。可在“剧本”中设置下一场景与分支目标。
+        点击节点查看连接，双击进入编辑。虚线表示条件、一次性选项或目标进入门槛；悬停查看条件。连线表示已配置关系，不保证当前状态可通行。
       </p>
     </>
   );
