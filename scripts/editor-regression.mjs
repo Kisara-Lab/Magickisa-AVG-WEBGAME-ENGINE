@@ -177,7 +177,8 @@ export async function editorRegression(browser, origin) {
     );
     await page.evaluate(() => window.audioStore.setAudio(0.4, false));
     await page.waitForFunction(
-      () => Math.abs(window.audioPlayers[0].volume - 0.13) < 1e-6,
+      // Global gain (0.4) × registered track gain (0.5) × BGM base (0.65).
+      () => Math.abs(window.audioPlayers[0].volume - 0.4 * 0.5 * 0.65) < 1e-6,
     );
     await root.getByTitle("音乐鉴赏", { exact: true }).click();
     await page.waitForFunction(() => window.audioPlayers[0].paused);

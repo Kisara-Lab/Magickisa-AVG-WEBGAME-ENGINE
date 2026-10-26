@@ -34,8 +34,8 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
     const targetConditional = (id: string) =>
       !!p.nodes.find((target) => target.id === id)?.condition;
     if (
-      n.choices?.length &&
-      n.choices.every(
+      (n.choices?.length || (n.next && targetConditional(n.next))) &&
+      (n.choices || []).every(
         (c) => c.condition || c.once || targetConditional(c.target),
       ) &&
       (!n.next || targetConditional(n.next))

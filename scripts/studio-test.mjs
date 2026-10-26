@@ -23,6 +23,12 @@ try {
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
   });
+  await page.addInitScript(() => {
+    Object.defineProperty(Crypto.prototype, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+  });
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("response", (r) => {
     if (r.status() >= 400 && !r.url().includes("/__studio/"))

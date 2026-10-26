@@ -1,4 +1,5 @@
 import type { AuthorProject, Profile, Section } from "./model";
+import { randomId } from "../engine/id";
 export interface Draft {
   key: string;
   profile: Profile;
@@ -99,7 +100,7 @@ export const putDraft = (draft: Draft) =>
 export const removeDraft = (key: string) =>
   transact("readwrite", (s) => s.delete(key));
 // A fresh ID per mounted document avoids copied sessionStorage IDs in duplicated tabs.
-export const tabId = crypto.randomUUID();
+export const tabId = randomId();
 let preferenceTab = tabId;
 let preferenceInitialization: Promise<void> | undefined;
 export function initializePreferences() {

@@ -2,6 +2,7 @@ import type { EngineSave, StoryProject, StoryChoice, Value } from "./types";
 import { evaluateCondition } from "./condition";
 import { applyEffects } from "./effects";
 import { snapshot, importSave } from "./save";
+import { randomId } from "./id";
 export class StoryRuntime {
   constructor(
     public project: StoryProject,
@@ -46,7 +47,7 @@ export class StoryRuntime {
   checkpoint(metadata: { speaker?: string; text?: string } = {}) {
     this.save.history.push({
       ...snapshot(this.save),
-      id: crypto.randomUUID(),
+      id: randomId(),
       createdAt: new Date().toISOString(),
       section: this.node?.title,
       ...metadata,

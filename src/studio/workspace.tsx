@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { AuthorProject, Section } from "./model";
+import { randomId } from "../engine/id";
 
 export interface EditorPosition {
   section: Section;
@@ -58,9 +59,7 @@ export function useSequenceKeys(scope: string, project: AuthorProject | null) {
       if (!entry.id) {
         const previous = old[index];
         entry.id =
-          previous && !used.has(previous.id)
-            ? previous.id
-            : crypto.randomUUID();
+          previous && !used.has(previous.id) ? previous.id : randomId();
         used.add(entry.id);
       }
     });

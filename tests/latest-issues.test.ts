@@ -10,6 +10,20 @@ import { authorWarnings } from "../src/studio/authorWarnings";
 import { issuePosition } from "../src/studio/issuePosition";
 import { resolvePlayback, playbackVolume } from "../src/engine/playback.js";
 import { usages } from "../src/studio/discovery";
+import { randomId } from "../src/engine/id";
+
+test("random IDs fall back to getRandomValues without randomUUID", () => {
+  const fallback = {
+    getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+  };
+  const values = new Set(Array.from({ length: 100 }, () => randomId(fallback)));
+  assert.equal(values.size, 100);
+  for (const value of values)
+    assert.match(
+      value,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+});
 
 test("self-target reload and legacy completed checkpoints do not replay onEnter", () => {
   const p = assertProject(blankProject("modern")),
@@ -58,6 +72,11 @@ test("warnings account for target conditions and preserve compat timing contract
   assert.ok(codes.includes("branch-fallback"));
   assert.ok(codes.includes("release-choice-timing"));
   assert.ok(codes.includes("release-repeat-effects"));
+  delete n.choices;
+  n.next = n.id;
+  assert.ok(
+    authorWarnings(p, "modern").some((i) => i.code === "branch-fallback"),
+  );
   n.condition = { type: "any", conditions: [] };
   assert.ok(
     authorWarnings(p, "modern").some((i) => i.code === "empty-condition"),
@@ -83,15 +102,18 @@ test("explicit setAudio takes precedence and gain multiplies without losing zero
 });
 
 test("compat player notes roundtrip independently from story appendNote and rollback", () => {
-  const p = blankProject("release");
+  const p: release.StoryProject = blankProject("release");
+  p.nodes[0].effects = [{ type: "appendNote", text: "story note" }];
   const save = release.createSave(p.startNodeId, "auto", p);
   save.playerNotes = "my notes";
-  save.notes = ["story note"];
   const r = new release.AvgEngine(p, release.importSave(save, p));
   r.advance();
+  r.advance();
+  assert.deepEqual(release.importSave(r.runtime.save, p).notes, ["story note"]);
+  assert.equal(r.runtime.save.playerNotes, "my notes");
   r.rollback(0);
   assert.equal(r.runtime.save.playerNotes, "my notes");
-  assert.deepEqual(r.runtime.save.notes, ["story note"]);
+  assert.deepEqual(r.runtime.save.notes, []);
   const old = { ...save };
   delete old.playerNotes;
   assert.equal(release.importSave(old, p).playerNotes, "");

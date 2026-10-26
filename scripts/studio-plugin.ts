@@ -68,6 +68,17 @@ function revision(profile: Profile, ctx = projectContext(profile)) {
             .join("\0"),
   );
 }
+function invalidReferences(p: AuthorProject) {
+  const targets: Record<string, Set<string>> = {
+    script: new Set(p.nodes.map((n) => n.id)),
+    characters: new Set(p.characters.map((c) => c.id)),
+    materials: new Set(p.materials.map((m) => m.id)),
+    audio: new Set(p.audio.map((a) => a.id)),
+  };
+  return usages(p).filter(
+    (ref) => targets[ref.kind] && !targets[ref.kind].has(ref.target),
+  );
+}
 function validate(
   input: unknown,
   profile: Profile,
@@ -93,17 +104,10 @@ function validate(
     }
   }
   const publicRoot = ctx.public;
-  const targets: Record<string, Set<string>> = {
-    script: ids,
-    characters: new Set(p.characters.map((c) => c.id)),
-    materials: new Set(p.materials.map((m) => m.id)),
-    audio: new Set(p.audio.map((a) => a.id)),
-  };
-  for (const ref of usages(p))
-    if (targets[ref.kind] && !targets[ref.kind].has(ref.target))
-      throw new Error(
-        `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
-      );
+  for (const ref of invalidReferences(p))
+    throw new Error(
+      `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
+    );
   for (const ref of resourceReferences(
     p as Parameters<typeof resourceReferences>[0],
   )) {
@@ -207,23 +211,16 @@ function diagnostics(
           field,
         });
   }
-  const targets: Record<string, Set<string>> = {
-    script: ids,
-    characters: new Set(p.characters.map((c) => c.id)),
-    materials: new Set(p.materials.map((m) => m.id)),
-    audio: new Set(p.audio.map((a) => a.id)),
-  };
-  for (const ref of usages(p)) {
-    if (targets[ref.kind] && !targets[ref.kind].has(ref.target))
-      issues.push({
-        code: "reference",
-        severity: "error",
-        message: `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
-        nodeId: ref.position.nodeId,
-        lineId: ref.position.lineId,
-        field: ref.position.field,
-        position: ref.position,
-      });
+  for (const ref of invalidReferences(p)) {
+    issues.push({
+      code: "reference",
+      severity: "error",
+      message: `${ref.label} 的${ref.field}引用了不存在的条目 ${ref.target}`,
+      nodeId: ref.position.nodeId,
+      lineId: ref.position.lineId,
+      field: ref.position.field,
+      position: ref.position,
+    });
   }
   if (!issues.length) {
     const warnings: string[] = [];

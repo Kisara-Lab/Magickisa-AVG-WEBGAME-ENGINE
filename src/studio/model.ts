@@ -1,4 +1,5 @@
 import type { StoryProject, StoryNode, Effect } from "../engine/types";
+import { randomId } from "../engine/id";
 export type AuthorNode = StoryNode & { effects?: Effect[]; act?: string };
 export type Profile = "modern" | "release";
 export type AuthorProject = Omit<StoryProject, "schemaVersion" | "nodes"> & {
@@ -19,7 +20,7 @@ export const copy = <T>(value: T): T => structuredClone(value);
 export function uniqueId(prefix: string, ids: string[]) {
   let id: string;
   do {
-    id = `${prefix}-${crypto.randomUUID()}`;
+    id = `${prefix}-${randomId()}`;
   } while (ids.includes(id));
   return id;
 }
