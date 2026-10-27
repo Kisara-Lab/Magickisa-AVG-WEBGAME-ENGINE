@@ -52,6 +52,9 @@ export function installDependencies(root, run = spawnSync) {
 }
 
 export async function launch(root) {
+  // Canonicalize Windows short paths and symlinks before Vite's realpath checks.
+  root = fs.realpathSync.native(root);
+  process.chdir(root);
   if (process.argv.includes("--help")) {
     console.log(
       "MAGICKISA Studio launcher — Node.js 22+, npm; --no-open disables browser opening.",
