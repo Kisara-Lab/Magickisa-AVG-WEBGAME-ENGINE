@@ -51,13 +51,23 @@ try {
       archive.on("error", reject);
       archive.on("end", resolve);
       archive.on("entry", (entry) => {
+        if (entry.fileName.endsWith("/")) {
+          fs.mkdirSync(path.join(temp, entry.fileName), { recursive: true });
+          archive.readEntry();
+          return;
+        }
         archive.openReadStream(entry, (error, stream) => {
           if (error) return reject(error);
           const output = path.join(temp, entry.fileName);
           fs.mkdirSync(path.dirname(output), { recursive: true });
+          // lazyEntries: advance only after this write completes, so end cannot
+          // resolve the archive before an outstanding pipeline has finished.
           pipeline(stream, fs.createWriteStream(output)).then(
             () => archive.readEntry(),
-            reject,
+            (error) => {
+              archive.close();
+              reject(error);
+            },
           );
         });
       });
