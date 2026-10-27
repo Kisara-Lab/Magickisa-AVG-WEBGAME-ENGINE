@@ -6,6 +6,14 @@
 
 **用网页技术制作、编辑和发行 AVG / 视觉小说。**
 
+## v1.0legacy：双模式最终版
+
+首个正式 [GitHub Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy) 提供源码 ZIP、跨平台联网启动包与 SHA256 校验。已有 `v1.0.0` 标签保留；`v1.0legacy` 包含后续修复，npm 内部版本仍为 `1.0.0`。
+
+启动包需预装 Node.js 22+，首次联网安装依赖。解压后运行 Windows `Start-Studio.cmd`、macOS `Start-Studio.command` 或 Linux `sh Start-Studio.sh`，详见 [启动说明](START-HERE.md)。
+
+**兼容档在此冻结并停止维护。** 下一版 v2.0.0 仅保留现代档，不提供兼容档自动转换；兼容档工程继续使用本 Release。现代档工程继续沿用现有格式。发布变更见 [CHANGELOG](CHANGELOG.md)。
+
 MAGICKISA 是由 **Kisara-Lab** 维护的网页 AVG 引擎与可视化创作工作台。基于 React、TypeScript 和 Vite，提供剧情分支、人物立绘、条件与效果、特殊演出、存档及浏览器运行能力；配套 **MAGICKISA Studio** 将剧本、资源、演出、预览和发行放在同一个工作台中。
 
 适合希望在浏览器中发布文字冒险、分支叙事或视觉小说的创作者，也适合需要直接扩展运行时与编辑器的开发者。

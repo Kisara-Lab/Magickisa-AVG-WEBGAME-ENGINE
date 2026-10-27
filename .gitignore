@@ -1,4 +1,6 @@
 node_modules/
+release-artifacts/
+.magickisa-studio.lock
 workspace-projects/
 .studio-transfers/
 dist-studio/
