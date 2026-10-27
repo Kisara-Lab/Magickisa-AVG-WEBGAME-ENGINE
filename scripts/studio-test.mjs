@@ -315,6 +315,23 @@ try {
       );
     }
     const conditional = structuredClone(saved.project);
+    const blobProject = structuredClone(saved.project);
+    blobProject.audio.push({ id: "temporary", src: "blob:test-only" });
+    for (const route of ["validate", "packages/check"]) {
+      const result = await fetch(
+        `${origin}/__studio/${route}?profile=${profile}&workspaceId=${next.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project: blobProject,
+            revision: saved.revision,
+          }),
+        },
+      );
+      assert.equal(result.ok, false, "blob dependencies must be rejected");
+      assert.match(JSON.stringify(await result.json()), /blob/i);
+    }
     conditional.nodes[0].choices = [
       {
         id: "optional",

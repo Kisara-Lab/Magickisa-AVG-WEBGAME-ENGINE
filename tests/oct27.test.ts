@@ -18,6 +18,49 @@ import {
   isExternalResource,
 } from "../src/engine/resource.js";
 import { authorWarnings } from "../src/studio/authorWarnings";
+import { registerPackagePath } from "../scripts/package-paths";
+import {
+  hasPlayerProgress,
+  backupAndClearSlot,
+} from "../src/engine/recovery.js";
+
+test("portable package paths reject files colliding with directories in either order", () => {
+  for (const names of [
+    ["public/foo", "public/FOO/a"],
+    ["public/FOO/a", "public/foo"],
+    ["public/caf\u00e9/a", "public/cafe\u0301/a"],
+  ]) {
+    const paths = new Map<string, "file" | "directory">();
+    registerPackagePath(paths, names[0]);
+    assert.throws(() => registerPackagePath(paths, names[1]), /Unicode/);
+  }
+});
+
+test("restart guards cover early progress; recovery preserves quota failures and concurrent updates", () => {
+  assert.equal(hasPlayerProgress({ history: [], playerNotes: "keep" }), true);
+  assert.equal(
+    hasPlayerProgress({ history: [], variables: { name: "player" } }),
+    true,
+  );
+  assert.equal(hasPlayerProgress({ history: [], variables: {} }), false);
+  let current: string | null = "old",
+    fail = false;
+  const storage = {
+    getItem: () => current,
+    setItem: () => {
+      if (fail) throw new Error("quota");
+      current = "newer-from-other-tab";
+    },
+    removeItem: () => {
+      current = null;
+    },
+  };
+  assert.throws(() => backupAndClearSlot(storage, "slot"));
+  assert.equal(current, "newer-from-other-tab");
+  fail = true;
+  assert.throws(() => backupAndClearSlot(storage, "slot"), /quota/);
+  assert.equal(current, "newer-from-other-tab");
+});
 
 test("resource IDs, literal paths and external URLs share validation/runtime resolution", () => {
   const p = assertProject(blankProject("modern"));

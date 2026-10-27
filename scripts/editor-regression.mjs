@@ -206,6 +206,41 @@ export async function editorRegression(browser, origin) {
       );
     });
     await page.waitForFunction(() => window.presentationFinished);
+    let finishStalledRequest;
+    await page.route(
+      "**/stalled-audio",
+      (route) =>
+        new Promise((resolve) => {
+          finishStalledRequest = () => route.abort().finally(resolve);
+        }),
+    );
+    await page.evaluate(async () => {
+      const { default: React } =
+        await import("/node_modules/.vite/deps/react.js");
+      const { PresentationHost } =
+        await import("/src/engine/PresentationHost.tsx");
+      HTMLMediaElement.prototype.play = () => Promise.resolve();
+      const p = structuredClone(window.audioStore.project);
+      p.media.opening = {
+        pages: [],
+        images: [],
+        duration: 0.25,
+        audio: "/stalled-audio",
+      };
+      window.presentationFinished = false;
+      window.regressionRoot.render(
+        React.createElement(PresentationHost, {
+          key: "stalled",
+          project: p,
+          presentation: { id: "opening", nodeId: "start" },
+          onFinish: () => {
+            window.presentationFinished = true;
+          },
+        }),
+      );
+    });
+    await page.waitForFunction(() => window.presentationFinished);
+    await finishStalledRequest?.();
     const history = await page.evaluate(async () => {
       const { syncLegacyView } =
         await import("/src/compat/release/game/GameApp.jsx");

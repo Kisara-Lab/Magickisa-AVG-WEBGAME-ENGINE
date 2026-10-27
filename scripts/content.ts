@@ -53,7 +53,11 @@ export function resourceReferences(p: StoryProject): string[] {
 export function validateResources(p: StoryProject): void {
   const errors: string[] = [];
   for (const ref of resourceReferences(p)) {
-    if (isExternalResource(ref) || /^(data|blob):/i.test(ref)) continue;
+    if (/^blob:/i.test(ref)) {
+      errors.push("浏览器临时 blob 资源不能构建：" + ref);
+      continue;
+    }
+    if (isExternalResource(ref) || /^data:/i.test(ref)) continue;
     const clean = decodeURIComponent(ref.split(/[?#]/)[0]);
     const file = path.resolve(
       root,

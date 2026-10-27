@@ -17,6 +17,10 @@ import { preloadCharacters } from "../engine/resourceManager.js";
 import { resolvePlayback, playbackVolume } from "../../../engine/playback.js";
 import { GalleryAudio } from "../../../engine/GalleryAudio";
 import { materialCategory } from "../../../engine/resource.js";
+import {
+  hasPlayerProgress,
+  backupAndClearSlot,
+} from "../../../engine/recovery.js";
 import { TitleScreenHost } from "../engine/TitleScreenHost.jsx";
 import { PresentationHost } from "../engine/PresentationHost.jsx";
 import { Music2 } from "lucide-react";
@@ -144,6 +148,7 @@ export function GameApp() {
     backlogRef = React.useRef(null),
     engineStoreRef = React.useRef(null),
     saveBlockedRef = React.useRef(false),
+    wheelHandlerRef = React.useRef(null),
     presentationsRef = React.useRef(new PresentationRegistry()),
     [view, setView] = React.useState(() => {
       return {
@@ -560,7 +565,7 @@ export function GameApp() {
     setCurrentMusicTitle(trackTitle(playback.src));
     const timer = window.setTimeout(() => setCurrentMusicTitle(""), 5200);
     return () => window.clearTimeout(timer);
-  }, [gameStarted, playback.src, showMusicLabel]);
+  }, [gameStarted, playback.src, showMusicLabel, node?.id]);
   const rollbackOne = () =>
       setView((f) => {
         const g = engineStoreRef.current;
@@ -589,25 +594,26 @@ export function GameApp() {
     view.index,
     view.line,
   ]);
+  wheelHandlerRef.current = (e) => {
+    if (
+      !gameStarted ||
+      splashActive ||
+      openingActive ||
+      endingActive ||
+      settingsOpen ||
+      activePanel ||
+      chapterMenuOpen ||
+      e.target.closest("input,textarea,select,button")
+    )
+      return;
+    handleWheel(e);
+  };
   React.useEffect(() => {
     const stage = document.querySelector(".stage");
-    const wheel = (e) => {
-      if (
-        !gameStarted ||
-        splashActive ||
-        openingActive ||
-        endingActive ||
-        settingsOpen ||
-        activePanel ||
-        chapterMenuOpen ||
-        e.target.closest("input,textarea,select,button")
-      )
-        return;
-      handleWheel(e);
-    };
+    const wheel = (e) => wheelHandlerRef.current?.(e);
     stage?.addEventListener("wheel", wheel, { passive: false });
     return () => stage?.removeEventListener("wheel", wheel);
-  });
+  }, [project, gameStarted]);
   const toggleFullscreen = async () => {
       var f, g, N;
       document.fullscreenElement
@@ -688,7 +694,7 @@ export function GameApp() {
     },
     startNewGame = () => {
       if (
-        engineStoreRef.current?.runtime.save.history.length &&
+        hasPlayerProgress(engineStoreRef.current?.runtime.save) &&
         !window.confirm("重新开始会覆盖当前自动存档，请先导出存档。确认继续？")
       )
         return;
@@ -869,14 +875,14 @@ export function GameApp() {
             )
               return;
             try {
-              const key = slotKey("auto", project.id),
-                raw = localStorage.getItem(key);
-              if (raw !== null)
-                localStorage.setItem(`${key}:recovery:${Date.now()}`, raw);
-              localStorage.removeItem(key);
+              backupAndClearSlot(localStorage, slotKey("auto", project.id));
               location.reload();
             } catch (e) {
-              setSaveError(`恢复失败：${String(e)}`);
+              setSaveError(
+                e?.name === "QuotaExceededError"
+                  ? "浏览器存储空间不足，无法备份，原存档未删除。请释放存储空间后重试；不要直接清除本站点数据。"
+                  : `恢复失败，原存档未删除：${String(e)}`,
+              );
             }
           }}
         >

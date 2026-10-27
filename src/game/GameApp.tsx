@@ -7,6 +7,7 @@ import {
 } from "react";
 import { EngineStore } from "../engine/store";
 import { slotKey } from "../engine/save";
+import { hasPlayerProgress, backupAndClearSlot } from "../engine/recovery.js";
 import { assertProject } from "../engine/schema";
 import { selectContext, selectUnlockedMaterials } from "../engine/selectors";
 import { resolveAsset } from "../engine/media";
@@ -103,14 +104,15 @@ function LoadSession({
           )
             return;
           try {
-            const key = slotKey(project.id),
-              raw = localStorage.getItem(key);
-            if (raw !== null)
-              localStorage.setItem(`${key}:recovery:${Date.now()}`, raw);
-            localStorage.removeItem(key);
+            backupAndClearSlot(localStorage, slotKey(project.id));
             location.reload();
           } catch (e) {
-            setResult({ error: `恢复失败，原存档未删除：${String(e)}` });
+            setResult({
+              error:
+                e instanceof DOMException && e.name === "QuotaExceededError"
+                  ? "浏览器存储空间不足，无法备份，原存档未删除。请释放存储空间后重试；不要直接清除本站点数据。"
+                  : `恢复失败，原存档未删除：${String(e)}`,
+            });
           }
         }}
       >
@@ -370,7 +372,7 @@ export function GameSession({
         onStart={() =>
           invoke(() => {
             if (
-              save.history.length &&
+              hasPlayerProgress(save) &&
               !window.confirm(
                 "重新开始会覆盖当前自动存档。请先导出存档以保留进度，确认继续？",
               )

@@ -123,7 +123,11 @@ function validate(
   for (const ref of resourceReferences(
     p as Parameters<typeof resourceReferences>[0],
   )) {
-    if (isExternalResource(ref) || /^(data|blob):/i.test(ref)) continue;
+    if (/^blob:/i.test(ref))
+      throw new Error(
+        "浏览器临时 blob 资源不能保存或构建，请先上传素材：" + ref,
+      );
+    if (isExternalResource(ref) || /^data:/i.test(ref)) continue;
     const file = contained(
       publicRoot,
       "." + decodeURIComponent(ref.split(/[?#]/)[0]),
