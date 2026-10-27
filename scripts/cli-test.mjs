@@ -332,6 +332,7 @@ try {
     undefined,
     3,
   );
+  await call(["build", "--if-revision", fresh.revision], undefined, 3);
   assert.deepEqual(fs.readFileSync(projectFile), stable);
   const lock = path.join(directory, ".magickisa-write.lock");
   fs.mkdirSync(lock);
@@ -419,8 +420,9 @@ try {
     [entry, "studio", ...w, "--no-open", "--json"],
     { cwd: temporary, windowsHide: true },
   );
-  let studioLog = "";
-  studio.stdout.resume();
+  let studioLog = "",
+    studioOutput = "";
+  studio.stdout.on("data", (chunk) => (studioOutput += chunk));
   const studioClosed = new Promise((resolve) => studio.once("close", resolve));
   try {
     const url = await new Promise((resolve, reject) => {
@@ -451,6 +453,11 @@ try {
   } finally {
     studio.kill("SIGTERM");
     await studioClosed;
+    if (process.platform !== "win32") {
+      const stopped = JSON.parse(studioOutput);
+      assert.equal(stopped.ok, true);
+      assert.equal(stopped.data.stopped, true);
+    } else assert.equal(studioOutput, "");
   }
   const markdown = path.join(temporary, "剧本.md");
   await call(["script", "export-markdown", "--out", markdown]);
@@ -538,11 +545,26 @@ try {
   const base = path.resolve(root, "workspace-projects");
   for (const id of created) {
     const target = path.resolve(base, id);
-    if (path.dirname(target) !== base || !/^[0-9a-f-]{36}$/.test(id))
-      throw new Error("Invalid fixture cleanup");
-    fs.rmSync(target, { recursive: true, force: true });
+    if (path.dirname(target) !== base || !/^[0-9a-f-]{36}$/.test(id)) {
+      console.error("Invalid fixture cleanup: skipped", id);
+      process.exitCode = 1;
+      continue;
+    }
+    try {
+      fs.rmSync(target, { recursive: true, force: true });
+    } catch (error) {
+      console.error("Fixture cleanup failed", error);
+      process.exitCode = 1;
+    }
   }
-  if (path.dirname(temporary) !== path.resolve(os.tmpdir()))
-    throw new Error("Invalid temp cleanup");
-  fs.rmSync(temporary, { recursive: true, force: true });
+  if (path.dirname(temporary) !== path.resolve(os.tmpdir())) {
+    console.error("Invalid temp cleanup: skipped");
+    process.exitCode = 1;
+  } else
+    try {
+      fs.rmSync(temporary, { recursive: true, force: true });
+    } catch (error) {
+      console.error("Temporary cleanup failed", error);
+      process.exitCode = 1;
+    }
 }

@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { addAbortSignal } from "node:stream";
 import { spawn } from "node:child_process";
+import { Console } from "node:console";
 import { z } from "zod";
 import { projectSchema } from "../../src/engine/schema";
 import { usages } from "../../src/studio/discovery";
@@ -456,10 +457,17 @@ export async function execute(args: string[], signal: AbortSignal) {
     };
   }
   if (group === "studio") {
-    const { createServer } = await import("vite");
+    const { createServer, createLogger } = await import("vite");
     const server = await createServer({
       root: repository,
       configFile: path.join(repository, "vite.config.ts"),
+      customLogger: createLogger("info", {
+        allowClearScreen: false,
+        console: new Console({
+          stdout: process.stderr,
+          stderr: process.stderr,
+        }),
+      }),
       server: { host: "127.0.0.1", port: 5173, open: false },
     });
     await server.listen();

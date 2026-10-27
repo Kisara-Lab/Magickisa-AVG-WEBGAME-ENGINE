@@ -133,9 +133,21 @@ export async function cliBrowserRegression(browser, origin) {
       "PASS CLI/Studio: shared project editing, stale draft 409, cross-process write lock, continued save",
     );
   } finally {
-    await context.close();
-    if (path.dirname(directory) !== path.resolve(root, "workspace-projects"))
-      throw new Error("Invalid cleanup");
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      await context.close();
+    } catch (error) {
+      console.error("Browser cleanup failed", error);
+      process.exitCode = 1;
+    }
+    if (path.dirname(directory) !== path.resolve(root, "workspace-projects")) {
+      console.error("Invalid cleanup: skipped");
+      process.exitCode = 1;
+    } else
+      try {
+        fs.rmSync(directory, { recursive: true, force: true });
+      } catch (error) {
+        console.error("Workspace cleanup failed", error);
+        process.exitCode = 1;
+      }
   }
 }
