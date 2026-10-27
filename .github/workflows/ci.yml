@@ -19,8 +19,13 @@ jobs:
       - run: npm run test:launcher
   verify:
     needs: launcher
+    if: always()
     runs-on: ubuntu-24.04
     steps:
+      - name: Require all launcher platforms
+        run: node -e "if (process.env.LAUNCHER_RESULT !== 'success') process.exit(1)"
+        env:
+          LAUNCHER_RESULT: ${{ needs.launcher.result }}
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
