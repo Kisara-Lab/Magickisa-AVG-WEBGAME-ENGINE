@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
+import { addAbortSignal } from "node:stream";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { projectSchema } from "../../src/engine/schema";
@@ -212,19 +213,28 @@ function parse(args: string[]) {
     throw failure("--file 与 --data 只能指定一个");
   return { group, action, options };
 }
-async function input(source: string) {
+async function input(source: string, signal: AbortSignal) {
+  signal.throwIfAborted();
   if (source === "-") {
     const chunks: Buffer[] = [];
-    for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+    try {
+      for await (const chunk of addAbortSignal(signal, process.stdin))
+        chunks.push(Buffer.from(chunk));
+    } catch (error) {
+      if (signal.aborted) throw signal.reason;
+      throw error;
+    }
     return Buffer.concat(chunks).toString("utf8");
   }
   return source.startsWith("@")
     ? fs.readFileSync(path.resolve(source.slice(1)), "utf8")
     : source;
 }
-async function jsonInput(source: string) {
+async function jsonInput(source: string, signal: AbortSignal) {
   try {
-    const data = JSON.parse((await input(source)).replace(/^\uFEFF/, ""));
+    const data = JSON.parse(
+      (await input(source, signal)).replace(/^\uFEFF/, ""),
+    );
     safeData(data);
     return data;
   } catch (error) {
@@ -534,13 +544,13 @@ export async function execute(args: string[], signal: AbortSignal) {
     const source = o.file ? "@" + need("file") : need("data");
     next =
       action === "import"
-        ? await jsonInput(source)
-        : importMarkdown(p, await input(source));
+        ? await jsonInput(source, signal)
+        : importMarkdown(p, await input(source, signal));
   } else {
     let operations: Operation[];
     if (group === "edit") {
       const transaction = transactionSchema.parse(
-        await jsonInput(o.file ? "@" + need("file") : need("data")),
+        await jsonInput(o.file ? "@" + need("file") : need("data"), signal),
       );
       if (
         transaction.expectedRevision &&
@@ -568,7 +578,8 @@ export async function execute(args: string[], signal: AbortSignal) {
         if (!/^\d+$/.test(need("index"))) throw failure("index 必须为非负整数");
         op.index = Number(o.index);
       }
-      if (o.data !== undefined) op.value = await jsonInput(need("data"));
+      if (o.data !== undefined)
+        op.value = await jsonInput(need("data"), signal);
       if (o["text-file"] !== undefined) {
         if (
           !["line", "scene"].includes(group) ||
@@ -597,6 +608,7 @@ export async function execute(args: string[], signal: AbortSignal) {
     next = applied.project;
     results = applied.results;
   }
+  signal.throwIfAborted();
   assertRevision(ctx, expected);
   let issues;
   try {
@@ -631,7 +643,7 @@ export async function execute(args: string[], signal: AbortSignal) {
 export async function main(args: string[]) {
   const json = args.includes("--json");
   const controller = new AbortController();
-  const stop = () => controller.abort();
+  const stop = () => controller.abort(failure("Cancelled", "CANCELLED", 5));
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   try {

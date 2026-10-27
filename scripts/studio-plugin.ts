@@ -22,6 +22,7 @@ import {
   diagnostics,
   snapshot,
   saveProject,
+  readSnapshot,
   importAsset,
   startBuild,
   createProject,
@@ -231,14 +232,13 @@ export function studioPlugin(): Plugin {
           }
           if (req.method === "GET" && url.pathname === "/project") {
             markOpened(ctx);
-            const project = read(fileFor(profile, ctx)) as AuthorProject;
-            requireModernProject(project);
+            const { project, revision: currentRevision } = readSnapshot(ctx);
             const sections: { title: string; level: number; body: string }[] =
               [];
             res.end(
               JSON.stringify({
                 project,
-                revision: revision(profile, ctx),
+                revision: currentRevision,
                 profile,
                 workspaceId: ctx.id,
                 directory: ctx.directory,
