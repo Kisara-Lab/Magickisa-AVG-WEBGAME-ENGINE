@@ -1,5 +1,6 @@
 // MAGICKISA release-compatible runtime.
 import { z } from "zod";
+import { contentLayout } from "../../../engine/contentLayout.js";
 export const SAVE_SCHEMA_VERSION = 1;
 export const slotKey = (slotId, projectId) =>
   projectId
@@ -8,7 +9,11 @@ export const slotKey = (slotId, projectId) =>
 export function createSave(nodeId, slotId = "auto", project) {
   return {
     ...(project
-      ? { projectId: project.id, contentVersion: project.version || "" }
+      ? {
+          projectId: project.id,
+          contentVersion: project.version || "",
+          contentLayout: contentLayout(project),
+        }
       : {}),
     schemaVersion: SAVE_SCHEMA_VERSION,
     slotId: slotId,
@@ -47,6 +52,7 @@ const stateSchema = z.object({
   }),
 });
 const saveSchema = stateSchema.extend({
+  contentLayout: z.string().optional(),
   schemaVersion: z.literal(1),
   projectId: z.string().optional(),
   contentVersion: z.string().optional(),
@@ -65,6 +71,11 @@ const saveSchema = stateSchema.extend({
 });
 export function importSave(input, project, { allowUnbound = false } = {}) {
   const save = saveSchema.parse(input);
+  if (
+    save.contentLayout !== undefined &&
+    save.contentLayout !== contentLayout(project)
+  )
+    throw new Error("工程台词结构已变化，请使用对应内容版本读取存档。");
   if (!save.projectId && !allowUnbound)
     throw new Error("旧存档未绑定工程，请通过导入存档确认归属。");
   if (save.projectId && save.projectId !== project.id)

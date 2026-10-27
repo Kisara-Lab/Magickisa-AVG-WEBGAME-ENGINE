@@ -8,6 +8,7 @@ import * as yazl from "yazl";
 import * as yauzl from "yauzl";
 import type { AuthorProject, Profile } from "../src/studio/model";
 import { resourceReferences } from "./content";
+import { isExternalResource } from "../src/engine/resource.js";
 import {
   repository,
   workspaceRoot,
@@ -68,7 +69,7 @@ function summary(
     warnings,
     external: resourceReferences(
       p as Parameters<typeof resourceReferences>[0],
-    ).filter((r) => /^https?:/i.test(r)),
+    ).filter(isExternalResource),
   };
 }
 export async function hashFile(file: string, signal?: AbortSignal) {
@@ -200,7 +201,7 @@ export class ProjectPackages {
     for (const ref of resourceReferences(
       p as Parameters<typeof resourceReferences>[0],
     )) {
-      if (/^https?:/i.test(ref)) continue;
+      if (isExternalResource(ref) || /^data:/i.test(ref)) continue;
       const relative = path
         .relative(
           ctx.public,
@@ -238,6 +239,14 @@ export class ProjectPackages {
           source: contained(ctx.public, name),
           destination: "public/" + name,
         });
+      const folded = new Set<string>();
+      for (const { destination } of sources) {
+        safeName(destination);
+        const key = destination.normalize("NFC").toLowerCase();
+        if (folded.has(key))
+          throw new Error("工程文件存在大小写或 Unicode 冲突：" + destination);
+        folded.add(key);
+      }
       if (sources.length + 2 > limits.files)
         throw new Error("工程文件超过 50,000 个");
       task.total = sources.length;

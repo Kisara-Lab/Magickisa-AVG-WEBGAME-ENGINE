@@ -1,8 +1,9 @@
 // Shared by both runtime modes. setAudio references registered audio IDs only.
+import { keywordMatches } from "./resource.js";
 export function resolvePlayback(project, title, currentTrackId) {
   const explicit = project.audio?.find((track) => track.id === currentTrackId);
   const rule = project.media?.chapterMusicRules?.find((rule) =>
-    rule.keywords.some((key) => title.includes(key)),
+    keywordMatches(title, rule.keywords),
   );
   const src =
     explicit?.src ||

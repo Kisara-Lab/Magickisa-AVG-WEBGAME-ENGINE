@@ -70,12 +70,13 @@ export function PresentationHost({
     };
   }, [onFinish, onProgress]);
   useEffect(() => {
-    if (src || paused) return;
+    if ((src && !blocked) || paused) return;
     const timer = setInterval(() => setTime((t) => t + 1), 1000);
     return () => clearInterval(timer);
-  }, [src, paused]);
+  }, [src, blocked, paused]);
   useEffect(() => {
-    if (media?.duration && time >= media.duration) onFinish();
+    if (time >= (media?.duration ?? (presentation.id === "opening" ? 89 : 198)))
+      onFinish();
   }, [time, media?.duration, onFinish]);
   return (
     <ReleasePresentation

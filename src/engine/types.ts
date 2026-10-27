@@ -190,6 +190,7 @@ export interface Checkpoint extends SaveState {
   section?: string;
 }
 export interface EngineSave extends SaveState {
+  contentLayout?: string;
   readLineIds: string[];
   schemaVersion: 2;
   projectId: string;

@@ -106,6 +106,41 @@ try {
       path.join(publicDir, "large-unused.wav"),
       Buffer.alloc(8 * 1024 ** 2 + 1),
     );
+    // NFC-equivalent names coexist on NTFS/Linux but cannot roundtrip safely in ZIP.
+    const collisionNames = ["caf\u00e9.txt", "cafe\u0301.txt"];
+    try {
+      for (const name of collisionNames)
+        fs.writeFileSync(path.join(publicDir, name), name);
+      if (
+        fs.readdirSync(publicDir).filter((n) => collisionNames.includes(n))
+          .length === 2
+      ) {
+        const collision = await api(
+          profile,
+          "packages/export",
+          { project: draft, revision: before.revision },
+          id,
+        );
+        const failed = await poll(async () => {
+          const t = await api(
+            profile,
+            `packages/${collision.id}`,
+            undefined,
+            id,
+          );
+          assert.notEqual(
+            t.status,
+            "ready",
+            "collision must never produce a usable archive",
+          );
+          return t.status === "failed" ? t : false;
+        });
+        assert.match(failed.error, /Unicode/);
+      }
+    } finally {
+      for (const name of collisionNames)
+        fs.rmSync(path.join(publicDir, name), { force: true });
+    }
     const task = await api(
       profile,
       "packages/export",
@@ -258,6 +293,27 @@ try {
       );
     });
     const saved = await api(profile, "project", undefined, next.id);
+    const fork = {
+      ...saved.project,
+      schemaVersion: profile === "modern" ? 1 : 2,
+    };
+    for (const route of ["project", "validate"]) {
+      const response = await fetch(
+        `${origin}/__studio/${route}?profile=${profile}&workspaceId=${next.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project: fork, revision: saved.revision }),
+        },
+      );
+      const result = await response.json();
+      assert.ok(
+        route === "validate"
+          ? result.issues?.some((i) => i.severity === "error")
+          : !response.ok,
+        `mismatched ${profile} schema must fail ${route}`,
+      );
+    }
     const conditional = structuredClone(saved.project);
     conditional.nodes[0].choices = [
       {
@@ -502,7 +558,10 @@ try {
           "{broken-save",
         );
         await page
-          .getByRole("button", { name: "打开临时新周目", exact: true })
+          .getByRole("button", {
+            name: "打开临时新周目（不保存）",
+            exact: true,
+          })
           .click();
         await page.getByLabel("测试姓名", { exact: true }).fill("临时");
         await page.locator(".scene-caption").click();

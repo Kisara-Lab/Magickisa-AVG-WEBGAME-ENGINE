@@ -1,17 +1,20 @@
 import type { StoryProject } from "./types";
+import { resolveImage, keywordMatches } from "./resource.js";
 export function resolveAsset(p: StoryProject, s: string) {
-  return s.startsWith("/") || /^https?:/.test(s)
-    ? s
-    : p.backdrops.find((b) => b.id === s)?.src ||
-        `${p.resources.assetsBase || "/assets/generated"}/${s}.png`;
+  return resolveImage(p, s);
 }
 export function resolveScene(p: StoryProject, title: string) {
-  const rule = p.resources.sceneRules?.find(r => r.keywords.some(k => title.includes(k)));
-  return rule ? resolveAsset(p, rule.asset) : p.backdrops[0]?.src || "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%229%22%3E%3Crect width=%2216%22 height=%229%22 fill=%22%231a1b1e%22/%3E%3C/svg%3E";
+  const rule = p.resources.sceneRules?.find((r) =>
+    keywordMatches(title, r.keywords),
+  );
+  return rule
+    ? resolveAsset(p, rule.asset)
+    : p.backdrops[0]?.src ||
+        "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%229%22%3E%3Crect width=%2216%22 height=%229%22 fill=%22%231a1b1e%22/%3E%3C/svg%3E";
 }
 export function resolveTrack(p: StoryProject, title: string) {
   const rule = p.media.chapterMusicRules?.find((r) =>
-    r.keywords.some((k) => title.includes(k)),
+    keywordMatches(title, r.keywords),
   );
   return (
     (rule && p.media.chapterMusic?.[rule.track]) ||

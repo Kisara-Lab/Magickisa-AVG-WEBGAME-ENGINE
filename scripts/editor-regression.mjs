@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 
 // Exercise actual shared React controls in a browser, independent of project fixtures.
 export async function editorRegression(browser, origin) {
@@ -186,6 +186,45 @@ export async function editorRegression(browser, origin) {
     await page.waitForFunction(
       () => window.audioPlayers.length === 2 && !window.audioPlayers[1].paused,
     );
+    // The real presentation host must finish without audio, including empty OP pages.
+    await page.evaluate(async () => {
+      const { default: React } =
+        await import("/node_modules/.vite/deps/react.js");
+      const { PresentationHost } =
+        await import("/src/engine/PresentationHost.tsx");
+      const p = structuredClone(window.audioStore.project);
+      p.media.opening = { pages: [], images: [], duration: 0.25 };
+      window.presentationFinished = false;
+      window.regressionRoot.render(
+        React.createElement(PresentationHost, {
+          project: p,
+          presentation: { id: "opening", nodeId: "start" },
+          onFinish: () => {
+            window.presentationFinished = true;
+          },
+        }),
+      );
+    });
+    await page.waitForFunction(() => window.presentationFinished);
+    const history = await page.evaluate(async () => {
+      const { syncLegacyView } =
+        await import("/src/compat/release/game/GameApp.jsx");
+      const p = window.audioStore.project;
+      const save = structuredClone(window.audioStore.save);
+      save.history = Array.from({ length: 500 }, (_, i) => ({
+        nodeId: "start",
+        lineIndex: i,
+        text: String(i),
+      }));
+      const first = syncLegacyView({ index: 0 }, save, p);
+      save.history.shift();
+      save.history.push({ nodeId: "start", lineIndex: 500, text: "new" });
+      const second = syncLegacyView(first, save, p);
+      return { before: first.history.at(-1), after: second.history.at(-1) };
+    });
+    assert.equal(history.before.text, "499");
+    assert.equal(history.after.text, "new");
+    assert.equal(history.after.engineHistoryIndex, 499);
   } finally {
     await page.close();
   }

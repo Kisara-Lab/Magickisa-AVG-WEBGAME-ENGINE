@@ -1,5 +1,6 @@
 import type { StoryProject, StoryNode, Effect } from "../engine/types";
 import { randomId } from "../engine/id";
+import { resolveImage, isExternalResource } from "../engine/resource.js";
 export type AuthorNode = StoryNode & { effects?: Effect[]; act?: string };
 export type Profile = "modern" | "release";
 export type AuthorProject = Omit<StoryProject, "schemaVersion" | "nodes"> & {
@@ -42,16 +43,11 @@ export function mediaUrl(profile: Profile, s: string) {
   const workspace = new URLSearchParams(location.search).get("workspaceId");
   return !s
     ? ""
-    : s.startsWith("/")
+    : s.startsWith("/") && !isExternalResource(s)
       ? `/__studio/media/${profile}${workspace ? "/@" + workspace : ""}${s.split("/").map(encodeURIComponent).join("/")}`
       : s;
 }
 export function assetUrl(p: AuthorProject, s: string) {
-  const ref = !s
-    ? ""
-    : s.startsWith("/") || /^https?:/.test(s)
-      ? s
-      : p.backdrops.find((b) => b.id === s)?.src ||
-        `${p.resources.assetsBase || "/assets/generated"}/${s}.png`;
+  const ref = resolveImage(p, s);
   return mediaUrl(p.schemaVersion === 2 ? "modern" : "release", ref);
 }

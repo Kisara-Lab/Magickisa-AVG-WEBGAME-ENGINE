@@ -5,26 +5,32 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { assertProject, projectSchema } from "../src/engine/schema";
 import type { StoryProject } from "../src/engine/types";
+import {
+  resolveImage,
+  isExternalResource,
+  resourcePath,
+} from "../src/engine/resource.js";
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-export const projectFile = path.join(defaultDirectory("modern"), "project.json");
+export const projectFile = path.join(
+  defaultDirectory("modern"),
+  "project.json",
+);
 export function resourceReferences(p: StoryProject): string[] {
-  const asset = (s: string) =>
-    s.startsWith("/") || /^https?:/.test(s)
-      ? s
-      : p.backdrops.find((b) => b.id === s)?.src ||
-        `${p.resources.assetsBase || "/assets/generated"}/${s}.png`;
+  const asset = (s: string) => resolveImage(p, s);
   return [
     ...new Set(
       [
         ...p.backdrops.map((b) => b.src),
         ...p.audio.map((a) => a.src),
         ...p.characters.flatMap((c) => [
-          c.portrait,
-          ...Object.values(c.expressions || {}),
-          c.live2d?.model,
+          c.portrait ? asset(c.portrait) : undefined,
+          ...Object.values(c.expressions || {})
+            .filter(Boolean)
+            .map(asset),
+          c.live2d?.model ? asset(c.live2d.model) : undefined,
         ]),
         ...p.nodes.flatMap((n) => (n.background ? [asset(n.background)] : [])),
         ...(p.resources.sceneRules || []).map((r) => asset(r.asset)),
@@ -34,21 +40,31 @@ export function resourceReferences(p: StoryProject): string[] {
         p.media.opening?.lyrics,
         ...(p.media.opening?.images || []).map(asset),
         p.media.ending?.audio,
-        p.media.ending?.image,
+        p.media.ending?.image ? asset(p.media.ending.image) : undefined,
         p.media.ending?.lyrics,
         ...Object.values(p.media.chapterMusic || {}),
         ...(p.media.musicGallery || []).map((m) => m.src),
-      ].filter((s): s is string => !!s),
+      ]
+        .filter((s): s is string => !!s)
+        .map(resourcePath),
     ),
   ];
 }
 export function validateResources(p: StoryProject): void {
   const errors: string[] = [];
   for (const ref of resourceReferences(p)) {
-    if (/^https?:/.test(ref)) continue;
-    const clean = decodeURIComponent(ref.split("?")[0]);
-    const file = path.resolve(root, "workspace-projects/default-modern/public", "." + clean);
-    if (!file.startsWith(path.join(defaultDirectory("modern"), "public") + path.sep))
+    if (isExternalResource(ref) || /^(data|blob):/i.test(ref)) continue;
+    const clean = decodeURIComponent(ref.split(/[?#]/)[0]);
+    const file = path.resolve(
+      root,
+      "workspace-projects/default-modern/public",
+      "." + clean,
+    );
+    if (
+      !file.startsWith(
+        path.join(defaultDirectory("modern"), "public") + path.sep,
+      )
+    )
       errors.push(`资源路径越界：${ref}`);
     else if (!fs.existsSync(file) || !fs.statSync(file).isFile())
       errors.push(`资源缺失：${ref}`);

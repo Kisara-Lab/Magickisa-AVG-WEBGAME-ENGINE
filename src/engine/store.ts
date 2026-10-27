@@ -13,11 +13,14 @@ export class EngineStore {
   private listeners = new Set<() => void>();
   private current: EngineSave;
   private storage?: StorageAdapter;
+  persistenceError = "";
+  readonly temporary: boolean;
   constructor(
     public project: StoryProject,
     options: SessionOptions = {},
   ) {
     assertProject(project);
+    this.temporary = options.persist === false;
     this.storage =
       options.persist === false
         ? undefined
@@ -48,8 +51,15 @@ export class EngineStore {
   private commit() {
     this.runtime.save.savedAt = new Date().toISOString();
     this.current = structuredClone(this.runtime.save);
+    if (this.storage) {
+      try {
+        writeSave(this.runtime.save, this.storage);
+        this.persistenceError = "";
+      } catch (e) {
+        this.persistenceError = `进度未保存：${String(e)}。请导出存档，释放存储空间后重试。`;
+      }
+    }
     this.listeners.forEach((l) => l());
-    if (this.storage) writeSave(this.runtime.save, this.storage);
     return this.current;
   }
   advance() {
@@ -103,6 +113,9 @@ export class EngineStore {
   }
   restore(input: unknown) {
     this.runtime.restore(input);
+    return this.commit();
+  }
+  retrySave() {
     return this.commit();
   }
   reset() {

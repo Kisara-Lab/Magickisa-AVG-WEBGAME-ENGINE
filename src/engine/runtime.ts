@@ -186,6 +186,25 @@ export class StoryRuntime {
     this.save = {
       ...this.save,
       ...structuredClone(state),
+      playerNotes: this.save.playerNotes,
+      unlockedMaterials: [
+        ...new Set([
+          ...this.save.unlockedMaterials,
+          ...state.unlockedMaterials,
+        ]),
+      ],
+      readMaterials: [
+        ...new Set([...this.save.readMaterials, ...state.readMaterials]),
+      ],
+      completedEndings: [
+        ...new Set([...this.save.completedEndings, ...state.completedEndings]),
+      ],
+      seenPresentations: [
+        ...new Set([
+          ...this.save.seenPresentations,
+          ...state.seenPresentations,
+        ]),
+      ],
       history: this.save.history.slice(0, index),
     };
     return this.save;
@@ -193,9 +212,21 @@ export class StoryRuntime {
   jump(nodeId: string, lineIndex = 0) {
     if (!this.project.nodes.some((n) => n.id === nodeId))
       throw new Error("节点不存在。");
+    const target = this.project.nodes.find((n) => n.id === nodeId)!;
+    if (
+      !evaluateCondition(
+        target.condition,
+        this.save.variables,
+        this.save.visitedNodes,
+      )
+    )
+      throw new Error("当前条件不允许进入此场景。");
+    const revisiting = this.save.visitedNodes.includes(nodeId);
     this.checkpoint();
     this.save.presentation = null;
-    this.move(nodeId);
+    this.move(nodeId, revisiting);
+    this.save.lineIndex = 0;
+    this.save.completed = false;
     this.save.lineIndex = Math.max(
       0,
       Math.min(lineIndex, this.node?.lines.length ?? 0),
