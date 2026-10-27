@@ -104,7 +104,14 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   assert.ok(url, output);
-  assert.equal((await fetch(url + "/engine.html")).ok, true);
+  const page = await fetch(url + "/engine.html").catch((error) => {
+    throw new Error(`${error}\n${output}`);
+  });
+  assert.equal(
+    page.ok,
+    true,
+    `${page.status}: ${await page.text()}\n${output}`,
+  );
   const list = await (await fetch(url + "/__studio/workspaces")).json();
   assert.ok(Array.isArray(list.projects));
   child.kill("SIGTERM");

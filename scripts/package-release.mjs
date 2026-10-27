@@ -26,12 +26,12 @@ execFileSync(
   { cwd: root },
 );
 // Only tracked files at the exact release ref are eligible, never local projects or secrets.
-const names = execFileSync("git", ["ls-tree", "-r", "--name-only", ref], {
+const names = execFileSync("git", ["ls-tree", "-r", "--name-only", "-z", ref], {
   cwd: root,
   encoding: "utf8",
 })
-  .trim()
-  .split("\n");
+  .split("\0")
+  .filter(Boolean);
 const archive = new yazl.ZipFile();
 const writing = pipeline(
   archive.outputStream,

@@ -66,6 +66,10 @@ export async function launch(root) {
     root,
     server: {
       host: "127.0.0.1",
+      // Windows native fs watchers can abort Node for Unicode directory paths.
+      ...(process.platform === "win32"
+        ? { watch: { usePolling: true, interval: 500 } }
+        : {}),
       open: process.argv.includes("--no-open") ? false : "/engine.html",
     },
   });
