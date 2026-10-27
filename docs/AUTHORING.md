@@ -32,9 +32,11 @@ node scripts/magickisa.mjs source list --workspace ID --json
 node scripts/magickisa.mjs source status --workspace ID --json
 ```
 
-未指定 id 时生成来源 ID；后续用相同 id 和新 file 重新关联。清单记录相对于 authoring 的路径及登记时 SHA256；文件可位于工作区外，但 Windows 必须位于同一驱动器。其他盘的文件请先放到同盘资料目录。最终文件不能是符号链接。
+未指定 id 时生成来源 ID；后续用相同 id 和新 file 重新关联。清单记录相对于 authoring 的路径及登记时 SHA256；文件可位于工作区外。Windows 跨盘来源使用可移植别名，通过本地 `.source-bindings.json` 关联绝对路径；此文件不进入工程包，迁移后需重新关联。最终文件不能是符号链接。
 
 registered 表示与登记时相同，changed 表示原稿变化，missing 表示待重新关联。changed 不会自动更新结构稿，Agent 应阅读改稿并重新整理；plan 捕获当前原文件哈希。缺失来源阻止同步，但不删除游戏内容。不确定的资源或逻辑写入 questions，不能编造路径或静默省略。
+
+`sync status` 另外返回 syncedSha256 和 changedSinceSync，对比最后一次成功接入版本；来源登记哈希与接入哈希分别保留。
 
 ## 3. 多文件结构稿示例
 

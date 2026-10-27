@@ -44,6 +44,7 @@ import {
   fileHash,
   assertNoPendingCommit,
 } from "./storage";
+import { sourceFile, registerSource } from "./sources";
 
 export { authoringSchemas };
 function fail(
@@ -65,16 +66,6 @@ function loadManifest(ctx: ProjectContext, file = local(ctx, "manifest.json")) {
     relative: portable(relative),
     manifest: manifestSchema.parse(readJson(local(ctx, relative))),
   };
-}
-function sourcePath(ctx: ProjectContext, file: string) {
-  if (path.isAbsolute(file) || /^[A-Za-z]:|^[a-z]+:\/\//i.test(file))
-    fail("来源路径必须是相对路径");
-  const resolved = path.resolve(home(ctx), file);
-  if (!/\.(txt|md|json)$/i.test(resolved))
-    fail("来源仅支持 TXT、Markdown、JSON");
-  if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink())
-    fail("来源文件不能是符号链接");
-  return resolved;
 }
 export function init(ctx: ProjectContext) {
   const unlock = acquireProjectWrite(ctx);
@@ -122,17 +113,15 @@ export function addSource(
   file: string,
   id = "source-" + crypto.randomUUID(),
 ) {
-  if (!/^[\p{L}\p{N}_.-]+$/u.test(id))
+  if (
+    !/^[\p{L}\p{N}_.-]+$/u.test(id) ||
+    ["__proto__", "prototype", "constructor"].includes(id)
+  )
     fail("来源 ID 仅支持文字、数字、点、横线与下划线", "ARGUMENT", 2);
   const unlock = acquireProjectWrite(ctx);
   try {
-    const loaded = loadManifest(ctx),
-      relative = portable(path.relative(home(ctx), path.resolve(file)));
-    const source = {
-      id,
-      path: relative,
-      sha256: fileHash(sourcePath(ctx, relative)),
-    };
+    const loaded = loadManifest(ctx);
+    const source = registerSource(ctx, id, file);
     const existing = loaded.manifest.sources.findIndex((s) => s.id === id);
     if (existing >= 0) loaded.manifest.sources[existing] = source;
     else loaded.manifest.sources.push(source);
@@ -145,7 +134,7 @@ export function addSource(
 export function sources(ctx: ProjectContext) {
   if (!fs.existsSync(local(ctx, "manifest.json"))) return [];
   return loadManifest(ctx).manifest.sources.map((source) => {
-    const file = sourcePath(ctx, source.path);
+    const file = sourceFile(ctx, source);
     if (!fs.existsSync(file))
       return {
         ...source,
@@ -254,8 +243,8 @@ function compile(ctx: ProjectContext, file: string, state: SyncState) {
     if (!ids.has(origin.sourceId)) fail("来源定位引用了未知来源 ID");
   }
   for (const source of manifest.sources) {
-    const sourceFile = sourcePath(ctx, source.path);
-    if (!fs.existsSync(sourceFile))
+    const resolvedSource = sourceFile(ctx, source);
+    if (!fs.existsSync(resolvedSource))
       issueList.push({
         code: "SOURCE_MISSING",
         severity: "error",
@@ -264,7 +253,7 @@ function compile(ctx: ProjectContext, file: string, state: SyncState) {
         message: "来源缺失，需重新关联；不会删除游戏内容",
       });
     else {
-      sourceHashes[source.id] = fileHash(sourceFile);
+      sourceHashes[source.id] = fileHash(resolvedSource);
       inputs.push({
         path: source.path,
         sha256: sourceHashes[source.id],
@@ -445,6 +434,20 @@ export function makePlan(
     operationResults: compiled.operationResults,
     sourceHashes: compiled.sourceHashes,
   };
+  // Track incoming structure separately from the actual (possibly manually
+  // edited) snapshot, including records that a source deletion would remove.
+  const incoming = structuredClone(
+    state.incomingProject ?? state.project ?? current.project,
+  );
+  for (const entry of [...compiled.entries].sort(
+    (a, b) => segments(a.path).length - segments(b.path).length,
+  ))
+    if (entry.mode !== "record" || !get(incoming, entry.path).present)
+      put(incoming, entry.path, entry.cell);
+  const normalizedIncoming = projectSchema.safeParse(incoming);
+  nextState.incomingProject = normalizedIncoming.success
+    ? normalizedIncoming.data
+    : incoming;
   const body = {
     formatVersion: 1 as const,
     workspaceId: ctx.id,

@@ -11,7 +11,13 @@ const modulePath = z
     s.split("/").every((part) => part.trim() === part && !part.endsWith(" ")),
   );
 export const sourceSchema = z
-  .object({ id: ref, path: ref, sha256: z.string().regex(/^[a-f0-9]{64}$/) })
+  .object({
+    id: ref.refine(
+      (id) => !["__proto__", "prototype", "constructor"].includes(id),
+    ),
+    path: ref,
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
   .strict();
 const originSchema = z
   .object({
@@ -117,6 +123,7 @@ export interface SyncState {
   formatVersion: 1;
   entries: Record<string, Cell>;
   project?: unknown;
+  incomingProject?: unknown;
   operationResults?: Record<string, { path: string; cell: Cell }>;
   sourceHashes?: Record<string, string>;
 }
@@ -129,6 +136,7 @@ export const stateSchema = z
     formatVersion: z.literal(1),
     entries: z.record(z.string(), cellSchema),
     project: projectSchema.optional(),
+    incomingProject: z.unknown().optional(),
     sourceHashes: z
       .record(z.string(), z.string().regex(/^[a-f0-9]{64}$/))
       .optional(),

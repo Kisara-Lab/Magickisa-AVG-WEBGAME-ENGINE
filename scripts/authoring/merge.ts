@@ -184,13 +184,33 @@ export function merge<T>(
       entry.mode === "record" && raw.present
         ? cell({ id: (raw.value as any).id })
         : raw;
-    const base =
+    let base =
       (entry.mode === "remove" && state.entries[at]?.present) ||
       (entry.mode === "order" &&
         state.entries[at] === undefined &&
         state.project)
         ? get(state.project, at)
         : state.entries[at];
+    if (entry.mode === "remove" && state.incomingProject !== undefined) {
+      base = get(state.incomingProject, at);
+    } else if (entry.mode === "remove" && state.entries[at]?.present) {
+      // A prior sync may have preserved manual values in its project snapshot.
+      // Compare deletion against the incoming baseline, not that preserved copy.
+      const incomingBase = structuredClone(state.project ?? current);
+      for (const [path, baseline] of Object.entries(state.entries)
+        .filter(([path]) => path === at || path.startsWith(at + "/"))
+        .sort(([a], [b]) => segments(a).length - segments(b).length))
+        if (!(
+          baseline.present &&
+          baseline.value &&
+          typeof baseline.value === "object" &&
+          Object.keys(baseline.value).length === 1 &&
+          "id" in baseline.value &&
+          get(incomingBase, path).present
+        ))
+          put(incomingBase, path, baseline);
+      base = get(incomingBase, at);
+    }
     let conflict = false,
       reason = "both-edited";
     if (entry.mode === "record") {

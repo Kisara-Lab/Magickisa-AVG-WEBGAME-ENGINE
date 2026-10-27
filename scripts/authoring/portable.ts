@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { contained, atomicJson, type ProjectContext } from "../workspaces";
 import { manifestSchema, moduleSchema, stateSchema } from "./model";
+import { sourceFile } from "./sources";
 import {
   home,
   hash,
@@ -55,7 +56,7 @@ export function exportAuthoring(
   for (const source of manifest.sources) {
     if (path.isAbsolute(source.path) || /^[A-Za-z]:/.test(source.path))
       throw new Error("来源路径必须为相对路径");
-    const original = path.resolve(sourceRoot, source.path),
+    const original = sourceFile(ctx, source),
       ext = path.extname(original).toLowerCase();
     if (![".txt", ".md", ".json"].includes(ext))
       throw new Error("来源文件类型不支持");

@@ -72,13 +72,14 @@ try {
   assert.equal((await call(["agent", "init"])).created.length, 0);
   for (const schema of ["manifest", "module", "plan", "resolutions"])
     assert.ok((await cli(["schema", schema])).properties);
+  const sourceFiles = new Map();
   for (const [name, body] of [
     ["剧本.txt", "星门开启。"],
     ["分支 逻辑.md", "选择进入，设置 entered。"],
     ["规则.json", '{"flag":"entered"}'],
   ]) {
     fs.writeFileSync(path.join(temp, name), body);
-    await call([
+    const registered = await call([
       "source",
       "add",
       "--file",
@@ -86,6 +87,17 @@ try {
       "--id",
       "source-" + name.split(".")[0].replaceAll(" ", "-"),
     ]);
+    sourceFiles.set(registered.id, path.join(temp, name));
+  }
+  // Exercise portable aliases/local-only bindings even on a single-drive host.
+  if (!fs.existsSync(path.join(authoring, ".source-bindings.json"))) {
+    const registered = json(manifestFile),
+      source = registered.sources[0];
+    source.path = "sources/local-alias.txt";
+    write(path.join(authoring, ".source-bindings.json"), {
+      [source.id]: { path: source.path, file: sourceFiles.get(source.id) },
+    });
+    write(manifestFile, registered);
   }
   const assetFile = path.join(temp, "背景.svg");
   fs.writeFileSync(assetFile, '<svg xmlns="http://www.w3.org/2000/svg"/>');
@@ -141,7 +153,11 @@ try {
     },
   };
   write(path.join(authoring, "modules/story.json"), story);
-  fs.writeFileSync(path.join(authoring, "modules/story.json"), '\uFEFF' + fs.readFileSync(path.join(authoring, "modules/story.json"), 'utf8'));
+  fs.writeFileSync(
+    path.join(authoring, "modules/story.json"),
+    "\uFEFF" +
+      fs.readFileSync(path.join(authoring, "modules/story.json"), "utf8"),
+  );
   write(path.join(authoring, "modules/end.json"), ending);
   const manifest = json(manifestFile);
   manifest.modules.push("modules/end.json");
@@ -300,6 +316,18 @@ try {
   prepared = await plan();
   await call(["sync", "apply", "--file", prepared.file]);
   story.nodes.pop();
+  await call([
+    "line",
+    "add",
+    "--scene",
+    "unused",
+    "--id",
+    "manual-line",
+    "--data",
+    '{"text":"人工新增内容"}',
+  ]);
+  prepared = await plan();
+  await call(["sync", "apply", "--file", prepared.file]);
   write(path.join(authoring, "modules/story.json"), story);
   prepared = await plan();
   assert.equal(prepared.value.operations.length, 0);
@@ -309,7 +337,11 @@ try {
     { op: "scene.move", id: "scene-001", before: "arrival" },
   ];
   write(manifestFile, manifest);
-  prepared = await plan();
+  prepared = await plan(undefined, 1);
+  assert.ok(
+    prepared.value.conflicts.some((item) => item.path === "/nodes/@unused"),
+  );
+  prepared = await plan([{ path: "/nodes/@unused", take: "incoming" }]);
   await call(["sync", "apply", "--file", prepared.file]);
   assert.equal(
     json(projectFile).nodes.some((n) => n.id === "unused"),
@@ -394,6 +426,10 @@ try {
     imported.id,
     "authoring",
   );
+  assert.equal(
+    fs.existsSync(path.join(importedHome, ".source-bindings.json")),
+    false,
+  );
   assert.ok(fs.existsSync(path.join(importedHome, ".sync-state.json")));
   assert.ok(
     json(path.join(importedHome, "manifest.json")).sources.every(
@@ -416,7 +452,7 @@ try {
       "--id",
       manifest.sources[i].id,
       "--file",
-      path.resolve(authoring, manifest.sources[i].path),
+      sourceFiles.get(manifest.sources[i].id),
     ]);
   const importedPlan = path.join(temp, "迁移后方案.json");
   await importedCall(["sync", "plan", "--out", importedPlan]);

@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cell, flatten, get, merge, put } from "../scripts/authoring/merge";
+import {
+  absent,
+  cell,
+  flatten,
+  get,
+  merge,
+  put,
+} from "../scripts/authoring/merge";
 import { manifestSchema, moduleSchema } from "../scripts/authoring/model";
 
 const origin = { module: "modules/story.json", field: "" };
@@ -58,6 +65,17 @@ test("source cells merge by stable ID, preserve local changes and acknowledge ke
   );
   assert.equal(repeat.conflicts.length, 0);
   assert.equal(repeat.changes.length, 0);
+  const removal = merge(
+    safe.project,
+    [{ path: "/nodes/@n", mode: "remove", cell: absent, origin }],
+    { ...state, entries: safe.nextEntries, project: safe.project },
+    [],
+  );
+  assert.equal(
+    removal.conflicts.length,
+    1,
+    "explicit deletion must detect manual values preserved by an earlier sync",
+  );
 });
 test("manual deletion is retained until changed source explicitly resolves the missing stable target", () => {
   const source = { nodes: [{ id: "n", title: "A" }] },
