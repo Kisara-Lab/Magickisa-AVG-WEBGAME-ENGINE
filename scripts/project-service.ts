@@ -1,6 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import {
+  beginCommit,
+  finishCommit,
+  recoverCommit,
+  stateFile,
+  assertNoPendingCommit,
+} from "./authoring/storage";
+import type { SyncState } from "./authoring/model";
 import { spawn } from "node:child_process";
 import {
   acquireProjectWrite,
@@ -253,6 +261,7 @@ export function snapshot(
 }
 
 export function readSnapshot(ctx: ProjectContext) {
+  assertNoPendingCommit(ctx);
   const bytes = fs.readFileSync(ctx.projectFile);
   const project = JSON.parse(bytes.toString("utf8")) as AuthorProject;
   requireModernProject(project);
@@ -311,6 +320,7 @@ export function saveProject(
   input: unknown,
   expected: string,
   alreadyLocked = false,
+  syncState?: SyncState,
 ) {
   const unlock = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
   try {
@@ -318,16 +328,40 @@ export function saveProject(
     const { project, issues } = checkedProject(ctx, input);
     const original = fs.readFileSync(ctx.projectFile);
     if (digest(original) !== expected) assertRevision(ctx, expected);
+    const projectChanged =
+      JSON.stringify(JSON.parse(original.toString("utf8"))) !==
+      JSON.stringify(project);
+    if (syncState && !projectChanged) {
+      beginCommit(ctx, project, syncState);
+      try {
+        finishCommit(ctx, syncState);
+      } catch (error) {
+        recoverCommit(ctx);
+        throw error;
+      }
+      return { revision: revision(ctx.profile, ctx), issues, backup: null };
+    }
     const backup = path.join(
       ctx.backups,
       `studio-modern-${Date.now()}-${crypto.randomUUID()}`,
     );
     fs.mkdirSync(backup, { recursive: true });
     fs.writeFileSync(path.join(backup, "project.json"), original);
+    if (fs.existsSync(stateFile(ctx)))
+      fs.copyFileSync(
+        stateFile(ctx),
+        path.join(backup, "authoring-state.json"),
+      );
+    if (syncState) beginCommit(ctx, project, syncState);
     try {
       atomicJson(ctx.projectFile, project);
       buildContent(project, ctx.public, ctx.id.startsWith("builtin-"));
+      if (syncState) finishCommit(ctx, syncState);
     } catch (error) {
+      if (syncState) {
+        recoverCommit(ctx);
+        throw error;
+      }
       // Authoritative JSON is restored byte for byte; generated content is disposable.
       fs.writeFileSync(ctx.projectFile + ".rollback", original);
       fs.renameSync(ctx.projectFile + ".rollback", ctx.projectFile);

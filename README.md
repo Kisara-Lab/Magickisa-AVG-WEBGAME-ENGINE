@@ -9,7 +9,7 @@ MAGICKISA 由 **Kisara-Lab** 维护，包含 React / TypeScript 运行时和可�
 
 ## 当前版本与 Legacy
 
-`main` 当前为 **2.0.0-dev.1**，目标正式版本为 v2.0.0，尚未发布 v2 正式 Release。现代版成为唯一开发模式。
+`main` 当前为 **2.0.0-dev.2**，目标正式版本为 v2.0.0，尚未发布 v2 正式 Release。现代版成为唯一开发模式。
 
 ## CLI 与 Agent 开发
 
@@ -25,6 +25,22 @@ node scripts/magickisa.mjs build --workspace ID --json
 ```
 
 完整事务示例与命令见 [CLI 手册](docs/CLI.md)，Agent 工作循环见 [Agent 开发指南](docs/AGENT-GUIDE.md)。本轮为静态检查，不提供剧情模拟、MCP 或专用剧本语法；实际剧情仍在 Studio 预览验收。
+
+### 让 Agent 接入用户剧本并持续改稿
+
+新增 `agent init/context`、`source add/list/status` 与 `sync plan/apply/status`。用户提供 UTF-8 TXT、Markdown 或 JSON，Agent 先读取工程上下文，再整理为按稳定 ID 组织的多文件结构稿。CLI 生成可检查的差异与事务，三方比较保护 Studio 人工修改；首次接管和同字段冲突须显式选择。CLI 不理解自然语言，不执行用户脚本，也不调用模型。
+
+```sh
+node scripts/magickisa.mjs agent init --workspace ID --json
+node scripts/magickisa.mjs agent context --workspace ID --limit 20 --json
+node scripts/magickisa.mjs source add --workspace ID --id chapter-1 --file "我的剧本.txt" --json
+# Agent 整理 authoring/manifest.json 与 modules/*.json 后：
+node scripts/magickisa.mjs sync plan --workspace ID --out plan.json --json
+node scripts/magickisa.mjs sync apply --workspace ID --file plan.json --dry-run --json
+node scripts/magickisa.mjs sync apply --workspace ID --file plan.json --json
+```
+
+详见 [多文件接入与增量同步手册](docs/AUTHORING.md)。工程包默认保留结构稿、映射与同步基线；原始附件仅通过 CLI `package export --include-sources` 或导出 API 的 `includeSources: true` 加入。创作资料不进入游戏发行产物。
 
 **需要兼容档，请下载 [v1.0legacy — 双模式最终版](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。** 这是首次 GitHub Release，包含最新双模式修复、源码 ZIP、跨平台联网启动包和 SHA256；其 npm 内部版本保持 1.0.0。更早的 `v1.0.0` 标签保留原样。
 

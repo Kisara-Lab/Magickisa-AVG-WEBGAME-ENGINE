@@ -320,7 +320,14 @@ export function studioPlugin(): Plugin {
           }
           if (url.pathname === "/packages/export") {
             res.end(
-              JSON.stringify(packages.export(ctx, data.project, data.revision)),
+              JSON.stringify(
+                packages.export(
+                  ctx,
+                  data.project,
+                  data.revision,
+                  data.includeSources === true,
+                ),
+              ),
             );
             return;
           }

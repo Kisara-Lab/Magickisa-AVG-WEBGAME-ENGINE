@@ -10,6 +10,7 @@ import type { AuthorProject, Profile } from "../src/studio/model";
 import { resourceReferences } from "./content";
 import { isExternalResource } from "../src/engine/resource.js";
 import { registerPackagePath } from "./package-paths";
+import { exportAuthoring, restoreAuthoring } from "./authoring/portable";
 import { acquireRegistry } from "./project-locks";
 import {
   requireModernProfile,
@@ -124,7 +125,8 @@ function safeName(name: string) {
   if (
     !["manifest.json", "project.json", "README.txt"].includes(name) &&
     !name.startsWith("public/") &&
-    !/^content\/[^/]+\.json$/.test(name)
+    !/^content\/[^/]+\.json$/.test(name) &&
+    !/^content\/authoring\/(?:.*\.json|sources\/[^/]+\.(?:txt|md))$/.test(name)
   )
     throw new Error("压缩包包含不支持的文件：" + name);
   return name;
@@ -230,7 +232,12 @@ export class ProjectPackages {
     }));
     return summary(ctx, p, warnings, files);
   }
-  export(ctx: ProjectContext, input: unknown, revision: string) {
+  export(
+    ctx: ProjectContext,
+    input: unknown,
+    revision: string,
+    includeSources = false,
+  ) {
     const info = this.check(ctx, input, revision),
       p = input as AuthorProject,
       task = this.task("export", ctx);
@@ -240,6 +247,7 @@ export class ProjectPackages {
         snapshot = path.join(task.directory, "snapshot");
       fs.mkdirSync(snapshot);
       this.hooks.snapshot(p, ctx, snapshot);
+      const checkAuthoring = exportAuthoring(ctx, snapshot, includeSources);
       const publicNames = publicFiles(ctx),
         records: FileRecord[] = [],
         sources: { source: string; destination: string }[] = [];
@@ -321,6 +329,7 @@ export class ProjectPackages {
       archive.end();
       await writing;
       task.phase = "核对源文件";
+      checkAuthoring();
       for (let i = 0; i < sources.length; i++) {
         if ((await hashFile(sources[i].source, signal)) !== records[i].sha256)
           throw new Error("文件在打包期间变化，请重试");
@@ -494,6 +503,7 @@ export class ProjectPackages {
     fs.mkdirSync(ctx.content, { recursive: true });
     fs.cpSync(path.join(verified, "content"), ctx.content, { recursive: true });
     fs.rmSync(verified, { recursive: true, force: true });
+    restoreAuthoring(stage);
     task.profile = manifest.profile;
     task.name = manifest.name;
     task.summary = summary(

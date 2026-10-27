@@ -1,8 +1,10 @@
 # MAGICKISA Studio 启动包
 
-本包包含完整引擎与 Studio，当前为 2.0.0-dev.1，仅支持现代档。兼容档请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，不提供旧档转换或后续维护。新版工程包不保证能由 Legacy Studio 打开。
+本包包含完整引擎与 Studio，当前为 2.0.0-dev.2，仅支持现代档。兼容档请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，不提供旧档转换或后续维护。新版工程包不保证能由 Legacy Studio 打开。
 
 命令行开发者与 Agent 可在安装依赖后运行 `node scripts/magickisa.mjs help`，无须打开浏览器即可编辑、校验和构建。详见 [CLI 手册](docs/CLI.md) 与 [Agent 指南](docs/AGENT-GUIDE.md)。
+
+用户文件接入可通过 `agent init/context`、`source add`、`sync plan/apply` 完成；支持多文件结构稿与反复改稿，保护人工修改。详见 [创作接入手册](docs/AUTHORING.md)。
 
 1. 安装 [Node.js 22 或更新版本](https://nodejs.org/)，包含 npm。
 2. 将整个 ZIP 解压到可写目录，不能直接在压缩包中启动。
