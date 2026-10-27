@@ -16,6 +16,7 @@ try {
   fs.writeFileSync(path.join(unit, "package-lock.json"), "{}");
   const fake = (_cmd, args) => {
     if (args[0] === "ci") {
+      assert.deepEqual(args, ["ci", "--include=dev"]);
       fs.mkdirSync(path.join(unit, "node_modules/vite"), { recursive: true });
       fs.writeFileSync(path.join(unit, "node_modules/vite/package.json"), "{}");
     }
@@ -98,6 +99,7 @@ try {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    env: { ...process.env, NODE_ENV: "production" },
   });
   let output = "";
   child.stdout.on("data", (chunk) => {
@@ -114,6 +116,13 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   assert.ok(url, output);
+  const duplicate = spawnSync(
+    process.execPath,
+    ["scripts/launch-studio.mjs", "--no-open"],
+    { cwd: root, encoding: "utf8", windowsHide: true },
+  );
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stderr, /Studio/);
   const page = await fetch(url + "/engine.html").catch((error) => {
     throw new Error(`${error}\n${output}`);
   });

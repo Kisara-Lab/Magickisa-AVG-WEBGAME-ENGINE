@@ -9,8 +9,9 @@ const root = process.cwd(),
   ref = process.argv[2] || "HEAD";
 const tag = process.argv[3] || "v1.0legacy";
 if (!/^[a-zA-Z0-9._-]+$/.test(tag)) throw new Error("Invalid release name");
-const output = path.join(root, "release-artifacts");
-fs.mkdirSync(output, { recursive: true });
+const destination = path.join(root, "release-artifacts");
+fs.mkdirSync(destination, { recursive: true });
+const output = fs.mkdtempSync(path.join(destination, ".staging-"));
 const source = `MAGICKISA-${tag}-source.zip`,
   starter = `MAGICKISA-${tag}-Studio-start.zip`;
 execFileSync(
@@ -73,4 +74,11 @@ fs.writeFileSync(
     )
     .join(""),
 );
-console.log(output);
+// Only complete artifacts are promoted. Invalidate the previous checksum first
+// so interruption during promotion cannot leave a plausible stale checksum set.
+fs.rmSync(path.join(destination, "SHA256SUMS.txt"), { force: true });
+for (const name of [source, starter, "SHA256SUMS.txt"]) {
+  fs.renameSync(path.join(output, name), path.join(destination, name));
+}
+fs.rmdirSync(output);
+console.log(destination);

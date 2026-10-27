@@ -23,6 +23,11 @@ export function installDependencies(root, run = spawnSync) {
     .update(
       `${process.platform}/${process.arch}/${process.versions.node.split(".")[0]}`,
     )
+    .update(
+      process.platform === "linux"
+        ? process.report.getReport().header.glibcVersionRuntime || "musl"
+        : "",
+    )
     .digest("hex");
   const marker = path.join(root, "node_modules", ".magickisa-install");
   if (
@@ -61,21 +66,65 @@ export async function launch(root) {
     );
     return;
   }
-  installDependencies(root);
-  const { createServer } = await import(
-    pathToFileURL(path.join(root, "node_modules/vite/dist/node/index.js")).href
-  );
-  const server = await createServer({
-    root,
-    server: {
-      host: "127.0.0.1",
-      // Windows native fs watchers can abort Node for Unicode directory paths.
-      ...(process.platform === "win32"
-        ? { watch: { usePolling: true, interval: 500 } }
-        : {}),
-      open: process.argv.includes("--no-open") ? false : "/engine.html",
-    },
+  const lock = path.join(root, ".magickisa-studio.lock");
+  try {
+    const fd = fs.openSync(lock, "wx");
+    fs.writeFileSync(fd, String(process.pid));
+    fs.closeSync(fd);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    let pid;
+    try {
+      pid = Number(fs.readFileSync(lock, "utf8"));
+    } catch {
+      throw new Error("无法读取启动锁，请关闭本目录的其他 Studio 后重试。");
+    }
+    if (!Number.isSafeInteger(pid) || pid <= 0)
+      throw new Error("启动锁尚未写入，请稍后重试。");
+    try {
+      process.kill(pid, 0);
+      throw new Error(
+        "此目录已有 Studio 正在安装或运行，请使用原窗口；不要同时启动多个服务。",
+      );
+    } catch (e) {
+      if (e.code !== "ESRCH") throw e;
+      fs.unlinkSync(lock);
+      return launch(root);
+    }
+  }
+  process.once("exit", () => {
+    try {
+      if (fs.readFileSync(lock, "utf8") === String(process.pid))
+        fs.unlinkSync(lock);
+    } catch {}
   });
+  const marker = path.join(root, "node_modules/.magickisa-install");
+  if (process.argv.includes("--reinstall")) fs.rmSync(marker, { force: true });
+  installDependencies(root);
+  process.env.NODE_ENV = "development";
+  let server;
+  try {
+    const { createServer } = await import(
+      pathToFileURL(path.join(root, "node_modules/vite/dist/node/index.js"))
+        .href
+    );
+    server = await createServer({
+      root,
+      server: {
+        host: "127.0.0.1",
+        // Windows native fs watchers can abort Node for Unicode directory paths.
+        ...(process.platform === "win32"
+          ? { watch: { usePolling: true, interval: 500 } }
+          : {}),
+        open: process.argv.includes("--no-open") ? false : "/engine.html",
+      },
+    });
+  } catch (error) {
+    fs.rmSync(marker, { force: true });
+    throw new Error(
+      `${error.message}。已清除依赖缓存标记，下次启动将重新安装；也可使用 --reinstall。`,
+    );
+  }
   await server.listen();
   server.printUrls();
   console.log(
