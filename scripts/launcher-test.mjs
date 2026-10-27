@@ -95,12 +95,23 @@ try {
         );
   assert.equal(wrapper.status, 0, wrapper.stderr);
   assert.match(wrapper.stdout, /MAGICKISA Studio launcher/);
-  child = spawn(process.execPath, ["scripts/launch-studio.mjs", "--no-open"], {
-    cwd: root,
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-    env: { ...process.env, NODE_ENV: "production" },
-  });
+  child = spawn(
+    process.platform === "win32" ? "cmd.exe" : "sh",
+    process.platform === "win32"
+      ? ["/d", "/c", "Start-Studio.cmd --no-open"]
+      : [
+          process.platform === "darwin"
+            ? "Start-Studio.command"
+            : "Start-Studio.sh",
+          "--no-open",
+        ],
+    {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...process.env, NODE_ENV: "production" },
+    },
+  );
   let output = "";
   child.stdout.on("data", (chunk) => {
     output += chunk;
@@ -133,7 +144,11 @@ try {
   );
   const list = await (await fetch(url + "/__studio/workspaces")).json();
   assert.ok(Array.isArray(list.projects));
-  child.kill("SIGTERM");
+  if (process.platform === "win32")
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+      windowsHide: true,
+    });
+  else child.kill("SIGTERM");
   await once(child, "exit");
   child = null;
   await assert.rejects(() => fetch(url + "/engine.html"));
@@ -143,7 +158,11 @@ try {
   );
 } finally {
   if (child && child.exitCode === null) {
-    child.kill("SIGTERM");
+    if (process.platform === "win32")
+      spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        windowsHide: true,
+      });
+    else child.kill("SIGTERM");
     await once(child, "exit");
   }
   await fs.promises.rm(temp, {
