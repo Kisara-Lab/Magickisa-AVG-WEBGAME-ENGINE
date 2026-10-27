@@ -44,7 +44,7 @@ try {
   assert.equal(installDependencies(unit, fake), true);
 
   const zip = path.resolve(
-    "release-artifacts/MAGICKISA-v1.0legacy-Studio-start.zip",
+    `release-artifacts/MAGICKISA-v${JSON.parse(fs.readFileSync("package.json", "utf8")).version}-Studio-start.zip`,
   );
   await new Promise((resolve, reject) =>
     yauzl.open(zip, { lazyEntries: true }, (error, archive) => {

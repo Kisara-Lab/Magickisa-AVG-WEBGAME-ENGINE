@@ -1,3 +1,4 @@
+import { requireModernProject } from "../engine/support";
 import {
   ProjectManager,
   studioRequest,
@@ -119,14 +120,7 @@ export function Studio() {
   const [managerOpen, setManagerOpen] = useState(() => !workspaceId());
   const [pendingWorkspace, setPendingWorkspace] =
     useState<WorkspaceItem | null>(null);
-  const [profile, setProfile] = useState<Profile>(() => {
-    const selected = new URLSearchParams(location.search).get("profile");
-    return selected === "modern" || selected === "release"
-      ? selected
-      : import.meta.env.MODE === "release"
-        ? "release"
-        : "modern";
-  });
+  const profile: Profile = "modern";
   const [project, setProject] = useState<AuthorProject | null>(null),
     [saved, setSaved] = useState(""),
     [sectionLevels, setSectionLevels] = useState<Record<string, number>>({}),
@@ -153,8 +147,10 @@ export function Studio() {
     [previewLarge, setPreviewLarge] = useState(false),
     [playing, setPlaying] = useState(false),
     [runtime, setRuntime] = useState<unknown>(null),
-    [job, setJob] = useState<BuildJob>({ status: "idle", log: "" }),
-    [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
+    [job, setJob] = useState<BuildJob>({
+      status: "idle",
+      log: "",
+    });
   const [layout, setLayout] = useState<Layout>(() => readLayout(profile));
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [recovery, setRecovery] = useState<Draft[]>([]);
@@ -176,7 +172,10 @@ export function Studio() {
   const loadedProfile = useRef<Profile | null>(null);
   const draftKey = useRef("");
   const sourceId = useRef("");
-  const editGroup = useRef<{ field: Element | null; at: number }>({
+  const editGroup = useRef<{
+    field: Element | null;
+    at: number;
+  }>({
     field: null,
     at: 0,
   });
@@ -329,7 +328,10 @@ export function Studio() {
       ...position,
       ...target,
       lineId: target.nodeId ? target.lineId : position.lineId,
-      items: { ...effectiveItems, ...target.items },
+      items: {
+        ...effectiveItems,
+        ...target.items,
+      },
     });
     if (id) remember(id);
   }
@@ -366,7 +368,10 @@ export function Studio() {
     setProject(d.project);
     setPast([]);
     setFuture([]);
-    editGroup.current = { field: null, at: 0 };
+    editGroup.current = {
+      field: null,
+      at: 0,
+    };
     setSaved(d.saved);
     setRevision(d.revision);
     setRaw(d.raw);
@@ -571,7 +576,10 @@ export function Studio() {
         const p = previewRef.current;
         if (p)
           iframe.current?.contentWindow?.postMessage(
-            { type: "studio:load", ...p },
+            {
+              type: "studio:load",
+              ...p,
+            },
             location.origin,
           );
       }
@@ -589,7 +597,10 @@ export function Studio() {
   useEffect(() => {
     if (preview && ready.current)
       iframe.current?.contentWindow?.postMessage(
-        { type: "studio:load", ...preview },
+        {
+          type: "studio:load",
+          ...preview,
+        },
         location.origin,
       );
   }, [preview]);
@@ -639,7 +650,10 @@ export function Studio() {
       now - editGroup.current.at > 800
     )
       setPast((history) => [...history, project].slice(-40));
-    editGroup.current = { field: typing ? field : null, at: now };
+    editGroup.current = {
+      field: typing ? field : null,
+      at: now,
+    };
     setFuture([]);
     setProject(next);
     setError("");
@@ -651,14 +665,20 @@ export function Studio() {
     edit(p);
   }
   function undo() {
-    editGroup.current = { field: null, at: 0 };
+    editGroup.current = {
+      field: null,
+      at: 0,
+    };
     if (!past.length || !project) return;
     setFuture([project, ...future].slice(0, 40));
     restoreEdit(past[past.length - 1]);
     setPast(past.slice(0, -1));
   }
   function redo() {
-    editGroup.current = { field: null, at: 0 };
+    editGroup.current = {
+      field: null,
+      at: 0,
+    };
     if (!future.length || !project) return;
     setPast([...past, project].slice(-40));
     restoreEdit(future[0]);
@@ -682,7 +702,9 @@ export function Studio() {
   async function validate(p = project) {
     if (!p) return false;
     try {
-      const validation = await request(profile, "validate", { project: p });
+      const validation = await request(profile, "validate", {
+        project: p,
+      });
       setValidated(JSON.stringify(p));
       setIssues(
         (validation.issues || []).filter(
@@ -694,7 +716,13 @@ export function Studio() {
       setNotice("校验通过：剧本、跳转引用和资源均可用。");
       return true;
     } catch (e) {
-      setIssues((e as { issues?: typeof issues }).issues || []);
+      setIssues(
+        (
+          e as {
+            issues?: typeof issues;
+          }
+        ).issues || [],
+      );
       setValidated("");
       setError(String(e));
       return false;
@@ -709,7 +737,10 @@ export function Studio() {
     saving.current = true;
     setBusy(true);
     try {
-      const data = await request(profile, "project", { project, revision });
+      const data = await request(profile, "project", {
+        project,
+        revision,
+      });
       setSaved(JSON.stringify(project));
       setRevision(data.revision);
       setValidated(JSON.stringify(project));
@@ -818,6 +849,7 @@ export function Studio() {
   async function importProject(file: File) {
     try {
       const p = JSON.parse(await file.text());
+      requireModernProject(p);
       if (await validate(p)) {
         edit(p);
         setSelected(p.startNodeId);
@@ -854,42 +886,6 @@ export function Studio() {
       setBusy(false);
     }
   }
-  function changeProfile(next: Profile) {
-    if (busy || job.status === "running") return;
-    if (next === profile) return;
-    if (dirty) {
-      setPendingProfile(next);
-      return;
-    }
-    switchProfile(next);
-  }
-  function switchProfile(next: Profile) {
-    if (workspaceId()) {
-      openWorkspace({ id: `builtin-${next}`, profile: next, name: "" });
-      return;
-    }
-    void removeDraft(draftKey.current).catch(() => {});
-    loadedProfile.current = null;
-    try {
-      if (!workspaceId())
-        sessionStorage.removeItem(`magickisa-studio-draft:${profile}`);
-    } catch {
-      /* IndexedDB drafts remain available. */
-    }
-    const url = new URL(location.href);
-    url.searchParams.set("profile", next);
-    history.replaceState(null, "", url);
-    setProject(null);
-    setPreview(null);
-    ready.current = false;
-    setProfile(next);
-    setRecovery([]);
-    setIssues([]);
-    setWarnings([]);
-    setJob({ status: "idle", log: "" });
-    setValidated("");
-    setPendingProfile(null);
-  }
   async function openWorkspace(item: WorkspaceItem) {
     leavingWorkspace.current = true;
     await removeDraft(draftKey.current).catch(() => {});
@@ -908,7 +904,10 @@ export function Studio() {
   function setTime(value: number) {
     setTimeState(value);
     iframe.current?.contentWindow?.postMessage(
-      { type: "studio:time", time: value },
+      {
+        type: "studio:time",
+        time: value,
+      },
       location.origin,
     );
   }
@@ -922,7 +921,11 @@ export function Studio() {
     const rev = dirty ? await save() : revision;
     if (!rev) return;
     try {
-      setJob(await request(profile, "build", { revision: rev }));
+      setJob(
+        await request(profile, "build", {
+          revision: rev,
+        }),
+      );
       setError("");
     } catch (e) {
       setError(String(e));
@@ -954,7 +957,10 @@ export function Studio() {
       id = newNode(project).id;
     clone.id = id;
     clone.title += " · 副本";
-    clone.lines = clone.lines.map((l, i) => ({ ...l, id: `${id}-line-${i}` }));
+    clone.lines = clone.lines.map((l, i) => ({
+      ...l,
+      id: `${id}-line-${i}`,
+    }));
     clone.choices = clone.choices?.map((c, i) => ({
       ...c,
       id: `${id}-choice-${i}`,
@@ -976,7 +982,10 @@ export function Studio() {
     select(id);
   }
   const updateLayout = (patch: Partial<Layout>) =>
-    setLayout((l) => ({ ...l, ...patch }));
+    setLayout((l) => ({
+      ...l,
+      ...patch,
+    }));
   const resetLayout = () => {
     const l = defaultLayout();
     setLayout(l);
@@ -984,11 +993,14 @@ export function Studio() {
   };
   const locate = () => {
     setSearch("");
-    updateLayout({ collapsed: [], sidebar: true });
+    updateLayout({
+      collapsed: [],
+      sidebar: true,
+    });
     requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-scene-id="${node?.id}"]`)
-        ?.scrollIntoView({ block: "nearest" }),
+      document.querySelector(`[data-scene-id="${node?.id}"]`)?.scrollIntoView({
+        block: "nearest",
+      }),
     );
   };
   const commandItems = [
@@ -1023,14 +1035,23 @@ export function Studio() {
         setSection(id);
       },
     })),
-    { id: "save", label: "保存到工程", hint: "Ctrl+S", run: () => void save() },
+    {
+      id: "save",
+      label: "保存到工程",
+      hint: "Ctrl+S",
+      run: () => void save(),
+    },
     {
       id: "preview",
       label: "应用到预览",
       hint: "Ctrl+Enter",
       run: () => previewAction.current(),
     },
-    { id: "layout", label: "恢复默认布局", run: resetLayout },
+    {
+      id: "layout",
+      label: "恢复默认布局",
+      run: resetLayout,
+    },
     ...discovery.map((d) => ({
       id: d.id,
       label: d.label,
@@ -1046,14 +1067,16 @@ export function Studio() {
   const recentCommands = recentIds
     .map((id) => searchCommands.find((c) => c.id === id))
     .filter((c): c is NonNullable<typeof c> => !!c)
-    .map((c) => ({ ...c, id: `recent:${c.id}`, recent: true }));
+    .map((c) => ({
+      ...c,
+      id: `recent:${c.id}`,
+      recent: true,
+    }));
   const currentTab = tabs.find((t) => t[0] === section)!;
   const ActiveIcon = currentTab[2];
   const sourcePath = workspaceId()
     ? `workspace-projects/${workspaceId()}/project.json`
-    : profile === "release"
-      ? "workspace-projects/default-release/project.json"
-      : "workspace-projects/default-modern/project.json";
+    : "workspace-projects/default-modern/project.json";
   return (
     <WorkspaceContext.Provider
       value={{
@@ -1062,7 +1085,12 @@ export function Studio() {
         items: effectiveItems,
         setItem: (key, value) =>
           setItems((old) =>
-            old[key] === value ? old : { ...old, [key]: value },
+            old[key] === value
+              ? old
+              : {
+                  ...old,
+                  [key]: value,
+                },
           ),
         warning: setNotice,
         sequences,
@@ -1080,7 +1108,10 @@ export function Studio() {
             } as CSSProperties
           }
           onBlurCapture={() => {
-            editGroup.current = { field: null, at: 0 };
+            editGroup.current = {
+              field: null,
+              at: 0,
+            };
           }}
         >
           <nav className="st-rail" aria-label="工作区">
@@ -1155,15 +1186,7 @@ export function Studio() {
               >
                 项目与迁移
               </button>
-              <select
-                aria-label="工程版本"
-                disabled={busy || job.status === "running"}
-                value={profile}
-                onChange={(e) => changeProfile(e.target.value as Profile)}
-              >
-                <option value="modern">现代开发版</option>
-                <option value="release">原发行兼容版</option>
-              </select>
+
               <span
                 role="status"
                 className={`st-save-state ${dirty ? "dirty" : ""}`}
@@ -1211,7 +1234,11 @@ export function Studio() {
             <ResizeHandle
               label="调整章节栏宽度"
               value={layout.left}
-              onChange={(left) => updateLayout({ left })}
+              onChange={(left) =>
+                updateLayout({
+                  left,
+                })
+              }
               min={200}
               max={380}
             />
@@ -1257,14 +1284,17 @@ export function Studio() {
                   levels={sectionLevels}
                   search={search}
                   collapsed={layout.collapsed}
-                  onCollapse={(collapsed) => updateLayout({ collapsed })}
+                  onCollapse={(collapsed) =>
+                    updateLayout({
+                      collapsed,
+                    })
+                  }
                   onSelect={select}
                 />
               )}
             </div>
             <div className="st-sidebar-footer">
-              <span className="st-dot" /> 本机工程{" "}
-              <small>{profile === "release" ? "发行兼容" : "现代引擎"}</small>
+              <span className="st-dot" /> 本机工程 <small>{"现代引擎"}</small>
             </div>
           </aside>
           <div className="st-workspace">
@@ -1276,7 +1306,11 @@ export function Studio() {
               <div>
                 <button
                   aria-label="切换章节栏"
-                  onClick={() => updateLayout({ sidebar: !layout.sidebar })}
+                  onClick={() =>
+                    updateLayout({
+                      sidebar: !layout.sidebar,
+                    })
+                  }
                 >
                   <BookOpen size={16} />
                 </button>
@@ -1354,7 +1388,7 @@ export function Studio() {
               {project && node && (
                 <div className="st-scene-navigation">
                   <span>
-                    {node.chapter || node.act || "当前场景"} /{" "}
+                    {node.chapter || "当前场景"} /{" "}
                     <strong>{node.title}</strong>
                   </span>
                   <div>
@@ -1564,29 +1598,6 @@ export function Studio() {
                           p.nodes = p.nodes.map((n) =>
                             n.id === node.id ? next : n,
                           );
-                          if (
-                            profile === "release" &&
-                            (next.background || node.background)
-                          ) {
-                            p.resources.sceneRules = [
-                              ...(next.background
-                                ? [
-                                    {
-                                      keywords: [next.title],
-                                      asset: next.background,
-                                    },
-                                  ]
-                                : []),
-                              ...(p.resources.sceneRules || []).filter(
-                                (r) =>
-                                  !(
-                                    r.keywords.length === 1 &&
-                                    (r.keywords[0] === next.title ||
-                                      r.keywords[0] === node.title)
-                                  ),
-                              ),
-                            ];
-                          }
                         })
                       }
                       onPreview={() => void runPreview()}
@@ -1714,7 +1725,9 @@ export function Studio() {
                               }
                               onChange={(v) =>
                                 mutate((p) => {
-                                  Object.assign(p.titleScreen, { [key]: v });
+                                  Object.assign(p.titleScreen, {
+                                    [key]: v,
+                                  });
                                 })
                               }
                             />
@@ -1732,7 +1745,10 @@ export function Studio() {
                                 mutate((p) => {
                                   p.ui = {
                                     ...p.ui,
-                                    enabled: { ...p.ui?.enabled, [key]: v },
+                                    enabled: {
+                                      ...p.ui?.enabled,
+                                      [key]: v,
+                                    },
                                   };
                                 })
                               }
@@ -1782,6 +1798,7 @@ export function Studio() {
                           onClick={async () => {
                             try {
                               const p = JSON.parse(raw);
+                              requireModernProject(p);
                               if (await validate(p)) {
                                 edit(p);
                                 setRaw(JSON.stringify(p, null, 2));
@@ -1835,11 +1852,7 @@ export function Studio() {
                         </div>
                         <Package size={34} />
                       </div>
-                      <Card
-                        title={
-                          profile === "release" ? "原发行兼容版" : "现代开发版"
-                        }
-                      >
+                      <Card title={"现代开发版"}>
                         <div className="st-release-steps">
                           <span
                             className={
@@ -1861,24 +1874,17 @@ export function Studio() {
                         </div>
                         <p>
                           目标工程：
-                          {profile === "release"
-                            ? "原发行兼容版"
-                            : "现代开发版"}{" "}
-                          · 输出目录：
+                          {"现代开发版"} · 输出目录：
                           <code>
                             {workspaceId()
                               ? `workspace-projects/${workspaceId()}/dist/`
-                              : profile === "release"
-                                ? "workspace-projects/default-release/dist/"
-                                : "workspace-projects/default-modern/dist/"}
+                              : "workspace-projects/default-modern/dist/"}
                           </code>
                         </p>
                         <p>
                           {workspaceId()
                             ? "使用当前独立项目的内容与素材构建，输出至该项目目录的 dist/。"
-                            : profile === "release"
-                              ? "使用兼容运行时，输出至默认兼容工程目录的 dist/。"
-                              : "使用现代运行时，输出至默认现代工程目录的 dist/。"}
+                            : "使用现代运行时，输出至默认现代工程目录的 dist/。"}
                         </p>
                         <div className="st-build-summary">
                           <span>
@@ -1920,7 +1926,14 @@ export function Studio() {
                         </p>
                       </Card>
                       <Card
-                        title={`构建状态 · ${{ idle: "尚未开始", running: "正在构建", complete: "成功", failed: "失败" }[job.status] || job.status}`}
+                        title={`构建状态 · ${
+                          {
+                            idle: "尚未开始",
+                            running: "正在构建",
+                            complete: "成功",
+                            failed: "失败",
+                          }[job.status] || job.status
+                        }`}
                       >
                         <pre className="st-build-log" data-testid="build-log">
                           {job.log || "构建日志会显示在这里。"}
@@ -1942,7 +1955,11 @@ export function Studio() {
             <ResizeHandle
               label="调整预览栏宽度"
               value={layout.right}
-              onChange={(right) => updateLayout({ right })}
+              onChange={(right) =>
+                updateLayout({
+                  right,
+                })
+              }
               min={300}
               max={620}
               reverse
@@ -2013,7 +2030,10 @@ export function Studio() {
                   onClick={() => {
                     setPlaying(!playing);
                     iframe.current?.contentWindow?.postMessage(
-                      { type: "studio:play", play: !playing },
+                      {
+                        type: "studio:play",
+                        play: !playing,
+                      },
                       location.origin,
                     );
                   }}
@@ -2125,27 +2145,7 @@ export function Studio() {
               <button onClick={() => setPendingWorkspace(null)}>取消</button>
             </Modal>
           )}
-          {pendingProfile && (
-            <Modal title="切换工程" onClose={() => setPendingProfile(null)}>
-              <h2>当前工程有未保存修改</h2>
-              <p>请选择保存草稿后切换，或放弃草稿。</p>
-              <button
-                className="primary"
-                onClick={async () => {
-                  if (await save()) switchProfile(pendingProfile);
-                }}
-              >
-                保存并切换
-              </button>
-              <button
-                className="danger"
-                onClick={() => switchProfile(pendingProfile)}
-              >
-                放弃修改并切换
-              </button>
-              <button onClick={() => setPendingProfile(null)}>取消</button>
-            </Modal>
-          )}
+
           {commandsOpen && (
             <CommandPalette
               commands={[
@@ -2209,7 +2209,11 @@ function VariableDebug({
         onClick={() => {
           try {
             if (!key) throw new Error("请输入变量名。");
-            send({ type: "studio:variable", key, value: JSON.parse(value) });
+            send({
+              type: "studio:variable",
+              key,
+              value: JSON.parse(value),
+            });
           } catch (e) {
             onError(String(e));
           }

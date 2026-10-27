@@ -6,9 +6,17 @@ export function issuePosition(
   p: AuthorProject,
   path: (string | number)[],
 ): EditorPosition {
-  if (!p || typeof p !== "object") return { section: "json", items: {} };
+  if (!p || typeof p !== "object")
+    return {
+      section: "json",
+      items: {},
+    };
   const [root, index, part, item, leaf] = path;
-  const at = <T extends { id: string }>(
+  const at = <
+    T extends {
+      id: string;
+    },
+  >(
     values: T[] | undefined,
     key: string | number,
   ) =>
@@ -59,7 +67,10 @@ export function issuePosition(
       !Array.isArray(n.lines) ||
       (n.choices !== undefined && !Array.isArray(n.choices))
     )
-      return { section: "json", items: {} };
+      return {
+        section: "json",
+        items: {},
+      };
     const pos: EditorPosition = {
       section: "script",
       nodeId: n?.id,
@@ -126,7 +137,7 @@ export function issuePosition(
     if (rule) pos.field = rule;
     if (part === "condition")
       pos.selector = conditionSelector("进入条件", path.slice(3));
-    if (part === "lines" && leaf === "condition" && p.schemaVersion === 2)
+    if (part === "lines" && leaf === "condition")
       pos.selector = conditionSelector("条件", path.slice(5));
     if (part === "choices" && leaf === "condition") {
       const prefix = `[data-branch-id=${JSON.stringify(at(n?.choices, item)?.id)}] `;
@@ -177,7 +188,11 @@ export function issuePosition(
       section: "characters",
       items: {
         characters: c?.id || "",
-        ...(part === "expressions" ? { expression: String(item) } : {}),
+        ...(part === "expressions"
+          ? {
+              expression: String(item),
+            }
+          : {}),
       },
       field:
         (
@@ -193,7 +208,9 @@ export function issuePosition(
   if (root === "materials")
     return {
       section: "materials",
-      items: { materials: at(p.materials, index)?.id || "" },
+      items: {
+        materials: at(p.materials, index)?.id || "",
+      },
       field:
         (
           {
@@ -248,6 +265,13 @@ export function issuePosition(
     } as Record<string, string>
   )[String(root)];
   return projectField
-    ? { section: "project", items: {}, field: projectField }
-    : { section: "json", items: {} };
+    ? {
+        section: "project",
+        items: {},
+        field: projectField,
+      }
+    : {
+        section: "json",
+        items: {},
+      };
 }

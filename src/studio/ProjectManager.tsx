@@ -1,11 +1,18 @@
+import { LEGACY_RELEASE_URL } from "../engine/support";
 import { useEffect, useRef, useState } from "react";
 import type { AuthorProject, Profile } from "./model";
 import { Modal } from "./components";
-
 export const workspaceId = () =>
   new URLSearchParams(location.search).get("workspaceId") || "";
 export function studioUrl(profile: Profile, route: string) {
-  return `/__studio/${route}?${new URLSearchParams({ profile, ...(workspaceId() ? { workspaceId: workspaceId() } : {}) })}`;
+  return `/__studio/${route}?${new URLSearchParams({
+    profile,
+    ...(workspaceId()
+      ? {
+          workspaceId: workspaceId(),
+        }
+      : {}),
+  })}`;
 }
 export async function studioRequest(
   profile: Profile,
@@ -18,7 +25,9 @@ export async function studioRequest(
       ? undefined
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(body),
         },
   );
@@ -78,6 +87,7 @@ export function ProjectManager({
   onOpen: (item: WorkspaceItem) => void;
   onJson: () => void;
 }) {
+  const [unsupported, setUnsupported] = useState(0);
   const [projects, setProjects] = useState<WorkspaceItem[]>([]),
     [error, setError] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null),
@@ -87,11 +97,12 @@ export function ProjectManager({
     [name, setName] = useState("");
   const [directory, setDirectory] = useState("");
   const [newName, setNewName] = useState("");
-  const [newProfile, setNewProfile] = useState<Profile>(profile);
+
   const fileInput = useRef<HTMLInputElement>(null);
-  const snapshot = useRef<{ project: AuthorProject; revision: string } | null>(
-      null,
-    ),
+  const snapshot = useRef<{
+      project: AuthorProject;
+      revision: string;
+    } | null>(null),
     xhr = useRef<XMLHttpRequest | null>(null);
   const active = pending || task?.status === "running";
   const exportStale =
@@ -103,7 +114,10 @@ export function ProjectManager({
   useEffect(() => {
     if (open)
       void studioRequest(profile, "workspaces")
-        .then((data) => setProjects(data.projects))
+        .then((data) => {
+          setProjects(data.projects);
+          setUnsupported(data.unsupportedProjects || 0);
+        })
         .catch((e) => setError(String(e)));
   }, [open, profile]);
   useEffect(() => {
@@ -121,7 +135,14 @@ export function ProjectManager({
         .catch((e) => {
           if (!disposed) {
             setError(String(e));
-            setTask((t) => (t ? { ...t, status: "failed" } : t));
+            setTask((t) =>
+              t
+                ? {
+                    ...t,
+                    status: "failed",
+                  }
+                : t,
+            );
           }
         });
     }, 500);
@@ -144,9 +165,18 @@ export function ProjectManager({
   async function clearTask() {
     if (task && task.status !== "complete") {
       try {
-        await api("packages/cancel", { id: task.id });
+        await api("packages/cancel", {
+          id: task.id,
+        });
       } catch (e) {
-        if ((e as { status?: number }).status !== 404) throw e;
+        if (
+          (
+            e as {
+              status?: number;
+            }
+          ).status !== 404
+        )
+          throw e;
       }
     }
     setTask(null);
@@ -189,6 +219,12 @@ export function ProjectManager({
   return (
     <Modal title="项目管理与整体导入导出" onClose={onClose}>
       <h2>项目与迁移</h2>
+      {unsupported > 0 && (
+        <p role="status">
+          {unsupported} 个兼容档工程已隐藏，原文件仍保留。请使用{" "}
+          <a href={LEGACY_RELEASE_URL}>v1.0legacy</a>
+        </p>
+      )}
       <section className="st-package-section">
         <h3>创建空白工程</h3>
         <label>
@@ -200,26 +236,18 @@ export function ProjectManager({
             placeholder="我的新工程"
           />
         </label>
-        <label>
-          运行模式
-          <select
-            aria-label="运行模式"
-            value={newProfile}
-            onChange={(e) => setNewProfile(e.target.value as Profile)}
-          >
-            <option value="modern">现代版</option>
-            <option value="release">发行兼容版</option>
-          </select>
-        </label>
+
         <button
           className="primary"
           disabled={active || !project || !revision || !newName.trim()}
           onClick={() =>
             void perform(async () => {
               const created = await studioRequest(
-                newProfile,
+                "modern",
                 "workspaces/create",
-                { name: newName },
+                {
+                  name: newName,
+                },
               );
               onOpen(created);
             })
@@ -416,7 +444,7 @@ export function ProjectManager({
             <div>
               <strong>{item.name}</strong>
               <small>
-                {item.profile === "release" ? "原发行兼容版" : "现代开发版"} ·{" "}
+                {"现代开发版"} ·{" "}
                 {item.lastOpened
                   ? new Date(item.lastOpened).toLocaleString()
                   : "原有工程"}
@@ -446,7 +474,9 @@ export function ProjectManager({
         <button
           onClick={() =>
             void perform(async () => {
-              const data = await api("open-directory", { target: "backups" });
+              const data = await api("open-directory", {
+                target: "backups",
+              });
               setDirectory(data.directory);
             })
           }
@@ -466,10 +496,8 @@ function PackageSummary({ value }: { value: Summary }) {
   return (
     <div className="st-package-summary">
       <p>
-        <strong>{value.name}</strong> ·{" "}
-        {value.profile === "release" ? "发行兼容" : "现代引擎"} · {value.scenes}{" "}
-        场景 · {value.files} 素材 · {(value.bytes / 1024 ** 2).toFixed(1)}{" "}
-        MB（压缩前）
+        <strong>{value.name}</strong> · {"现代引擎"} · {value.scenes} 场景 ·{" "}
+        {value.files} 素材 · {(value.bytes / 1024 ** 2).toFixed(1)} MB（压缩前）
       </p>
       {value.warnings.map((warning) => (
         <p key={warning}>{warning}</p>

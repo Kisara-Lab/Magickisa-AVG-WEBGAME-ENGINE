@@ -31,7 +31,7 @@ export function SceneTree({
     let current = "未分章";
     for (const n of nodes) {
       if ((n.sourceLevel || levels[n.id]) === 1) current = n.title;
-      const title = n.chapter || n.act || current;
+      const title = n.chapter || current;
       if (result.at(-1)?.title !== title)
         result.push({ id: n.id, title, nodes: [] });
       result.at(-1)!.nodes.push(n);

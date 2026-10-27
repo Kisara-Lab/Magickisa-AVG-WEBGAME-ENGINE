@@ -1,3 +1,4 @@
+import { requireModernProfile, requireModernProject } from "../engine/support";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 const send = (data) => parent.postMessage(data, location.origin);
@@ -16,41 +17,15 @@ Object.defineProperty(window, "localStorage", {
   },
 });
 let project,
-  sectionLevels = {},
   profile,
   root,
   store,
   generation = 0;
-const nativeFetch = window.fetch.bind(window);
-window.fetch = (input, options) => {
-  const url = new URL(
-    typeof input === "string" ? input : input.url,
-    location.href,
-  );
-  if (url.pathname === "/content/engine-story.json")
-    return Promise.resolve(
-      new Response(JSON.stringify(project), {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  if (url.pathname === "/content/script.json")
-    return Promise.resolve(
-      new Response(
-        JSON.stringify({
-          sections: project.nodes.map((n) => ({
-            title: n.title,
-            level: n.sourceLevel || sectionLevels[n.id] || 2,
-            body: n.lines.map((l) => l.text).join("\n\n"),
-          })),
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      ),
-    );
-  return nativeFetch(input, options);
-};
 const workspaceId = new URLSearchParams(location.search).get("workspaceId");
 const fileUrl = (ref) =>
-  ref?.startsWith("/") && !ref.startsWith("/__studio/media/")
+  ref?.startsWith("/") &&
+  !ref.startsWith("//") &&
+  !ref.startsWith("/__studio/media/")
     ? `/__studio/media/${profile}${workspaceId ? "/@" + workspaceId : ""}${ref.split("/").map(encodeURIComponent).join("/")}`
     : ref;
 function previewProject(input) {
@@ -62,13 +37,24 @@ function previewProject(input) {
     ...rule,
     asset: fileUrl(rule.asset),
   }));
-  p.backdrops = p.backdrops.map((b) => ({ ...b, src: fileUrl(b.src) }));
-  p.audio = p.audio.map((a) => ({ ...a, src: fileUrl(a.src) }));
+  p.backdrops = p.backdrops.map((b) => ({
+    ...b,
+    src: fileUrl(b.src),
+  }));
+  p.audio = p.audio.map((a) => ({
+    ...a,
+    src: fileUrl(a.src),
+  }));
   p.characters = p.characters.map((c) => ({
     ...c,
     portrait: fileUrl(c.portrait),
     ...(c.live2d
-      ? { live2d: { ...c.live2d, model: fileUrl(c.live2d.model) } }
+      ? {
+          live2d: {
+            ...c.live2d,
+            model: fileUrl(c.live2d.model),
+          },
+        }
       : {}),
     expressions: Object.fromEntries(
       Object.entries(c.expressions || {}).map(([k, v]) => [k, fileUrl(v)]),
@@ -96,7 +82,10 @@ function previewProject(input) {
     ...m,
     src: fileUrl(m.src),
   }));
-  p.nodes = p.nodes.map((n) => ({ ...n, background: fileUrl(n.background) }));
+  p.nodes = p.nodes.map((n) => ({
+    ...n,
+    background: fileUrl(n.background),
+  }));
   return p;
 }
 function Director({ Component, data }) {
@@ -114,9 +103,12 @@ function Director({ Component, data }) {
       }
       if (e.data.type === "studio:play") {
         if (e.data.play)
-          audio.current
-            ?.play()
-            .catch((e) => send({ type: "studio:error", error: e.message }));
+          audio.current?.play().catch((e) =>
+            send({
+              type: "studio:error",
+              error: e.message,
+            }),
+          );
         else audio.current?.pause();
       }
     };
@@ -129,10 +121,16 @@ function Director({ Component, data }) {
     const update = () => {
       requestedTime.current = a.currentTime;
       setTime(a.currentTime);
-      send({ type: "studio:time", time: a.currentTime });
+      send({
+        type: "studio:time",
+        time: a.currentTime,
+      });
     };
     a.addEventListener("timeupdate", update);
-    const ended = () => send({ type: "studio:skip" });
+    const ended = () =>
+      send({
+        type: "studio:skip",
+      });
     a.addEventListener("ended", ended);
     return () => {
       a.removeEventListener("timeupdate", update);
@@ -148,15 +146,6 @@ function Director({ Component, data }) {
     a.addEventListener("loadedmetadata", loaded);
     return () => a.removeEventListener("loadedmetadata", loaded);
   }, []);
-  useEffect(() => {
-    if (profile === "release" && data.mode === "ending") {
-      const track = document.querySelector(".ed-credits-track");
-      if (track) {
-        track.style.animationPlayState = "paused";
-        track.style.animationDelay = `-${time}s`;
-      }
-    }
-  }, [time]);
   return (
     <Component
       project={project}
@@ -174,34 +163,12 @@ function Director({ Component, data }) {
       }
       onSkip={() => {
         audio.current?.pause();
-        send({ type: "studio:skip" });
+        send({
+          type: "studio:skip",
+        });
       }}
     />
   );
-}
-async function importRelease(id, line) {
-  const s = window.__MAGICKISA_ENGINE__;
-  if (!s) return;
-  const input = document.querySelector('label[title="导入存档"] input');
-  if (!input) return;
-  const transfer = new DataTransfer();
-  transfer.items.add(
-    new File(
-      [
-        JSON.stringify({
-          ...s.runtime.save,
-          nodeId: id,
-          lineIndex: line,
-          history: [],
-          visitedNodes: [id],
-        }),
-      ],
-      "preview.json",
-      { type: "application/json" },
-    ),
-  );
-  input.files = transfer.files;
-  input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 window.addEventListener("message", async (e) => {
   if (e.origin !== location.origin || e.source !== parent) return;
@@ -209,8 +176,9 @@ window.addEventListener("message", async (e) => {
     const d = e.data;
     if (d.type === "studio:load") {
       const current = ++generation;
-      profile = d.profile;
-      sectionLevels = d.sectionLevels || {};
+      requireModernProfile(d.profile);
+      requireModernProject(d.project);
+      profile = "modern";
       project = previewProject(d.project);
       memory.clear();
       store?.destroy();
@@ -219,19 +187,15 @@ window.addEventListener("message", async (e) => {
       window.__MAGICKISA_ENGINE__ = null;
       document.getElementById("root").innerHTML = "";
       root = createRoot(document.getElementById("root"));
-      await import("../compat/release/styles.css");
+      await import("../styles.css");
       if (d.mode !== "scene") {
-        const Component =
-          profile === "release"
-            ? (await import("../compat/release/engine/PresentationHost.jsx"))
-                .PresentationHost
-            : (await import("../engine/ReleasePresentation"))
-                .ReleasePresentation;
+        const Component = (await import("../engine/ReleasePresentation"))
+          .ReleasePresentation;
         if (current !== generation) return;
         root.render(<Director Component={Component} data={d} />);
         return;
       }
-      if (profile === "modern") {
+      {
         await import("../restored.css");
         const { EngineStore } = await import("../engine/store");
         const { GameSession } = await import("../game/GameApp");
@@ -242,53 +206,26 @@ window.addEventListener("message", async (e) => {
         });
         store.jump(d.nodeId || project.startNodeId, d.line || 0);
         store.subscribe(() =>
-          send({ type: "studio:state", save: store.getSnapshot() }),
+          send({
+            type: "studio:state",
+            save: store.getSnapshot(),
+          }),
         );
         root.render(<GameSession store={store} embedded />);
-        send({ type: "studio:state", save: store.getSnapshot() });
-      } else {
-        const { GameApp } = await import("../compat/release/game/GameApp.jsx");
-        if (current !== generation) return;
-        root.render(<GameApp />);
-        const start = Date.now();
-        while (current === generation && Date.now() - start < 12000) {
-          const button = document.querySelector('[data-action="new-game"]');
-          if (button) {
-            button.click();
-            break;
-          }
-          await new Promise((r) => setTimeout(r, 40));
-        }
-        while (current === generation && Date.now() - start < 12000) {
-          if (
-            window.__MAGICKISA_ENGINE__ &&
-            document.querySelector(".stage") &&
-            !document.querySelector(".engine-splash")
-          ) {
-            await importRelease(d.nodeId || project.startNodeId, d.line || 0);
-            break;
-          }
-          await new Promise((r) => setTimeout(r, 40));
-        }
+        send({
+          type: "studio:state",
+          save: store.getSnapshot(),
+        });
       }
     }
     if (d.type === "studio:variable") {
       if (store) store.setVariable(d.key, d.value);
-      else if (window.__MAGICKISA_ENGINE__) {
-        window.__MAGICKISA_ENGINE__.runtime.save.variables[d.key] = d.value;
-        const s = window.__MAGICKISA_ENGINE__.runtime.save;
-        await importRelease(s.nodeId, s.lineIndex);
-      }
     }
   } catch (error) {
-    send({ type: "studio:error", error: String(error) });
+    send({
+      type: "studio:error",
+      error: String(error),
+    });
   }
 });
-setInterval(() => {
-  if (!store && window.__MAGICKISA_ENGINE__)
-    send({
-      type: "studio:state",
-      save: window.__MAGICKISA_ENGINE__.runtime.save,
-    });
-}, 500);
 send({ type: "studio:ready" });

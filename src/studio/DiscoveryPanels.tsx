@@ -3,7 +3,6 @@ import { helpContent, sectionNames } from "./discovery";
 import type { Usage } from "./discovery";
 import type { AuthorProject, Profile, Section } from "./model";
 import type { EditorPosition } from "./workspace";
-
 export function DiscoveryPanels({
   helpOpen,
   usageOpen,
@@ -69,11 +68,7 @@ export function DiscoveryPanels({
             </ol>
             <h3>高级功能仍然保留</h3>
             <p>{help.advanced}</p>
-            {profile === "release" && (
-              <p>
-                当前为原发行兼容版。节点效果保持原时机；丢失的外置歌词文件没有被标为已恢复。
-              </p>
-            )}
+            {false}
             <h3>快捷键</h3>
             <p>
               Ctrl+K 快速前往 · Ctrl+S 保存工程 · Ctrl+Enter 更新预览 · Esc

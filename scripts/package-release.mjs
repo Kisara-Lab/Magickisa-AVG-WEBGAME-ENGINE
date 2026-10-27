@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 
 const root = process.cwd(),
   ref = process.argv[2] || "HEAD";
-const tag = process.argv[3] || "v1.0legacy";
+const tag = process.argv[3] || `v${JSON.parse(fs.readFileSync("package.json", "utf8")).version}`;
 if (!/^[a-zA-Z0-9._-]+$/.test(tag)) throw new Error("Invalid release name");
 const destination = path.join(root, "release-artifacts");
 fs.mkdirSync(destination, { recursive: true });

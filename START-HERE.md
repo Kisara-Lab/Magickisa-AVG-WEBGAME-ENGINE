@@ -1,6 +1,6 @@
 # MAGICKISA Studio 启动包
 
-本包包含完整引擎与 Studio，支持现代档和发行兼容档。v1.0legacy 是兼容档最终冻结版本，后续 v2 仅保留现代档，不提供旧档转换或后续维护。
+本包包含完整引擎与 Studio，当前为 2.0.0-dev.0，仅支持现代档。兼容档请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，不提供旧档转换或后续维护。新版工程包不保证能由 Legacy Studio 打开。
 
 1. 安装 [Node.js 22 或更新版本](https://nodejs.org/)，包含 npm。
 2. 将整个 ZIP 解压到可写目录，不能直接在压缩包中启动。

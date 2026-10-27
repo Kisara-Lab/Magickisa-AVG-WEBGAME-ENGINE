@@ -2,7 +2,6 @@ import type { AuthorProject, Section } from "./model";
 import type { Condition, Effect } from "../engine/types";
 import { resolveAsset, resolveScene, resolveTrack } from "../engine/media";
 import type { EditorPosition } from "./workspace";
-
 export interface Destination {
   id: string;
   label: string;
@@ -75,7 +74,9 @@ export const sectionNames: Record<Section, string> = {
 };
 export function destinations(
   p: AuthorProject,
-  files: { url: string }[],
+  files: {
+    url: string;
+  }[],
 ): Destination[] {
   const result: Destination[] = [];
   const add = (
@@ -84,7 +85,14 @@ export function destinations(
     category: string,
     hint: string,
     position: EditorPosition,
-  ) => result.push({ id, label, category, hint, position });
+  ) =>
+    result.push({
+      id,
+      label,
+      category,
+      hint,
+      position,
+    });
   for (const n of p.nodes) {
     const position: EditorPosition = {
       section: "script",
@@ -98,32 +106,45 @@ export function destinations(
         l.text || "空台词",
         "台词",
         `${n.title} · ${l.id}`,
-        { ...position, lineId: l.id, field: "台词正文" },
+        {
+          ...position,
+          lineId: l.id,
+          field: "台词正文",
+        },
       );
   }
   for (const c of p.characters)
     add(`character:${c.id}`, c.name, "人物", c.id, {
       section: "characters",
-      items: { characters: c.id },
+      items: {
+        characters: c.id,
+      },
       field: "人物名称",
     });
   for (const m of p.materials)
     add(`material:${m.id}`, m.title, "资料", `${m.category} · ${m.id}`, {
       section: "materials",
-      items: { materials: m.id },
+      items: {
+        materials: m.id,
+      },
       field: "资料标题",
     });
   for (const f of files)
     add(`asset:${f.url}`, f.url.split("/").pop() || f.url, "素材", f.url, {
       section: "assets",
-      items: { assets: f.url },
+      items: {
+        assets: f.url,
+      },
     });
   return result;
 }
 // Only typed reference fields are indexed; dialogue/body text is never treated as a reference.
 export function usages(p: AuthorProject): Usage[] {
   const result: Usage[] = [];
-  const modern = { ...p, schemaVersion: 2 as const };
+  const modern = {
+    ...p,
+    schemaVersion: 2 as const,
+  };
   const add = (
     kind: Usage["kind"],
     target: string | undefined,
@@ -132,7 +153,15 @@ export function usages(p: AuthorProject): Usage[] {
     position: EditorPosition,
     derived = false,
   ) => {
-    if (target) result.push({ kind, target, label, field, position, derived });
+    if (target)
+      result.push({
+        kind,
+        target,
+        label,
+        field,
+        position,
+        derived,
+      });
   };
   const asset = (
     target: string | undefined,
@@ -191,30 +220,60 @@ export function usages(p: AuthorProject): Usage[] {
     field: "起始场景",
   });
   for (const n of p.nodes) {
-    const pos: EditorPosition = { section: "script", nodeId: n.id, items: {} };
-    add("script", n.next, n.title, "下一场景", { ...pos, field: "下一场景" });
-    asset(n.background, n.title, "场景背景", { ...pos, field: "场景背景" });
-    if (!n.background || p.schemaVersion !== 2)
+    const pos: EditorPosition = {
+      section: "script",
+      nodeId: n.id,
+      items: {},
+    };
+    add("script", n.next, n.title, "下一场景", {
+      ...pos,
+      field: "下一场景",
+    });
+    asset(n.background, n.title, "场景背景", {
+      ...pos,
+      field: "场景背景",
+    });
+    if (!n.background || false)
       asset(
         resolveScene(modern, n.title),
         n.title,
         "背景规则",
-        { ...pos, field: "场景背景" },
+        {
+          ...pos,
+          field: "场景背景",
+        },
         true,
       );
     asset(
       resolveTrack(modern, n.title),
       n.title,
       "章节音乐规则",
-      { section: "project", items: {}, field: "章节音乐" },
+      {
+        section: "project",
+        items: {},
+        field: "章节音乐",
+      },
       true,
     );
-    condition(n.condition, n.title, "场景条件", { ...pos, field: "进入条件" });
-    effects(n.onEnter, n.title, "进入效果", { ...pos, field: "进入时效果" });
-    effects(n.onComplete, n.title, "完成效果", { ...pos, field: "完成时效果" });
-    effects(n.effects, n.title, "节点效果", { ...pos, field: "场景效果" });
+    condition(n.condition, n.title, "场景条件", {
+      ...pos,
+      field: "进入条件",
+    });
+    effects(n.onEnter, n.title, "进入效果", {
+      ...pos,
+      field: "进入时效果",
+    });
+    effects(n.onComplete, n.title, "完成效果", {
+      ...pos,
+      field: "完成时效果",
+    });
+
     for (const l of n.lines) {
-      const line = { ...pos, lineId: l.id, field: "台词正文" };
+      const line = {
+        ...pos,
+        lineId: l.id,
+        field: "台词正文",
+      };
       add("characters", l.characterId, `${n.title} · ${l.id}`, "台词人物", {
         ...line,
         field: "本句人物",
@@ -225,7 +284,10 @@ export function usages(p: AuthorProject): Usage[] {
           layer.characterId,
           `${n.title} · ${l.id}`,
           "立绘图层",
-          { ...line, field: "人物图层与位置" },
+          {
+            ...line,
+            field: "人物图层与位置",
+          },
         ),
       );
       condition(l.condition, `${n.title} · ${l.id}`, "显示条件", {
@@ -234,7 +296,10 @@ export function usages(p: AuthorProject): Usage[] {
       });
     }
     n.choices?.forEach((c) => {
-      const choice = { ...pos, field: `分支:${c.id}` };
+      const choice = {
+        ...pos,
+        field: `分支:${c.id}`,
+      };
       add("script", c.target, `${n.title} · ${c.label}`, "分支目标", choice);
       condition(c.condition, n.title, "分支条件", {
         ...choice,
@@ -249,9 +314,14 @@ export function usages(p: AuthorProject): Usage[] {
   p.characters.forEach((c) => {
     const pos: EditorPosition = {
       section: "characters",
-      items: { characters: c.id },
+      items: {
+        characters: c.id,
+      },
     };
-    asset(c.portrait, c.name, "默认立绘", { ...pos, field: "人物立绘路径" });
+    asset(c.portrait, c.name, "默认立绘", {
+      ...pos,
+      field: "人物立绘路径",
+    });
     asset(c.live2d?.model, c.name, "Live2D 模型", {
       ...pos,
       field: "Live2D 模型路径",
@@ -259,7 +329,10 @@ export function usages(p: AuthorProject): Usage[] {
     Object.entries(c.expressions || {}).forEach(([key, value]) =>
       asset(value, `${c.name} · ${key}`, "表情资源", {
         ...pos,
-        items: { ...pos.items, expression: key },
+        items: {
+          ...pos.items,
+          expression: key,
+        },
         field: `表情 ${key} 路径`,
       }),
     );
@@ -267,7 +340,9 @@ export function usages(p: AuthorProject): Usage[] {
   p.materials.forEach((m) => {
     const pos: EditorPosition = {
       section: "materials",
-      items: { materials: m.id },
+      items: {
+        materials: m.id,
+      },
       field: "资料解锁条件",
     };
     add("script", m.unlockNode, m.title, "解锁场景", {
@@ -297,7 +372,10 @@ export function usages(p: AuthorProject): Usage[] {
       field: `音轨 ${a.id} 路径`,
     }),
   );
-  const project: EditorPosition = { section: "project", items: {} };
+  const project: EditorPosition = {
+    section: "project",
+    items: {},
+  };
   asset(p.titleScreen.backdrop, "标题画面", "标题背景", {
     ...project,
     field: "首页背景",
@@ -324,8 +402,12 @@ export function usages(p: AuthorProject): Usage[] {
   });
   for (const mode of ["opening", "ending"] as const) {
     const media = p.media[mode];
-    const pos: EditorPosition = { section: "presentations", mode, items: {} };
-    asset(media?.audio, mode === "opening" ? "OP" : "ED", "演出音频", {
+    const pos: EditorPosition = {
+      section: "presentations",
+      mode,
+      items: {},
+    };
+    asset(media?.audio, "ED", "演出音频", {
       ...pos,
       field: "演出音乐路径",
     });
@@ -333,25 +415,20 @@ export function usages(p: AuthorProject): Usage[] {
       ...pos,
       field: "LRC 歌词路径",
     });
-    if (mode === "opening")
-      p.media.opening?.images?.forEach((value, i) =>
-        asset(value, `OP 镜头 ${i + 1}`, "镜头图片", {
-          ...pos,
-          field: `镜头 ${i + 1} 背景`,
-        }),
-      );
-    else
-      asset(p.media.ending?.image, "ED", "片尾背景", {
-        ...pos,
-        field: "ED 背景图片",
-      });
+    asset(p.media.ending?.image, "ED", "片尾背景", {
+      ...pos,
+      field: "ED 背景图片",
+    });
   }
   return result;
 }
-
 export const helpContent: Record<
   Section,
-  { purpose: string; steps: string[]; advanced: string }
+  {
+    purpose: string;
+    steps: string[];
+    advanced: string;
+  }
 > = {
   script: {
     purpose: "编写连续台词并配置场景与分支。",
@@ -362,7 +439,7 @@ export const helpContent: Record<
       "所有选项被条件隐藏或已用尽时，会尝试进入下一场景；未设置下一场景或其条件不满足时停留当前节点。",
     ],
     advanced:
-      "展开场景属性、条件、效果和图层；完整结构可在 JSON 编辑。兼容版保留节点 effects 原有时机。",
+      "展开场景属性、条件、效果和图层；完整结构可在 JSON 编辑。",
   },
   graph: {
     purpose: "查看场景之间的跳转关系。",

@@ -3,12 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { isDeepStrictEqual } from "node:util";
-import { z } from "zod";
 import { assertProject, projectSchema } from "../src/engine/schema";
 import type { AuthorProject, Profile } from "../src/studio/model";
-import { root, projectFile, buildContent, resourceReferences } from "./content";
-import { releaseContent, buildReleaseContent } from "./release-content";
+import { root, buildContent, resourceReferences } from "./content";
 import {
   projectContext,
   workspaces,
@@ -22,52 +19,19 @@ import { usages } from "../src/studio/discovery";
 import { authorWarnings } from "../src/studio/authorWarnings";
 import { issuePosition } from "../src/studio/issuePosition";
 import type { EditorPosition } from "../src/studio/workspace";
-import { isExternalResource, resourcePath } from "../src/engine/resource.js";
+import { isExternalResource } from "../src/engine/resource.js";
+import {
+  requireModernProfile,
+  requireModernProject,
+} from "../src/engine/support";
+import { unsupportedWorkspaceCount } from "./workspaces";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
 const read = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
-const nodeSchema = projectSchema.shape.nodes.element;
-const releaseSchema = projectSchema
-  .omit({ schemaVersion: true })
-  .extend({
-    nodes: z
-      .array(
-        nodeSchema
-          .extend({
-            choices: z
-              .array(nodeSchema.shape.choices.unwrap().element.loose())
-              .optional(),
-          })
-          .loose(),
-      )
-      .min(1),
-    media: projectSchema.shape.media
-      .extend({
-        dedication: projectSchema.shape.media.shape.dedication
-          .unwrap()
-          .loose()
-          .optional(),
-      })
-      .loose(),
-  })
-  .loose();
 const fileFor = (profile: Profile, ctx = projectContext(profile)) =>
   ctx.projectFile;
 function revision(profile: Profile, ctx = projectContext(profile)) {
-  return digest(
-    profile === "modern"
-      ? fs.readFileSync(ctx.projectFile)
-      : fs.readFileSync(ctx.projectFile, "utf8") +
-          "\0" +
-          fs
-            .readdirSync(ctx.content)
-            .sort()
-            .map(
-              (f) =>
-                f + "\0" + fs.readFileSync(path.join(ctx.content, f), "utf8"),
-            )
-            .join("\0"),
-  );
+  return digest(fs.readFileSync(ctx.projectFile));
 }
 function invalidReferences(p: AuthorProject) {
   const targets: Record<string, Set<string>> = {
@@ -86,17 +50,8 @@ function validate(
   warnings: string[] = [],
   ctx = projectContext(profile),
 ): AuthorProject {
-  if (
-    !input ||
-    typeof input !== "object" ||
-    (profile === "modern") !== ((input as AuthorProject).schemaVersion === 2)
-  )
-    throw new Error(
-      "工程数据与运行模式不匹配；请打开正确工程，不能在 JSON 中切换运行模式。",
-    );
-  if (profile === "release") releaseSchema.parse(input);
-  const p =
-    profile === "modern" ? assertProject(input) : (input as AuthorProject);
+  requireModernProject(input);
+  const p = assertProject(input);
   const ids = new Set(p.nodes.map((n) => n.id));
   for (const rule of p.media.chapterMusicRules || [])
     if (!Object.hasOwn(p.media.chapterMusic || {}, rule.track))
@@ -135,15 +90,6 @@ function validate(
     if (!file.startsWith(publicRoot + path.sep))
       throw new Error(`资源路径越界：${ref}`);
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
-      const inlineLyrics =
-        (ref === resourcePath(p.media.opening?.lyrics || "") &&
-          p.media.opening?.pages?.length) ||
-        (ref === resourcePath(p.media.ending?.lyrics || "") &&
-          p.media.ending?.lines?.length);
-      if (profile === "release" && inlineLyrics) {
-        warnings.push(`歌词文件不存在：${ref}；演出将使用工程内的定时字幕。`);
-        continue;
-      }
       throw new Error(`资源不存在：${ref}`);
     }
   }
@@ -168,9 +114,19 @@ function diagnostics(
   profile: Profile,
   ctx = projectContext(profile),
 ): StudioIssue[] {
-  const parsed = (
-    profile === "modern" ? projectSchema : releaseSchema
-  ).safeParse(input);
+  try {
+    requireModernProject(input);
+  } catch (error) {
+    return [
+      {
+        code: "unsupported-project",
+        severity: "error",
+        message: String(error),
+        field: "schemaVersion",
+      },
+    ];
+  }
+  const parsed = projectSchema.safeParse(input);
   const p = input as AuthorProject;
   if (!parsed.success)
     return parsed.error.issues.map((issue) => {
@@ -201,7 +157,11 @@ function diagnostics(
       severity: "error",
       message: "起始场景不存在",
       field: "startNodeId",
-      position: { section: "project", items: {}, field: "起始场景" },
+      position: {
+        section: "project",
+        items: {},
+        field: "起始场景",
+      },
     });
   for (const n of p.nodes) {
     if (seen.has(n.id))
@@ -214,7 +174,10 @@ function diagnostics(
       });
     seen.add(n.id);
     for (const { target, field } of [
-      { target: n.next, field: "next" },
+      {
+        target: n.next,
+        field: "next",
+      },
       ...(n.choices || []).map((c, i) => ({
         target: c.target,
         field: `choices.${i}.target`,
@@ -267,77 +230,21 @@ function diagnostics(
       })),
     );
   }
-  if (profile === "release")
-    for (const material of p.materials)
-      if (
-        !material.unlockNode &&
-        !material.unlock &&
-        p.nodes.some((n) => n.title === material.title)
-      )
-        issues.push({
-          code: "legacy-title-unlock",
-          severity: "warning",
-          message: `资料 ${material.title} 未设置解锁条件，兼容版沿用同名场景访问后解锁规则；建议明确设置解锁场景。`,
-          field: "materials",
-        });
   issues.push(...authorWarnings(p, profile));
   return issues;
-}
-function saveRelease(p: AuthorProject, ctx = projectContext("release")) {
-  const before = read(fileFor("release", ctx)) as AuthorProject;
-  if (isDeepStrictEqual(before, p)) return;
-  const script = read(path.join(ctx.content, "script.json"));
-  const old = new Map(
-    before.nodes.map((n, i) => [
-      n.id,
-      { node: n, section: script.sections[i] },
-    ]),
-  );
-  script.sections = p.nodes.map((n) => {
-    const previous = old.get(n.id);
-    return previous && JSON.stringify(previous.node) === JSON.stringify(n)
-      ? previous.section
-      : {
-          ...previous?.section,
-          title: n.title,
-          level: n.sourceLevel || previous?.section.level || 2,
-          body: n.lines.map((l) => l.text).join("\n\n"),
-        };
-  });
-  script.lineCount = p.nodes.reduce((s, n) => s + n.lines.length, 0);
-  script.charCount = p.nodes.reduce(
-    (s, n) => s + n.lines.reduce((a, l) => a + l.text.length, 0),
-    0,
-  );
-  // Each replacement is atomic; the caller restores the complete backup on failure.
-  write(path.join(ctx.content, "script.json"), script);
-  write(fileFor("release", ctx), p);
-  if (ctx.projectFile !== path.join(ctx.content, "engine-story.json"))
-    write(path.join(ctx.content, "engine-story.json"), p);
-  buildReleaseContent(ctx.content, ctx.public);
 }
 function snapshot(p: AuthorProject, source: ProjectContext, directory: string) {
   const content = path.join(directory, "content"),
     publicRoot = path.join(directory, "public");
-  fs.mkdirSync(content, { recursive: true });
-  fs.mkdirSync(publicRoot, { recursive: true });
-  if (source.profile === "modern") {
-    buildContent(p as Parameters<typeof buildContent>[0], publicRoot, false);
-    fs.cpSync(path.join(publicRoot, "content"), content, { recursive: true });
-    fs.rmSync(path.join(publicRoot, "content"), { recursive: true });
-  } else {
-    fs.cpSync(source.content, content, { recursive: true });
-    write(path.join(directory, "project.json"), read(source.projectFile));
-    const target = {
-      ...source,
-      content,
-      public: publicRoot,
-      projectFile: path.join(directory, "project.json"),
-    };
-    saveRelease(p, target);
-    buildReleaseContent(content, publicRoot);
-    fs.rmSync(path.join(publicRoot, "content"), { recursive: true });
-  }
+  fs.mkdirSync(content, {
+    recursive: true,
+  });
+  fs.mkdirSync(publicRoot, {
+    recursive: true,
+  });
+  buildContent(p as Parameters<typeof buildContent>[0], publicRoot, false);
+  fs.cpSync(path.join(publicRoot, "content"), content, { recursive: true });
+  fs.rmSync(path.join(publicRoot, "content"), { recursive: true });
   write(path.join(directory, "project.json"), p);
 }
 export function studioPlugin(): Plugin {
@@ -356,7 +263,9 @@ export function studioPlugin(): Plugin {
       return [
         {
           tag: "script",
-          attrs: { type: "module" },
+          attrs: {
+            type: "module",
+          },
           children:
             "if(import.meta.hot)import.meta.hot.on('magickisa:content',()=>{if(!['/engine.html','/studio-preview.html'].includes(location.pathname))location.reload();});",
           injectTo: "body",
@@ -389,7 +298,9 @@ export function studioPlugin(): Plugin {
           send({
             type: "custom",
             event: "magickisa:content",
-            data: { path: payload.path },
+            data: {
+              path: payload.path,
+            },
           });
           return;
         }
@@ -403,24 +314,28 @@ export function studioPlugin(): Plugin {
           !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) ||
           (origin && origin !== `http://${host}`)
         ) {
-          res
-            .writeHead(403)
-            .end(JSON.stringify({ error: "只允许本机同源访问。" }));
+          res.writeHead(403).end(
+            JSON.stringify({
+              error: "只允许本机同源访问。",
+            }),
+          );
           return;
         }
-        const url = new URL(req.url || "/", "http://localhost"),
-          profile: Profile =
-            url.searchParams.get("profile") === "release"
-              ? "release"
-              : "modern";
+        const url = new URL(req.url || "/", "http://localhost");
         let locked = "";
         try {
+          const profile = requireModernProfile(url.searchParams.get("profile"));
           const ctx = projectContext(
             profile,
             url.searchParams.get("workspaceId"),
           );
           if (req.method === "GET" && url.pathname === "/workspaces") {
-            res.end(JSON.stringify({ projects: workspaces() }));
+            res.end(
+              JSON.stringify({
+                projects: workspaces(),
+                unsupportedProjects: unsupportedWorkspaceCount(),
+              }),
+            );
             return;
           }
           if (req.method === "GET" && url.pathname.startsWith("/packages/")) {
@@ -444,9 +359,11 @@ export function studioPlugin(): Plugin {
             !["/validate", "/packages/cancel"].includes(url.pathname)
           ) {
             if (writing.has(ctx.id)) {
-              res
-                .writeHead(409)
-                .end(JSON.stringify({ error: "当前项目正在写入，请稍后重试" }));
+              res.writeHead(409).end(
+                JSON.stringify({
+                  error: "当前项目正在写入，请稍后重试",
+                }),
+              );
               return;
             }
             locked = ctx.id;
@@ -460,7 +377,9 @@ export function studioPlugin(): Plugin {
               /^\/media\/(modern|release)(?:\/@([0-9a-f-]{36}))?(\/.*)$/.exec(
                 decodeURIComponent(url.pathname),
               );
-            const selectedProfile = routeMatch?.[1] || profile;
+            const selectedProfile = requireModernProfile(
+              routeMatch?.[1] || profile,
+            );
             const base = projectContext(
                 selectedProfile as Profile,
                 routeMatch?.[2] || url.searchParams.get("workspaceId"),
@@ -514,7 +433,10 @@ export function studioPlugin(): Plugin {
                 "Content-Range": `bytes ${start}-${end}/${size}`,
                 "Content-Length": end - start + 1,
               });
-              fs.createReadStream(file, { start, end }).pipe(res);
+              fs.createReadStream(file, {
+                start,
+                end,
+              }).pipe(res);
             } else {
               res.setHeader("Content-Length", size);
               fs.createReadStream(file).pipe(res);
@@ -524,10 +446,9 @@ export function studioPlugin(): Plugin {
           if (req.method === "GET" && url.pathname === "/project") {
             markOpened(ctx);
             const project = read(fileFor(profile, ctx)) as AuthorProject;
-            const sections =
-              profile === "release"
-                ? read(path.join(ctx.content, "script.json")).sections
-                : [];
+            requireModernProject(project);
+            const sections: { title: string; level: number; body: string }[] =
+              [];
             res.end(
               JSON.stringify({
                 project,
@@ -549,7 +470,12 @@ export function studioPlugin(): Plugin {
           if (req.method === "GET" && url.pathname === "/build") {
             res.end(
               JSON.stringify(
-                job?.workspaceId === ctx.id ? job : { status: "idle", log: "" },
+                job?.workspaceId === ctx.id
+                  ? job
+                  : {
+                      status: "idle",
+                      log: "",
+                    },
               ),
             );
             return;
@@ -557,7 +483,9 @@ export function studioPlugin(): Plugin {
           if (req.method === "GET" && url.pathname === "/assets") {
             const base = ctx.public;
             const files = fs
-              .readdirSync(base, { recursive: true })
+              .readdirSync(base, {
+                recursive: true,
+              })
               .filter(
                 (f): f is string =>
                   typeof f === "string" &&
@@ -567,7 +495,11 @@ export function studioPlugin(): Plugin {
                 url: "/" + f.replaceAll("\\", "/"),
                 bytes: fs.statSync(path.join(base, f)).size,
               }));
-            res.end(JSON.stringify({ files }));
+            res.end(
+              JSON.stringify({
+                files,
+              }),
+            );
             return;
           }
           if (
@@ -599,7 +531,11 @@ export function studioPlugin(): Plugin {
           if (url.pathname === "/workspaces/create") {
             const created = createWorkspace(profile, data.name);
             res.end(
-              JSON.stringify({ id: created.id, profile, name: created.name }),
+              JSON.stringify({
+                id: created.id,
+                profile,
+                name: created.name,
+              }),
             );
             return;
           }
@@ -624,7 +560,11 @@ export function studioPlugin(): Plugin {
               throw new Error("传输任务属于其他项目");
             if (url.pathname.endsWith("cancel")) {
               await packages.cancel(task);
-              res.end(JSON.stringify({ cancelled: true }));
+              res.end(
+                JSON.stringify({
+                  cancelled: true,
+                }),
+              );
             } else
               res.end(JSON.stringify(await packages.commit(task, data.name)));
             return;
@@ -638,7 +578,9 @@ export function studioPlugin(): Plugin {
               throw new Error("不支持的目录类型。");
             const directory =
               data.target === "backups" ? ctx.backups : ctx.directory;
-            fs.mkdirSync(directory, { recursive: true });
+            fs.mkdirSync(directory, {
+              recursive: true,
+            });
             const child = spawn(
               process.platform === "win32"
                 ? "explorer.exe"
@@ -646,11 +588,18 @@ export function studioPlugin(): Plugin {
                   ? "open"
                   : "xdg-open",
               [directory],
-              { windowsHide: true, stdio: "ignore" },
+              {
+                windowsHide: true,
+                stdio: "ignore",
+              },
             );
             child.on("error", () => {});
             child.unref();
-            res.end(JSON.stringify({ directory }));
+            res.end(
+              JSON.stringify({
+                directory,
+              }),
+            );
             return;
           }
           if (url.pathname === "/validate") {
@@ -666,7 +615,9 @@ export function studioPlugin(): Plugin {
                 warnings,
                 issues,
                 ...(errors.length
-                  ? { error: errors.map((i) => i.message).join("\n") }
+                  ? {
+                      error: errors.map((i) => i.message).join("\n"),
+                    }
                   : {}),
               }),
             );
@@ -686,48 +637,27 @@ export function studioPlugin(): Plugin {
                 ctx.backups,
                 `studio-${profile}-${Date.now()}-${crypto.randomUUID()}`,
               );
-            fs.mkdirSync(backup, { recursive: true });
-            const files =
-              profile === "modern"
-                ? [ctx.projectFile]
-                : fs
-                    .readdirSync(ctx.content)
-                    .map((f) => path.join(ctx.content, f))
-                    .concat([ctx.projectFile]);
-            // Flat backups must reject root/content basename collisions before any write.
-            for (const f of files)
-              if (
-                files.some(
-                  (other) =>
-                    other !== f &&
-                    path.basename(other).toLowerCase() ===
-                      path.basename(f).toLowerCase(),
-                )
-              )
-                throw new Error(
-                  "备份文件名冲突，请先重命名 content 内与工程根文件同名的文件。",
-                );
+            fs.mkdirSync(backup, {
+              recursive: true,
+            });
+            const files = [ctx.projectFile];
             for (const f of files)
               fs.copyFileSync(f, path.join(backup, path.basename(f)));
             try {
-              if (profile === "modern") {
-                write(ctx.projectFile, p);
-                buildContent(
-                  p as Parameters<typeof buildContent>[0],
-                  ctx.public,
-                  ctx.id.startsWith("builtin-"),
-                );
-              } else saveRelease(p, ctx);
+              write(ctx.projectFile, p);
+              buildContent(
+                p as Parameters<typeof buildContent>[0],
+                ctx.public,
+                ctx.id.startsWith("builtin-"),
+              );
             } catch (error) {
               for (const f of files)
                 fs.copyFileSync(path.join(backup, path.basename(f)), f);
-              if (profile === "modern")
-                buildContent(
-                  read(ctx.projectFile),
-                  ctx.public,
-                  ctx.id.startsWith("builtin-"),
-                );
-              else buildReleaseContent(ctx.content, ctx.public);
+              buildContent(
+                read(ctx.projectFile),
+                ctx.public,
+                ctx.id.startsWith("builtin-"),
+              );
               throw error;
             }
             res.end(
@@ -753,7 +683,9 @@ export function studioPlugin(): Plugin {
             if (!bytes.length || bytes.length > 8 * 1024 * 1024)
               throw new Error("资源为空或超过 8 MB。");
             const folder = path.join(ctx.public, "assets/imported");
-            fs.mkdirSync(folder, { recursive: true });
+            fs.mkdirSync(folder, {
+              recursive: true,
+            });
             let name = data.name;
             const ext = path.extname(name),
               stem = name.slice(0, -ext.length);
@@ -763,7 +695,11 @@ export function studioPlugin(): Plugin {
             const file = path.join(folder, name);
             fs.writeFileSync(file + ".tmp", bytes);
             fs.renameSync(file + ".tmp", file);
-            res.end(JSON.stringify({ url: "/assets/imported/" + name }));
+            res.end(
+              JSON.stringify({
+                url: "/assets/imported/" + name,
+              }),
+            );
             return;
           }
           if (url.pathname === "/build") {
@@ -791,7 +727,7 @@ export function studioPlugin(): Plugin {
               [
                 path.join(root, "node_modules", "vite", "bin", "vite.js"),
                 "build",
-                ...(profile === "release" ? ["--mode", "release"] : []),
+                ...[],
               ],
               {
                 cwd: root,
@@ -818,17 +754,29 @@ export function studioPlugin(): Plugin {
             res.end(JSON.stringify(current));
             return;
           }
-          res.writeHead(404).end(JSON.stringify({ error: "接口不存在。" }));
+          res.writeHead(404).end(
+            JSON.stringify({
+              error: "接口不存在。",
+            }),
+          );
         } catch (e) {
           if (res.headersSent) {
             res.destroy();
             return;
           }
-          res.writeHead((e as { status?: number }).status || 400).end(
-            JSON.stringify({
-              error: e instanceof Error ? e.message : String(e),
-            }),
-          );
+          res
+            .writeHead(
+              (
+                e as {
+                  status?: number;
+                }
+              ).status || 400,
+            )
+            .end(
+              JSON.stringify({
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            );
         } finally {
           if (locked) writing.delete(locked);
         }
