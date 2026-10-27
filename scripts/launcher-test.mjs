@@ -127,10 +127,10 @@ try {
     child.kill("SIGTERM");
     await once(child, "exit");
   }
-  fs.rmSync(temp, {
+  await fs.promises.rm(temp, {
     recursive: true,
     force: true,
-    maxRetries: 10,
+    maxRetries: 20,
     retryDelay: 200,
   });
 }
