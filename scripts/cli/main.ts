@@ -460,26 +460,31 @@ export async function execute(args: string[], signal: AbortSignal) {
     const { createServer, createLogger } = await import("vite");
     const terminationListeners = new Set(process.listeners("SIGTERM"));
     const stdinEndListeners = new Set(process.stdin.listeners("end"));
-    const server = await createServer({
-      root: repository,
-      configFile: path.join(repository, "vite.config.ts"),
-      customLogger: createLogger("info", {
-        allowClearScreen: false,
-        console: new Console({
-          stdout: process.stderr,
-          stderr: process.stderr,
-        }),
-      }),
-      server: { host: "127.0.0.1", port: 5173, open: false },
-    });
-    // The CLI owns shutdown and its final protocol response. Vite otherwise
-    // calls process.exit() from its SIGTERM/stdin callbacks before JSON is flushed.
-    for (const listener of process.listeners("SIGTERM"))
-      if (!terminationListeners.has(listener)) process.off("SIGTERM", listener);
-    for (const listener of process.stdin.listeners("end"))
-      if (!stdinEndListeners.has(listener))
-        process.stdin.off("end", listener as () => void);
+    let server: import("vite").ViteDevServer | undefined;
+    const detachViteShutdown = () => {
+      for (const listener of process.listeners("SIGTERM"))
+        if (!terminationListeners.has(listener))
+          process.off("SIGTERM", listener);
+      for (const listener of process.stdin.listeners("end"))
+        if (!stdinEndListeners.has(listener))
+          process.stdin.off("end", listener as () => void);
+    };
     try {
+      server = await createServer({
+        root: repository,
+        configFile: path.join(repository, "vite.config.ts"),
+        customLogger: createLogger("info", {
+          allowClearScreen: false,
+          console: new Console({
+            stdout: process.stderr,
+            stderr: process.stderr,
+          }),
+        }),
+        server: { host: "127.0.0.1", port: 5173, open: false },
+      });
+      // The CLI owns shutdown and its final protocol response. Vite otherwise
+      // calls process.exit() from its SIGTERM/stdin callbacks before JSON is flushed.
+      detachViteShutdown();
       await server.listen();
       const address =
         server.httpServer!.address() as import("node:net").AddressInfo;
@@ -508,7 +513,8 @@ export async function execute(args: string[], signal: AbortSignal) {
         );
       return { url, stopped: true };
     } finally {
-      await server.close();
+      detachViteShutdown();
+      await server?.close();
     }
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
