@@ -16,6 +16,11 @@ import { attachDebug } from "../engine/debug.js";
 import { preloadCharacters } from "../engine/resourceManager.js";
 import { resolvePlayback, playbackVolume } from "../../../engine/playback.js";
 import { GalleryAudio } from "../../../engine/GalleryAudio";
+import { materialCategory } from "../../../engine/resource.js";
+import {
+  hasPlayerProgress,
+  backupAndClearSlot,
+} from "../../../engine/recovery.js";
 import { TitleScreenHost } from "../engine/TitleScreenHost.jsx";
 import { PresentationHost } from "../engine/PresentationHost.jsx";
 import { Music2 } from "lucide-react";
@@ -67,6 +72,17 @@ export function syncLegacyView(view, save, project) {
     visited: visitedIndices,
     notes: save.playerNotes ?? "",
     unlockedMaterials: [...save.unlockedMaterials],
+    history: save.history
+      .map((h, engineHistoryIndex) => ({
+        speaker: h.speaker || "旁白",
+        text: h.text || "",
+        section: project.nodes.find((n) => n.id === h.nodeId)?.title || "",
+        sectionIndex: nodeIndex(project, h.nodeId),
+        lineIndex: h.lineIndex,
+        engineHistoryIndex,
+      }))
+      .filter((h) => h.text)
+      .slice(-200),
   };
 }
 export const LEGACY_SAVE_KEY = "magickisa:view";
@@ -105,6 +121,7 @@ export function GameApp() {
     [project, setProject] = React.useState(null),
     [loadError, setLoadError] = React.useState(""),
     [saveError, setSaveError] = React.useState(""),
+    [writeError, setWriteError] = React.useState(""),
     [chapterMenuOpen, setChapterMenuOpen] = React.useState(!1),
     [activePanel, setActivePanel] = React.useState(null),
     [chapterSearch, setChapterSearch] = React.useState(""),
@@ -131,6 +148,7 @@ export function GameApp() {
     backlogRef = React.useRef(null),
     engineStoreRef = React.useRef(null),
     saveBlockedRef = React.useRef(false),
+    wheelHandlerRef = React.useRef(null),
     presentationsRef = React.useRef(new PresentationRegistry()),
     [view, setView] = React.useState(() => {
       return {
@@ -250,8 +268,11 @@ export function GameApp() {
       if (f && project && gameStarted && !saveBlockedRef.current) {
         try {
           writeSave(f, project);
+          setWriteError("");
         } catch (error) {
-          setNotice(`存档未保存：${String(error)}`);
+          setWriteError(
+            `存档未保存：${String(error)}。请导出存档，释放空间后重试。`,
+          );
         }
       }
     }, [view, gameStarted, project]));
@@ -349,8 +370,8 @@ export function GameApp() {
       return {
         encyclopedia: g.filter((N) => N.category === "encyclopedia"),
         newspaper: g.filter((N) => N.category === "newspaper"),
-        notes: g.filter((N) => N.category === "note"),
-        clues: g.filter((N) => N.category === "clue"),
+        notes: g.filter((N) => materialCategory(N.category) === "note"),
+        clues: g.filter((N) => materialCategory(N.category) === "clue"),
       };
     }, [project, sections, view.visited, view.flags, view.unlockedMaterials]),
     currentMaterialCategory = () => {
@@ -406,27 +427,9 @@ export function GameApp() {
         !engineStoreRef.current
       )
         return f;
-      const g = engineStoreRef.current.runtime.save,
-        N = engineStoreRef.current.advance(),
-        P = syncView(f, N),
-        H =
-          N.history.length > g.history.length
-            ? N.history.slice(-1).map((be) => {
-                var We;
-                return {
-                  speaker: be.speaker || "旁白",
-                  text: be.text || "",
-                  section:
-                    ((We = sections[P.index]) == null ? void 0 : We.title) ||
-                    "",
-                  sectionIndex: P.index,
-                  lineIndex: be.lineIndex,
-                  engineHistoryIndex: N.history.length - 1,
-                };
-              })
-            : [];
+      const N = engineStoreRef.current.advance(),
+        P = syncView(f, N);
       return (
-        H.length && (P.history = [...f.history, ...H].slice(-200)),
         f.line >= lineTexts.length &&
           (node == null ? void 0 : node.presentation) === "ending" &&
           !endingActive &&
@@ -448,54 +451,57 @@ export function GameApp() {
       );
     });
   (React.useEffect(() => {
-    if (!openingActive) return;
-    const f = openingAudioRef.current;
-    if (!f) return;
-    ((f.currentTime = 0), f.play().catch(() => {}));
-    const g = () => {
-      var P;
-      const N = ((P = media.opening) == null ? void 0 : P.duration) || 89;
-      f.currentTime >= N
-        ? (f.pause(),
-          (f.currentTime = N),
-          setOpeningActive(!1),
-          setView((H) => ({
-            ...H,
-            opSeen: !0,
-          })))
-        : setOpeningTime(f.currentTime);
+    if (!openingActive && !endingActive) return;
+    const opening = openingActive;
+    const audio = opening ? openingAudioRef.current : endingAudioRef.current;
+    const duration =
+      (opening ? media.opening?.duration : media.ending?.duration) ??
+      (opening ? 89 : 198);
+    let time = 0,
+      stopped = false;
+    const finish = () => {
+      if (stopped) return;
+      stopped = true;
+      audio?.pause();
+      if (opening) setOpeningActive(false);
+      else setEndingActive(false);
+      setView((v) => ({
+        ...v,
+        ...(opening ? { opSeen: true } : { edSeen: true }),
+      }));
     };
-    return (
-      f.addEventListener("timeupdate", g),
-      () => {
-        (f.removeEventListener("timeupdate", g), f.pause());
+    const update = () => {
+      if (stopped) return;
+      if (time >= duration) {
+        finish();
+        return;
       }
-    );
-  }, [openingActive]),
-    React.useEffect(() => {
-      if (!endingActive) return;
-      const f = endingAudioRef.current;
-      if (!f) return;
-      ((f.currentTime = 0), f.play().catch(() => {}));
-      const g = () => {
-        var P;
-        const N = ((P = media.ending) == null ? void 0 : P.duration) || 198;
-        f.currentTime >= N
-          ? (f.pause(),
-            setEndingActive(!1),
-            setView((H) => ({
-              ...H,
-              edSeen: !0,
-            })))
-          : setEndingTime(f.currentTime);
-      };
-      return (
-        f.addEventListener("timeupdate", g),
-        () => {
-          (f.removeEventListener("timeupdate", g), f.pause());
-        }
-      );
-    }, [endingActive]),
+      if (opening) setOpeningTime(time);
+      else setEndingTime(time);
+    };
+    const tick = () => {
+      time =
+        audio && !audio.paused && !audio.ended && audio.currentTime > time
+          ? audio.currentTime
+          : time + 0.25;
+      update();
+    };
+    if (audio) {
+      audio.currentTime = 0;
+      if (audio.getAttribute("src")) audio.play().catch(() => {});
+    }
+    const timer = window.setInterval(tick, 250);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      audio?.pause();
+    };
+  }, [
+    openingActive,
+    endingActive,
+    media.opening?.duration,
+    media.ending?.duration,
+  ]),
     React.useEffect(() => {
       gameStarted ||
         !titleAudioRef.current ||
@@ -528,17 +534,11 @@ export function GameApp() {
         (audioManagerRef.current.pause("chapter"), setCurrentMusicTitle(""));
         return;
       }
-      return (
-        showMusicLabel
-          ? (setCurrentMusicTitle(trackTitle(f)),
-            window.setTimeout(() => setCurrentMusicTitle(""), 5200))
-          : setCurrentMusicTitle(""),
-        audioManagerRef.current.play("chapter", f, {
-          volume: playbackVolume(currentAudio, playback.volume, 0.6),
-          loop: !0,
-        }),
-        () => audioManagerRef.current.pause("chapter")
-      );
+      audioManagerRef.current.play("chapter", f, {
+        volume: playbackVolume(currentAudio, playback.volume, 0.6),
+        loop: true,
+      });
+      return () => audioManagerRef.current.pause("chapter");
     }, [
       gameStarted,
       splashActive,
@@ -557,6 +557,15 @@ export function GameApp() {
       const f = window.setTimeout(() => setSplashActive(!1), 3e3);
       return () => window.clearTimeout(f);
     }, [splashActive]));
+  React.useEffect(() => {
+    if (!gameStarted || !showMusicLabel || !playback.src) {
+      setCurrentMusicTitle("");
+      return;
+    }
+    setCurrentMusicTitle(trackTitle(playback.src));
+    const timer = window.setTimeout(() => setCurrentMusicTitle(""), 5200);
+    return () => window.clearTimeout(timer);
+  }, [gameStarted, playback.src, showMusicLabel, node?.id]);
   const rollbackOne = () =>
       setView((f) => {
         const g = engineStoreRef.current;
@@ -585,6 +594,26 @@ export function GameApp() {
     view.index,
     view.line,
   ]);
+  wheelHandlerRef.current = (e) => {
+    if (
+      !gameStarted ||
+      splashActive ||
+      openingActive ||
+      endingActive ||
+      settingsOpen ||
+      activePanel ||
+      chapterMenuOpen ||
+      e.target.closest("input,textarea,select,button")
+    )
+      return;
+    handleWheel(e);
+  };
+  React.useEffect(() => {
+    const stage = document.querySelector(".stage");
+    const wheel = (e) => wheelHandlerRef.current?.(e);
+    stage?.addEventListener("wheel", wheel, { passive: false });
+    return () => stage?.removeEventListener("wheel", wheel);
+  }, [project, gameStarted]);
   const toggleFullscreen = async () => {
       var f, g, N;
       document.fullscreenElement
@@ -664,6 +693,11 @@ export function GameApp() {
         ));
     },
     startNewGame = () => {
+      if (
+        hasPlayerProgress(engineStoreRef.current?.runtime.save) &&
+        !window.confirm("重新开始会覆盖当前自动存档，请先导出存档。确认继续？")
+      )
+        return;
       var f;
       (resetGame(),
         (f = titleAudioRef.current) == null || f.pause(),
@@ -829,7 +863,31 @@ export function GameApp() {
         <p>
           原存档保留；在导入有效存档或明确重新开始前，临时周目不会覆盖原存档。
         </p>
-        <button onClick={() => setGameStarted(true)}>打开临时新周目</button>
+        <button onClick={() => setGameStarted(true)}>
+          打开临时新周目（不保存）
+        </button>
+        <button
+          onClick={() => {
+            if (
+              !window.confirm(
+                "将保留原始存档副本，并建立可自动保存的新周目。继续？",
+              )
+            )
+              return;
+            try {
+              backupAndClearSlot(localStorage, slotKey("auto", project.id));
+              location.reload();
+            } catch (e) {
+              setSaveError(
+                e?.name === "QuotaExceededError"
+                  ? "浏览器存储空间不足，无法备份，原存档未删除。请释放存储空间后重试；不要直接清除本站点数据。"
+                  : `恢复失败，原存档未删除：${String(e)}`,
+              );
+            }
+          }}
+        >
+          备份原存档并建立可保存新周目
+        </button>
       </div>
     );
   if (!gameStarted) {
@@ -937,6 +995,20 @@ export function GameApp() {
         </div>
       )}
       <header className="topbar">
+        {(writeError || saveBlockedRef.current) && (
+          <div role="alert">
+            <p>
+              {writeError ||
+                "临时周目不会自动保存；刷新前请导出存档。导入有效存档可恢复自动保存。"}
+            </p>
+            <button onClick={exportSave}>导出当前存档</button>
+            {writeError && (
+              <button onClick={() => setView((v) => ({ ...v }))}>
+                重试保存
+              </button>
+            )}
+          </div>
+        )}
         <div className="brand">
           <BookOpen size={18} /> <span>{project?.title || "MAGICKISA"}</span>
         </div>
@@ -1055,7 +1127,6 @@ export function GameApp() {
         <section
           className={`stage ${(zo = node == null ? void 0 : node.tags) != null && zo.includes("dedication") ? "dedication-stage" : ""}`}
           onClick={advance}
-          onWheel={handleWheel}
         >
           {((Io = node == null ? void 0 : node.tags) == null
             ? void 0
@@ -1389,7 +1460,7 @@ export function GameApp() {
                     <article key={track.id || track.src}>
                       <h3>{track.title}</h3>
                       <GalleryAudio
-                        src={gameAsset(track.src, project)}
+                        src={track.src}
                         audio={currentAudio}
                         volume={
                           project.audio?.find((a) => a.src === track.src)
@@ -1404,6 +1475,12 @@ export function GameApp() {
               </div>
             ) : activePanel === "notes" ? (
               <div className="notes-modal">
+                {materialsByCategory.notes.map((m) => (
+                  <article key={m.id}>
+                    <h3>{m.title}</h3>
+                    <p>{m.body}</p>
+                  </article>
+                ))}
                 {(engineStoreRef.current?.runtime.save.notes || []).map(
                   (note, index) => (
                     <p key={index}>{note}</p>

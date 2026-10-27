@@ -19,7 +19,7 @@ export function EngineViewport({
   const input = line?.input;
   return (
     <section
-      className={`stage ${node?.tags?.includes("dedication") ? "dedication-stage-v2" : ""}`}
+      className={`stage ${node?.presentation === "dedication" && !context.save.presentation && !context.save.completed ? "dedication-stage" : ""}`}
       onClick={onAdvance}
     >
       <img
@@ -31,7 +31,9 @@ export function EngineViewport({
             : resolveScene(project, node?.title || "")
         }
         alt="场景插图"
-        onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+        onError={(e) => {
+          e.currentTarget.style.visibility = "hidden";
+        }}
       />
       <CharacterStage project={project} line={line} />
       <div className="scene-vignette" />

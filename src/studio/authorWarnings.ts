@@ -30,6 +30,63 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
       c.conditions.forEach((child) => condition(child, owner, nodeId, lineId));
     }
   };
+  for (const rule of [
+    ...(p.resources.sceneRules || []),
+    ...(p.media.chapterMusicRules || []),
+  ])
+    if (rule.keywords.some((k) => !k.trim()))
+      issues.push({
+        code: "empty-keyword",
+        severity: "warning",
+        message: "匹配规则包含空关键词，运行时会忽略空关键词，请填写有效文字。",
+        field: "resources",
+      });
+  for (const rule of p.media.chapterMusicRules || [])
+    if (!Object.hasOwn(p.media.chapterMusic || {}, rule.track))
+      issues.push({
+        code: "missing-chapter-track",
+        severity: "warning",
+        message: `章节音乐规则引用了不存在的标识 ${rule.track}，将回落到默认音乐。`,
+        field: "media",
+      });
+  const shots = p.media.opening?.images?.length || 0;
+  if (
+    profile === "release" &&
+    p.materials.some(
+      (m) =>
+        !m.unlockNode && !m.unlock && !p.nodes.some((n) => n.title === m.title),
+    )
+  )
+    issues.push({
+      code: "legacy-public-material",
+      severity: "warning",
+      message:
+        "兼容版存在未配置解锁条件且没有同名场景的资料，这些资料会立即公开。请设置明确的解锁条件以避免剧透。",
+      field: "materials",
+    });
+  if (
+    (p.media.opening?.credits?.artist && shots < 2) ||
+    (p.media.opening?.credits?.production?.length && shots < 5)
+  )
+    issues.push({
+      code: "opening-credit-shots",
+      severity: "warning",
+      message: `OP 署名按原演出镜头位置显示：画师需要至少 2 张、制作组需要至少 5 张；当前 ${shots} 张。`,
+      field: "media",
+    });
+  if (
+    profile === "modern" &&
+    p.nodes.some(
+      (n) => n.tags?.includes("dedication") && n.presentation !== "dedication",
+    )
+  )
+    issues.push({
+      code: "dedication-tag",
+      severity: "warning",
+      message:
+        "现代版献词由场景演出字段控制，dedication 标签不会触发献词，请设置“开场献词 → OP”。",
+      field: "presentation",
+    });
   for (const n of p.nodes) {
     const targetConditional = (id: string) =>
       !!p.nodes.find((target) => target.id === id)?.condition;

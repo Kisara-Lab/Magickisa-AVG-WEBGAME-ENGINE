@@ -87,11 +87,19 @@ export function ProjectDetails({
             />
             <button
               className="danger"
-              onClick={() =>
+              onClick={() => {
+                if (
+                  project.media.chapterMusicRules?.some((r) => r.track === key)
+                ) {
+                  window.alert(
+                    "此音乐仍被章节匹配规则使用，请先修改或移除相关规则。",
+                  );
+                  return;
+                }
                 edit((p) => {
                   delete p.media.chapterMusic?.[key];
-                })
-              }
+                });
+              }}
             >
               移除音乐
             </button>

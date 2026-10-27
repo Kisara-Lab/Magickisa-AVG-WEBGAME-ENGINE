@@ -8,6 +8,8 @@ import * as yazl from "yazl";
 import * as yauzl from "yauzl";
 import type { AuthorProject, Profile } from "../src/studio/model";
 import { resourceReferences } from "./content";
+import { isExternalResource } from "../src/engine/resource.js";
+import { registerPackagePath } from "./package-paths";
 import {
   repository,
   workspaceRoot,
@@ -68,7 +70,7 @@ function summary(
     warnings,
     external: resourceReferences(
       p as Parameters<typeof resourceReferences>[0],
-    ).filter((r) => /^https?:/i.test(r)),
+    ).filter(isExternalResource),
   };
 }
 export async function hashFile(file: string, signal?: AbortSignal) {
@@ -200,7 +202,9 @@ export class ProjectPackages {
     for (const ref of resourceReferences(
       p as Parameters<typeof resourceReferences>[0],
     )) {
-      if (/^https?:/i.test(ref)) continue;
+      if (/^blob:/i.test(ref))
+        throw new Error("浏览器临时 blob 资源不能打包，请先上传素材：" + ref);
+      if (isExternalResource(ref) || /^data:/i.test(ref)) continue;
       const relative = path
         .relative(
           ctx.public,
@@ -238,6 +242,11 @@ export class ProjectPackages {
           source: contained(ctx.public, name),
           destination: "public/" + name,
         });
+      const folded = new Map<string, "file" | "directory">();
+      for (const { destination } of sources) {
+        safeName(destination);
+        registerPackagePath(folded, destination);
+      }
       if (sources.length + 2 > limits.files)
         throw new Error("工程文件超过 50,000 个");
       task.total = sources.length;
@@ -262,7 +271,7 @@ export class ProjectPackages {
             throw new Error("素材在读取期间变化，请重试");
         }
         archived.push({ source: staged, destination });
-        records.push({ path: safeName(destination), bytes, sha256 });
+        records.push({ path: destination, bytes, sha256 });
         task.completed++;
       }
       if (records.reduce((s, r) => s + r.bytes, 0) > limits.expanded)
@@ -360,6 +369,7 @@ export class ProjectPackages {
           };
           signal.addEventListener("abort", abort, { once: true });
           const seen = new Set<string>();
+          const occupied = new Map<string, "file" | "directory">();
           let expanded = 0;
           zip.on("error", reject);
           zip.on("end", () => {
@@ -377,6 +387,7 @@ export class ProjectPackages {
               )
                 throw new Error("重复路径、大小写冲突或符号链接");
               seen.add(key);
+              registerPackagePath(occupied, name);
               expanded += entry.uncompressedSize;
               if (
                 seen.size > limits.files ||

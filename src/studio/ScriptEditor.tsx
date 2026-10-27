@@ -88,6 +88,28 @@ export function ScriptEditor({
               ...project.backdrops.map((b) => ({ value: b.id, label: b.id })),
             ]}
             onChange={(background) => {
+              if (project.schemaVersion !== 2) {
+                if (!node.title.trim()) {
+                  window.alert("请先填写非空场景标题，再建立兼容版背景规则。");
+                  return;
+                }
+                const p = structuredClone(project);
+                p.nodes = p.nodes.map((n) =>
+                  n.id === node.id
+                    ? { ...n, background: background || undefined }
+                    : n,
+                );
+                p.resources.sceneRules = (p.resources.sceneRules || []).filter(
+                  (r) => !r.keywords.includes(node.title),
+                );
+                if (background)
+                  p.resources.sceneRules.unshift({
+                    keywords: [node.title],
+                    asset: background,
+                  });
+                onProjectChange(p);
+                return;
+              }
               const n = { ...node };
               if (background) n.background = background;
               else delete n.background;
@@ -98,6 +120,10 @@ export function ScriptEditor({
             kind="image"
             label="挑选场景背景"
             onPick={(url) => {
+              if (project.schemaVersion !== 2 && !node.title.trim()) {
+                window.alert("请先填写非空场景标题，再建立兼容版背景规则。");
+                return;
+              }
               const p = structuredClone(project);
               const background = registerBackdrop(p, url);
               p.nodes = p.nodes.map((n) =>

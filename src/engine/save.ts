@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { valueSchema } from "./schema";
+import { contentLayout } from "./contentLayout.js";
 import type {
   EngineSave,
   SaveState,
@@ -35,6 +36,7 @@ export const stateSchema = z.object({
   }),
 });
 export const saveSchema = stateSchema.extend({
+  contentLayout: z.string().optional(),
   readLineIds: strings.default([]),
   schemaVersion: z.literal(2),
   projectId: z.string(),
@@ -58,6 +60,7 @@ export const slotKey = (projectId: string, slotId = "auto") =>
 export function createSave(project: StoryProject, slotId = "auto"): EngineSave {
   return {
     schemaVersion: 2,
+    contentLayout: contentLayout(project),
     projectId: project.id,
     contentVersion: project.version,
     slotId,
@@ -90,9 +93,11 @@ export function snapshot(save: EngineSave): SaveState {
     savedAt,
     history,
     readLineIds,
+    contentLayout: _layout,
+    playerNotes: _playerNotes,
     ...state
   } = save;
-  return structuredClone(state);
+  return { ...structuredClone(state), playerNotes: "" };
 }
 function validPosition(state: SaveState, p: StoryProject): void {
   const node = p.nodes.find((n) => n.id === state.nodeId);
@@ -117,6 +122,13 @@ export function importSave(
   if (raw.schemaVersion === 2) {
     const save = saveSchema.parse(raw);
     if (save.projectId !== p.id) throw new Error("存档属于其他项目。");
+    if (
+      save.contentLayout !== undefined &&
+      save.contentLayout !== contentLayout(p)
+    )
+      throw new Error(
+        "工程台词结构已变化，请使用对应版本游戏读取此存档；作者调整行序后应提升内容版本。",
+      );
     if (save.contentVersion !== p.version)
       throw new Error(
         `存档内容版本 ${save.contentVersion} 与当前 ${p.version} 不同。请使用对应内容版本的游戏读取，或导入当前版本导出的存档；本引擎不自动转换内容版本。`,

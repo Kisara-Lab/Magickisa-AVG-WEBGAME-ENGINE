@@ -54,12 +54,14 @@ export function ReleasePresentation({
   }
   if (mode === "opening") {
     const w = media.opening || {},
-      x = w.pages || [
-        {
-          at: 0,
-          text: "",
-        },
-      ],
+      x = w.pages?.length
+        ? w.pages
+        : [
+            {
+              at: 0,
+              text: "",
+            },
+          ],
       L = w.images || [],
       h = x.reduce((k, C) => (time >= C.at ? C : k), x[0]),
       d = L.length ? Math.floor(time / 14) % L.length : -1,

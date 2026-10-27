@@ -44,7 +44,7 @@ export function PresentationHost({
     if (!a) return;
     const update = () => {
       const value = a.currentTime;
-      setTime(value);
+      setTime((t) => Math.max(t, value));
       if (Math.abs(value - lastReported.current) >= 2) {
         lastReported.current = value;
         onProgress?.(value);
@@ -70,12 +70,24 @@ export function PresentationHost({
     };
   }, [onFinish, onProgress]);
   useEffect(() => {
-    if (src || paused) return;
-    const timer = setInterval(() => setTime((t) => t + 1), 1000);
+    if (paused) return;
+    let previous = audio.current?.currentTime || 0,
+      lastChange = performance.now();
+    const timer = setInterval(() => {
+      const current = audio.current?.currentTime || 0;
+      if (current > previous) {
+        previous = current;
+        lastChange = performance.now();
+        setTime((t) => Math.max(t, current));
+      } else if (!src || blocked || performance.now() - lastChange >= 2000) {
+        setTime((t) => t + 0.25);
+      }
+    }, 250);
     return () => clearInterval(timer);
-  }, [src, paused]);
+  }, [src, blocked, paused]);
   useEffect(() => {
-    if (media?.duration && time >= media.duration) onFinish();
+    if (time >= (media?.duration ?? (presentation.id === "opening" ? 89 : 198)))
+      onFinish();
   }, [time, media?.duration, onFinish]);
   return (
     <ReleasePresentation

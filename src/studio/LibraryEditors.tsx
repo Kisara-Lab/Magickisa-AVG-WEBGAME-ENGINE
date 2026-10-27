@@ -103,6 +103,14 @@ export function AssetEditor({
     const p = structuredClone(project),
       id = backdrop();
     if (
+      target === "scene" &&
+      profile === "release" &&
+      !p.nodes.find((n) => n.id === nodeId)?.title.trim()
+    ) {
+      notice("兼容版背景规则需要非空场景标题，请先填写标题。");
+      return;
+    }
+    if (
       (target === "scene" || target === "op") &&
       !p.backdrops.some((b) => b.id === id)
     )
@@ -371,12 +379,19 @@ export function AssetEditor({
             />
             <button
               className="danger"
-              onClick={() =>
+              onClick={() => {
+                if (
+                  i === 0 &&
+                  !window.confirm(
+                    "这是未匹配背景时的默认首项（兼容版首页也可能使用）。移除会改变这些画面，确认继续？",
+                  )
+                )
+                  return;
                 onChange({
                   ...project,
                   backdrops: project.backdrops.filter((_, j) => j !== i),
-                })
-              }
+                });
+              }}
             >
               移除注册
             </button>
@@ -844,8 +859,8 @@ export function MaterialEditor({
               options={[
                 "encyclopedia",
                 "newspaper",
-                "notes",
-                "evidence",
+                "note",
+                "clue",
                 "items",
               ].map((v) => ({
                 value: v,
@@ -853,8 +868,8 @@ export function MaterialEditor({
                   {
                     encyclopedia: "百科",
                     newspaper: "报纸",
-                    notes: "旅者笔记",
-                    evidence: "证据",
+                    note: "旅者笔记",
+                    clue: "证据",
                     items: "道具",
                   } as Record<string, string>
                 )[v],

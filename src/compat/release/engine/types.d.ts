@@ -111,6 +111,7 @@ export interface Checkpoint {
   text?: string;
 }
 export interface EngineSave {
+  contentLayout?: string;
   playerNotes?: string;
   projectId?: string;
   contentVersion?: string;

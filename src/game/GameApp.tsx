@@ -6,11 +6,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { EngineStore } from "../engine/store";
+import { slotKey } from "../engine/save";
+import { hasPlayerProgress, backupAndClearSlot } from "../engine/recovery.js";
 import { assertProject } from "../engine/schema";
 import { selectContext, selectUnlockedMaterials } from "../engine/selectors";
 import { resolveAsset } from "../engine/media";
 import { resolvePlayback, playbackVolume } from "../engine/playback.js";
 import { GalleryAudio } from "../engine/GalleryAudio";
+import { materialCategory } from "../engine/resource.js";
 import { EngineViewport } from "../engine/EngineViewport";
 import { TitleScreenHost } from "../engine/TitleScreenHost";
 import { EngineSplash } from "../engine/EngineSplash";
@@ -89,9 +92,32 @@ function LoadSession({
       <h1>存档需要处理</h1>
       <p>{result.error}</p>
       <p>
-        原存档保持原样。可以打开临时新周目，再导入本工程当前版本导出的存档。
+        原存档保持原样。临时新周目仅在内存中运行，导入存档后也不会自动保存；请在刷新前导出进度。需要恢复自动保存时，先备份原存档并建立可保存新周目，再导入有效存档。
       </p>
-      <button onClick={onFresh}>打开临时新周目</button>
+      <button onClick={onFresh}>打开临时新周目（不保存）</button>
+      <button
+        onClick={() => {
+          if (
+            !window.confirm(
+              "将保留原始自动存档副本，并为当前工程创建可自动保存的新周目。继续？",
+            )
+          )
+            return;
+          try {
+            backupAndClearSlot(localStorage, slotKey(project.id));
+            location.reload();
+          } catch (e) {
+            setResult({
+              error:
+                e instanceof DOMException && e.name === "QuotaExceededError"
+                  ? "浏览器存储空间不足，无法备份，原存档未删除。请释放存储空间后重试；不要直接清除本站点数据。"
+                  : `恢复失败，原存档未删除：${String(e)}`,
+            });
+          }
+        }}
+      >
+        备份原存档并建立可保存新周目
+      </button>
     </div>
   ) : result.store ? (
     <GameSession store={result.store} />
@@ -290,7 +316,8 @@ export function GameSession({
   const unread = (category: string) =>
     materials.some(
       (m) =>
-        m.category === (category === "notes" ? "note" : category) &&
+        materialCategory(m.category) ===
+          (category === "notes" ? "note" : category) &&
         !save.readMaterials.includes(m.id),
     );
   const musicTitle =
@@ -323,7 +350,7 @@ export function GameSession({
     setPanel(id);
     if (id !== "history" && id !== "chapters")
       for (const m of materials.filter(
-        (m) => m.category === (id === "notes" ? "note" : id),
+        (m) => materialCategory(m.category) === (id === "notes" ? "note" : id),
       ))
         invoke(() => store.markRead(m.id));
   };
@@ -344,6 +371,13 @@ export function GameSession({
         audioBlocked={blocked}
         onStart={() =>
           invoke(() => {
+            if (
+              hasPlayerProgress(save) &&
+              !window.confirm(
+                "重新开始会覆盖当前自动存档。请先导出存档以保留进度，确认继续？",
+              )
+            )
+              return;
             store.reset();
             setSplash(true);
             setStarted(true);
@@ -361,6 +395,20 @@ export function GameSession({
     );
   return (
     <div className="app">
+      {(store.temporary || store.persistenceError) && !embedded && (
+        <div className="recovery-error" role="alert">
+          <p>
+            {store.persistenceError ||
+              "临时周目：当前进度不会自动保存，刷新前请导出存档。"}
+          </p>
+          <button onClick={exportSave}>导出当前存档</button>
+          {!store.temporary && (
+            <button onClick={() => invoke(() => store.retrySave())}>
+              重试保存
+            </button>
+          )}
+        </div>
+      )}
       {notice && !save.presentation && node?.presentation !== "dedication" && (
         <div className="unlock-notice" role="status">
           {notice}
@@ -543,7 +591,17 @@ export function GameSession({
               )
             }
           />
-          <button title="重新开始" onClick={() => invoke(() => store.reset())}>
+          <button
+            title="重新开始"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "重新开始会覆盖当前自动存档，请先导出存档。确认继续？",
+                )
+              )
+                invoke(() => store.reset());
+            }}
+          >
             重开
           </button>
         </div>
@@ -686,6 +744,12 @@ export function GameSession({
                       <button
                         className="restore-button"
                         onClick={() => {
+                          if (
+                            !window.confirm(
+                              "回到此处会截断之后的剧情回退记录；玩家笔记和已获得的收藏保留。确认继续？",
+                            )
+                          )
+                            return;
                           invoke(() =>
                             store.rollback(
                               save.history.findIndex((x) => x.id === h.id),
@@ -740,6 +804,14 @@ export function GameSession({
                 {save.notes.map((n, i) => (
                   <p key={i}>{n}</p>
                 ))}
+                {materials
+                  .filter((m) => materialCategory(m.category) === "note")
+                  .map((m) => (
+                    <article key={m.id}>
+                      <h3>{m.title}</h3>
+                      <p>{m.body}</p>
+                    </article>
+                  ))}
               </div>
             ) : panel === "music" ? (
               <div className="material-list">
@@ -764,7 +836,7 @@ export function GameSession({
             ) : (
               <div className="material-list">
                 {materials
-                  .filter((m) => m.category === panel)
+                  .filter((m) => materialCategory(m.category) === panel)
                   .map((m) => (
                     <article key={m.id}>
                       <h3>{m.title}</h3>

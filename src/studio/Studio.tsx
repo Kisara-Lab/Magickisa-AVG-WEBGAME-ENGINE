@@ -959,6 +959,19 @@ export function Studio() {
       ...c,
       id: `${id}-choice-${i}`,
     }));
+    const remap = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      const obj = value as Record<string, unknown>;
+      if (obj.type === "visited" && obj.nodeId === node.id) obj.nodeId = id;
+      Object.values(obj).forEach(remap);
+    };
+    if (clone.next === node.id) clone.next = id;
+    clone.choices?.forEach((c) => {
+      if (c.target === node.id) c.target = id;
+    });
+    remap(clone.condition);
+    clone.lines.forEach((l) => remap(l.condition));
+    clone.choices?.forEach((c) => remap(c.condition));
     mutate((p) => p.nodes.push(clone));
     select(id);
   }

@@ -22,6 +22,7 @@ import { usages } from "../src/studio/discovery";
 import { authorWarnings } from "../src/studio/authorWarnings";
 import { issuePosition } from "../src/studio/issuePosition";
 import type { EditorPosition } from "../src/studio/workspace";
+import { isExternalResource, resourcePath } from "../src/engine/resource.js";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
 const read = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -85,10 +86,21 @@ function validate(
   warnings: string[] = [],
   ctx = projectContext(profile),
 ): AuthorProject {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    (profile === "modern") !== ((input as AuthorProject).schemaVersion === 2)
+  )
+    throw new Error(
+      "工程数据与运行模式不匹配；请打开正确工程，不能在 JSON 中切换运行模式。",
+    );
   if (profile === "release") releaseSchema.parse(input);
   const p =
     profile === "modern" ? assertProject(input) : (input as AuthorProject);
   const ids = new Set(p.nodes.map((n) => n.id));
+  for (const rule of p.media.chapterMusicRules || [])
+    if (!Object.hasOwn(p.media.chapterMusic || {}, rule.track))
+      throw new Error(`章节音乐规则引用不存在的标识：${rule.track}`);
   if (ids.size !== p.nodes.length) throw new Error("节点 ID 重复。");
   if (!ids.has(p.startNodeId))
     throw new Error(`起始场景不存在：${p.startNodeId}`);
@@ -111,7 +123,11 @@ function validate(
   for (const ref of resourceReferences(
     p as Parameters<typeof resourceReferences>[0],
   )) {
-    if (/^https?:/.test(ref)) continue;
+    if (/^blob:/i.test(ref))
+      throw new Error(
+        "浏览器临时 blob 资源不能保存或构建，请先上传素材：" + ref,
+      );
+    if (isExternalResource(ref) || /^data:/i.test(ref)) continue;
     const file = contained(
       publicRoot,
       "." + decodeURIComponent(ref.split(/[?#]/)[0]),
@@ -120,8 +136,10 @@ function validate(
       throw new Error(`资源路径越界：${ref}`);
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
       const inlineLyrics =
-        (ref === p.media.opening?.lyrics && p.media.opening?.pages?.length) ||
-        (ref === p.media.ending?.lyrics && p.media.ending?.lines?.length);
+        (ref === resourcePath(p.media.opening?.lyrics || "") &&
+          p.media.opening?.pages?.length) ||
+        (ref === resourcePath(p.media.ending?.lyrics || "") &&
+          p.media.ending?.lines?.length);
       if (profile === "release" && inlineLyrics) {
         warnings.push(`歌词文件不存在：${ref}；演出将使用工程内的定时字幕。`);
         continue;
