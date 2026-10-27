@@ -78,7 +78,7 @@ try {
   const root = path.join(temp, "MAGICKISA");
   const wrapper =
     process.platform === "win32"
-      ? spawnSync("cmd.exe", ["/d", "/c", "Start-Studio.cmd --help"], {
+      ? spawnSync("cmd.exe", ["/d", "/c", ".\\Start-Studio.cmd --help"], {
           cwd: root,
           encoding: "utf8",
           windowsHide: true,
@@ -98,7 +98,7 @@ try {
   child = spawn(
     process.platform === "win32" ? "cmd.exe" : "sh",
     process.platform === "win32"
-      ? ["/d", "/c", "Start-Studio.cmd --no-open"]
+      ? ["/d", "/c", ".\\Start-Studio.cmd --no-open"]
       : [
           process.platform === "darwin"
             ? "Start-Studio.command"
