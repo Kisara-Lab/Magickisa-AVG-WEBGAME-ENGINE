@@ -7,6 +7,7 @@ export type AuthorProject = Omit<StoryProject, "nodes"> & {
   nodes: AuthorNode[];
 };
 export type Section =
+  | "investigation"
   | "script"
   | "graph"
   | "presentations"

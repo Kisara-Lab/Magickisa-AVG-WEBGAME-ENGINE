@@ -1,0 +1,151 @@
+.st-flow-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 16px;
+  align-items: start;
+}
+.st-flow-workspace > div,
+.st-flow-inspector {
+  min-width: 0;
+}
+.st-flow-canvas {
+  height: 620px;
+  border: 1px solid #77501d;
+  border-radius: 12px;
+  background: #f4d18a;
+}
+.st-flow-card {
+  width: 260px;
+  padding: 14px;
+  border: 2px solid #77501d;
+  border-radius: 10px;
+  background: #ffedbf;
+  color: #302309;
+  font-size: 14px;
+}
+.st-flow-card.selected {
+  border: 3px solid #392b0f;
+  box-shadow: 0 0 0 4px #fff0bc;
+}
+.st-flow-card strong,
+.st-flow-card small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.st-flow-port {
+  position: relative;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-top: 1px solid #aa8039;
+  font-size: 14px;
+}
+.st-flow-card .react-flow__handle {
+  background: #533a12;
+  width: 12px;
+  height: 12px;
+}
+.st-flow-canvas .react-flow__edge-text {
+  fill: #302309;
+  font-size: 14px;
+}
+.st-flow-canvas .react-flow__edge-textbg {
+  fill: #fff0c4;
+}
+.st-flow-canvas .react-flow__controls button {
+  background: #ffedbf;
+  color: #302309;
+  border-color: #77501d;
+}
+.st-flow-canvas .react-flow__controls button svg {
+  fill: #302309;
+}
+.st-target-picker {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+.st-target-picker input,
+.st-target-picker select,
+.st-flow-inspector select {
+  width: 100%;
+  min-width: 0;
+}
+.st-authoring-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #77501d;
+  border-radius: 10px;
+  background: #ffe6a9;
+  color: #302309;
+}
+.st-authoring-status p {
+  flex-basis: 100%;
+}
+.st-investigation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.st-flow-workspace details button {
+  display: block;
+  margin: 6px 0;
+  white-space: normal;
+  text-align: left;
+}
+.st-flow-inspector {
+  max-height: 1100px;
+  overflow: auto;
+}
+.st-flow-card:focus-visible,
+.st-flow-canvas :focus-visible {
+  outline: 3px solid #302309;
+  outline-offset: 4px;
+}
+@media (max-width: 1280px) {
+  .st-flow-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .st-flow-inspector {
+    max-height: none;
+  }
+  .st-flow-canvas {
+    height: 500px;
+  }
+}
+@media (max-width: 600px) {
+  .st-flow-canvas {
+    height: 280px;
+  }
+  .st-investigation-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .st-graph-tools > * {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-flow-workspace * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.studio-root .st-flow-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 6px;
+  border-radius: 0;
+}
+.studio-root .st-flow-canvas .react-flow__controls-button svg {
+  width: 18px;
+  height: 18px;
+  max-width: none;
+  max-height: none;
+}
+.studio-root .st-flow-canvas .react-flow__minimap {
+  background: #ffedbf;
+}

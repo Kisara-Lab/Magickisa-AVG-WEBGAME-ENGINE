@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { AuthorProject, Profile } from "./model";
 import { assetUrl, uniqueId, mediaUrl } from "./model";
 import { Card, Field, ConditionEditor } from "./fields";
+import { TargetPicker } from "./TargetPicker";
 import { PickAsset } from "./AssetPicker";
 import { Fold } from "./components";
 import { expressionReferences } from "./discovery";
@@ -976,19 +977,12 @@ export function MaterialEditor({
                 })
               }
             />
-            <Field
+            <TargetPicker
               label="解锁场景"
+              nodes={project.nodes}
+              allowEmpty
+              emptyLabel="不按场景解锁"
               value={material.unlockNode || ""}
-              options={[
-                {
-                  value: "",
-                  label: "不按场景解锁",
-                },
-                ...project.nodes.map((n) => ({
-                  value: n.id,
-                  label: n.title,
-                })),
-              ]}
               onChange={(v) => {
                 const next = {
                   ...material,
@@ -1020,6 +1014,7 @@ export function MaterialEditor({
           >
             <ConditionEditor
               label="资料解锁条件"
+              materials={project.materials}
               value={material.unlock}
               nodes={project.nodes}
               onChange={(unlock) => {

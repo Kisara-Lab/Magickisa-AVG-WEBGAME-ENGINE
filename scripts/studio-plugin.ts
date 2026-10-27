@@ -29,6 +29,7 @@ import {
   listAssets,
 } from "./project-service";
 import { acquireProjectWrite } from "./project-locks";
+import { readStudioData, saveStudioData } from "./studio-data";
 const read = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
 const fileFor = (profile: Profile, ctx = projectContext(profile)) =>
   ctx.projectFile;
@@ -230,6 +231,10 @@ export function studioPlugin(): Plugin {
             }
             return;
           }
+          if (req.method === "GET" && url.pathname === "/studio-data") {
+            res.end(JSON.stringify(readStudioData(ctx)));
+            return;
+          }
           if (req.method === "GET" && url.pathname === "/project") {
             markOpened(ctx);
             const { project, revision: currentRevision } = readSnapshot(ctx);
@@ -301,6 +306,14 @@ export function studioPlugin(): Plugin {
               throw new Error("请求超过 12 MB。");
           }
           const data = JSON.parse(body);
+          if (url.pathname === "/studio-data") {
+            res.end(
+              JSON.stringify(
+                saveStudioData(ctx, data.data, data.revision, true),
+              ),
+            );
+            return;
+          }
           if (url.pathname === "/workspaces/create") {
             const created = createProject(data.name);
             res.end(
@@ -406,7 +419,14 @@ export function studioPlugin(): Plugin {
           if (url.pathname === "/project") {
             res.end(
               JSON.stringify(
-                saveProject(ctx, data.project, data.revision, true),
+                saveProject(
+                  ctx,
+                  data.project,
+                  data.revision,
+                  true,
+                  undefined,
+                  data.studioUpdate,
+                ),
               ),
             );
             return;

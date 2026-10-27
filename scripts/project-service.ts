@@ -7,6 +7,7 @@ import {
   recoverCommit,
   stateFile,
   assertNoPendingCommit,
+  readState,
 } from "./authoring/storage";
 import type { SyncState } from "./authoring/model";
 import { spawn } from "node:child_process";
@@ -32,6 +33,9 @@ import { authorWarnings } from "../src/studio/authorWarnings";
 import { issuePosition } from "../src/studio/issuePosition";
 import type { EditorPosition } from "../src/studio/workspace";
 import { isExternalResource } from "../src/engine/resource.js";
+import { studioDataFile, readStudioData } from "./studio-data";
+import { studioDataSchema } from "../src/studio/investigationModel";
+import { safeData } from "./cli/operations";
 import { requireModernProject } from "../src/engine/support";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
@@ -321,17 +325,41 @@ export function saveProject(
   expected: string,
   alreadyLocked = false,
   syncState?: SyncState,
+  studioUpdate?: { data: unknown; revision: string },
 ) {
   const unlock = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
   try {
     assertRevision(ctx, expected);
+    if (studioUpdate) safeData(studioUpdate.data);
+    const studio = studioUpdate
+      ? studioDataSchema.parse(studioUpdate.data)
+      : undefined;
+    if (studioUpdate && readStudioData(ctx).revision !== studioUpdate.revision)
+      throw Object.assign(new Error("创作资料已变化，请重新读取后合并"), {
+        status: 409,
+        code: "REVISION_CONFLICT",
+        exitCode: 3,
+      });
+    const coordinatedState = syncState ?? (studio ? readState(ctx) : undefined);
     const { project, issues } = checkedProject(ctx, input);
     const original = fs.readFileSync(ctx.projectFile);
     if (digest(original) !== expected) assertRevision(ctx, expected);
     const projectChanged =
       JSON.stringify(JSON.parse(original.toString("utf8"))) !==
       JSON.stringify(project);
-    if (syncState && !projectChanged) {
+    if (
+      studio &&
+      !projectChanged &&
+      JSON.stringify(readStudioData(ctx).data) === JSON.stringify(studio) &&
+      !syncState
+    )
+      return {
+        revision: revision(ctx.profile, ctx),
+        issues,
+        backup: null,
+        studio: readStudioData(ctx),
+      };
+    if (syncState && !studio && !projectChanged) {
       beginCommit(ctx, project, syncState);
       try {
         finishCommit(ctx, syncState);
@@ -347,18 +375,20 @@ export function saveProject(
     );
     fs.mkdirSync(backup, { recursive: true });
     fs.writeFileSync(path.join(backup, "project.json"), original);
+    if (fs.existsSync(studioDataFile(ctx)))
+      fs.copyFileSync(studioDataFile(ctx), path.join(backup, "studio.json"));
     if (fs.existsSync(stateFile(ctx)))
       fs.copyFileSync(
         stateFile(ctx),
         path.join(backup, "authoring-state.json"),
       );
-    if (syncState) beginCommit(ctx, project, syncState);
+    if (coordinatedState) beginCommit(ctx, project, coordinatedState, studio);
     try {
       atomicJson(ctx.projectFile, project);
       buildContent(project, ctx.public, ctx.id.startsWith("builtin-"));
-      if (syncState) finishCommit(ctx, syncState);
+      if (coordinatedState) finishCommit(ctx, coordinatedState, studio);
     } catch (error) {
-      if (syncState) {
+      if (coordinatedState) {
         recoverCommit(ctx);
         throw error;
       }
@@ -375,6 +405,7 @@ export function saveProject(
     return {
       revision: revision(ctx.profile, ctx),
       backup: path.relative(root, backup),
+      ...(studio ? { studio: readStudioData(ctx) } : {}),
       issues,
     };
   } finally {

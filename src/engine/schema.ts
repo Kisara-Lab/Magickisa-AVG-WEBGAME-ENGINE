@@ -14,6 +14,13 @@ const id = z.string().min(1);
 export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.object({
+      type: z.literal("material"),
+      id,
+      state: z.enum(["unlocked", "read"]),
+      value: z.boolean().optional(),
+    }),
+    z.object({ type: z.literal("contains"), key: id, value: valueSchema }),
+    z.object({
       type: z.literal("flag"),
       key: id,
       equals: valueSchema.optional(),
@@ -304,6 +311,8 @@ export function validateProject(input: unknown): ValidationIssue[] {
   function condition(c: Condition | undefined, path: string) {
     if (!c) return;
     if (c.type === "visited") ref(c.nodeId, path);
+    if (c.type === "material" && !materials.has(c.id))
+      issues.push({ path, message: `material does not exist: ${c.id}` });
     if (c.type === "not") condition(c.condition, path);
     if (c.type === "all" || c.type === "any")
       c.conditions.forEach((x) => condition(x, path));

@@ -2,6 +2,13 @@ export type Value =
   string | number | boolean | null | Value[] | { [key: string]: Value };
 export type Variables = Record<string, Value>;
 export type Condition =
+  | {
+      type: "material";
+      id: string;
+      state: "unlocked" | "read";
+      value?: boolean;
+    }
+  | { type: "contains"; key: string; value: Value }
   | { type: "flag"; key: string; equals?: Value }
   | { type: "not"; condition: Condition }
   | { type: "all" | "any"; conditions: Condition[] }

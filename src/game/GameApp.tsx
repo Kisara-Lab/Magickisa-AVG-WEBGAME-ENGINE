@@ -198,6 +198,7 @@ export function GameSession({
             condition,
             store.save.variables,
             store.save.visitedNodes,
+            store.save,
           ),
         snapshot: () => structuredClone(store.save),
         setVariable: (k, v) => store.setVariable(k, v),

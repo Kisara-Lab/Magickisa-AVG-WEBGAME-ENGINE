@@ -8,6 +8,8 @@ import type {
   StoryProject,
 } from "../engine/types";
 import { Fold } from "./components";
+import { TargetPicker } from "./TargetPicker";
+import { conditionSummary } from "../engine/investigation";
 export function Field({
   label,
   value,
@@ -291,6 +293,8 @@ export function ValueField({
   );
 }
 const conditionTypes = [
+  ["material", "线索解锁／阅读"],
+  ["contains", "列表包含"],
   ["flag", "变量相等"],
   ["count", "数字比较"],
   ["visited", "已访问节点"],
@@ -299,6 +303,8 @@ const conditionTypes = [
   ["not", "取反"],
 ];
 export function makeCondition(type: string, nodeId = ""): Condition {
+  if (type === "material") return { type, id: "clue", state: "unlocked" };
+  if (type === "contains") return { type, key: "clues", value: "" };
   return type === "all" || type === "any"
     ? { type, conditions: [{ type: "flag", key: "flag", equals: true }] }
     : type === "not"
@@ -313,15 +319,18 @@ export function ConditionEditor({
   value,
   onChange,
   nodes,
+  materials = [],
   label = "条件",
 }: {
   value?: Condition;
   onChange: (v: Condition | undefined) => void;
   nodes: StoryNode[];
+  materials?: { id: string; title: string }[];
   label?: string;
 }) {
   return (
     <div className="st-rule" data-rule-label={label}>
+      <p className="st-field-help">{conditionSummary(value)}</p>
       <div className="st-inline">
         <strong>{label}</strong>
         <button
@@ -331,7 +340,7 @@ export function ConditionEditor({
         </button>
       </div>
       <small className="st-field-help">
-        条件决定内容何时可见。例如“已访问节点”可要求先读过指定场景；支持同时满足、任一和取反。
+        条件决定内容何时可见；支持资料已解锁／已阅读、列表包含，以及递归全部／任一／取反。
       </small>
       {value && (
         <>
@@ -341,13 +350,61 @@ export function ConditionEditor({
             options={conditionTypes.map(([value, label]) => ({ value, label }))}
             onChange={(v) => onChange(makeCondition(v, nodes[0]?.id))}
           />
-          {value.type === "flag" || value.type === "count" ? (
+          {value.type === "flag" ||
+          value.type === "count" ||
+          value.type === "contains" ? (
             <Field
               label="变量名"
               value={value.key}
               onChange={(key) => onChange({ ...value, key })}
             />
           ) : null}
+          {value.type === "contains" && (
+            <ValueField
+              label="包含的值"
+              value={value.value}
+              onChange={(v) => onChange({ ...value, value: v })}
+            />
+          )}
+          {value.type === "material" && (
+            <>
+              <Field
+                label="线索资料 ID"
+                value={value.id}
+                onChange={(id) => onChange({ ...value, id })}
+              />
+              {!!materials.length && (
+                <Field
+                  label="选择线索资料"
+                  value={value.id}
+                  options={[
+                    { value: "", label: "选择资料" },
+                    ...materials.map((m) => ({
+                      value: m.id,
+                      label: `${m.title} · ${m.id}`,
+                    })),
+                  ]}
+                  onChange={(id) => onChange({ ...value, id })}
+                />
+              )}
+              <Field
+                label="线索状态"
+                value={value.state}
+                options={[
+                  { value: "unlocked", label: "已解锁" },
+                  { value: "read", label: "已阅读" },
+                ]}
+                onChange={(state) =>
+                  onChange({ ...value, state: state as "unlocked" | "read" })
+                }
+              />
+              <Check
+                label="要求满足该状态"
+                value={value.value !== false}
+                onChange={(v) => onChange({ ...value, value: v })}
+              />
+            </>
+          )}
           {value.type === "flag" && (
             <ValueField
               label="期望值"
@@ -381,16 +438,10 @@ export function ConditionEditor({
           )}
           {value.type === "visited" && (
             <>
-              <Field
+              <TargetPicker
                 label="条件节点"
+                nodes={nodes}
                 value={value.nodeId}
-                options={[
-                  { value: "", label: "选择节点" },
-                  ...nodes.map((n) => ({
-                    value: n.id,
-                    label: `${n.id} · ${n.title}`,
-                  })),
-                ]}
                 onChange={(nodeId) => onChange({ ...value, nodeId })}
               />
               <Check
@@ -417,6 +468,7 @@ export function ConditionEditor({
                     key={i}
                     label={`子条件 ${i + 1}`}
                     nodes={nodes}
+                    materials={materials}
                     value={v}
                     onChange={(next) =>
                       onChange({
@@ -446,6 +498,7 @@ export function ConditionEditor({
               label="取反对象"
               value={value.condition}
               nodes={nodes}
+              materials={materials}
               onChange={(condition) =>
                 onChange({
                   ...value,

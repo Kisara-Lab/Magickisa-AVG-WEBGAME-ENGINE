@@ -6,6 +6,14 @@ export { createEngineHost } from "./host";
 export { assertProject, validateProject, projectSchema } from "./schema";
 export { createSave, importSave, readSave, writeSave } from "./save";
 export { evaluateCondition, conditionHandlers } from "./condition";
+export type { ConditionState } from "./condition";
+export { analyzeGraph } from "./graph";
+export {
+  explainCondition,
+  explainBranches,
+  explainNext,
+  conditionSummary,
+} from "./investigation";
 export { applyEffects, effectHandlers } from "./effects";
 export * from "./selectors";
 export { EngineViewport } from "./EngineViewport";

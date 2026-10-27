@@ -28,7 +28,12 @@ export class StoryRuntime {
     return (this.node?.choices || []).filter(
       (c) =>
         (!c.once || !basis.usedChoices.includes(c.id)) &&
-        evaluateCondition(c.condition, basis.variables, basis.visitedNodes) &&
+        evaluateCondition(
+          c.condition,
+          basis.variables,
+          basis.visitedNodes,
+          basis,
+        ) &&
         this.targetAllowed(c, basis),
     );
   }
@@ -41,6 +46,7 @@ export class StoryRuntime {
         target.condition,
         simulated.variables,
         simulated.visitedNodes,
+        simulated,
       )
     );
   }
@@ -69,6 +75,7 @@ export class StoryRuntime {
           m.unlock,
           this.save.variables,
           this.save.visitedNodes,
+          this.save,
         ) &&
         !this.save.unlockedMaterials.includes(m.id)
       )
@@ -81,6 +88,7 @@ export class StoryRuntime {
         this.line.condition,
         this.save.variables,
         this.save.visitedNodes,
+        this.save,
       )
     )
       this.save.lineIndex++;
@@ -152,6 +160,7 @@ export class StoryRuntime {
           target.condition,
           this.save.variables,
           this.save.visitedNodes,
+          this.save,
         )
       ) {
         this.checkpoint();
@@ -218,6 +227,7 @@ export class StoryRuntime {
         target.condition,
         this.save.variables,
         this.save.visitedNodes,
+        this.save,
       )
     )
       throw new Error("当前条件不允许进入此场景。");

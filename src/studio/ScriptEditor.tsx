@@ -1,3 +1,4 @@
+import { TargetPicker } from "./TargetPicker";
 import type { AuthorProject, AuthorNode } from "./model";
 import { uniqueId } from "./model";
 import type { StoryNode, StoryLine, StoryChoice } from "../engine/types";
@@ -33,16 +34,6 @@ export function ScriptEditor({
       ...node,
       lines: node.lines.map((l, i) => (i === lineIndex ? next : l)),
     });
-  const targets = [
-    {
-      value: "",
-      label: "无 / 停止于此",
-    },
-    ...project.nodes.map((n) => ({
-      value: n.id,
-      label: `${n.id} · ${n.title}`,
-    })),
-  ];
   return (
     <>
       <div className="st-section-title">
@@ -82,10 +73,11 @@ export function ScriptEditor({
               })
             }
           />
-          <Field
+          <TargetPicker
+            nodes={project.nodes}
+            allowEmpty
             label="下一场景"
-            value={node.next}
-            options={targets}
+            value={node.next ?? ""}
             onChange={(next) => {
               const n = {
                 ...node,
@@ -691,6 +683,7 @@ export function ScriptEditor({
               {
                 <Fold title="本句条件与玩家输入">
                   <ConditionEditor
+                    materials={project.materials}
                     nodes={project.nodes}
                     value={line.condition}
                     onChange={(condition) => {
@@ -834,10 +827,10 @@ export function ScriptEditor({
                     })
                   }
                 />
-                <Field
+                <TargetPicker
+                  nodes={project.nodes}
                   label={`分支 ${i + 1} 目标`}
                   value={c.target}
-                  options={targets.filter((t) => t.value)}
                   onChange={(target) =>
                     change({
                       ...c,
@@ -861,6 +854,7 @@ export function ScriptEditor({
                   }
                 />
                 <ConditionEditor
+                  materials={project.materials}
                   label="可选条件"
                   nodes={project.nodes}
                   value={c.condition}
@@ -898,6 +892,7 @@ export function ScriptEditor({
         summary={`${node.condition ? 1 : 0} 个进入条件 · ${(node.onEnter?.length || 0) + (node.onComplete?.length || 0)} 个效果`}
       >
         <ConditionEditor
+          materials={project.materials}
           label="进入条件"
           nodes={project.nodes}
           value={node.condition}

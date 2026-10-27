@@ -26,6 +26,7 @@ export const WorkspaceContext = createContext<{
   warning: (message: string) => void;
   sequences: Record<string, string[]>;
   navigationVersion: number;
+  visitNode?: (id:string)=>void;
 } | null>(null);
 export function useNavigationSignal() {
   return useContext(WorkspaceContext)?.navigationVersion || 0;
@@ -252,6 +253,16 @@ export function resolvePosition(
     missing = true;
   }
   const node = p.nodes.find((n) => n.id === next.nodeId);
+  const graphEdges = new Set(
+    p.nodes.flatMap((n) => [
+      ...(n.next ? [JSON.stringify([n.id, "next"])] : []),
+      ...(n.choices ?? []).map((c) => JSON.stringify([n.id, "choice", c.id])),
+    ]),
+  );
+  if (next.items["graph-edge"] && !graphEdges.has(next.items["graph-edge"])) {
+    next.items["graph-edge"] = "";
+    missing = true;
+  }
   if (next.lineId && !node?.lines.some((l) => l.id === next.lineId)) {
     next.lineId = undefined;
     missing = true;

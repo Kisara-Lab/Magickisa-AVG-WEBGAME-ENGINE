@@ -70,7 +70,27 @@ try {
     fs.readFileSync(path.join(authoring, "AGENTS.md"), "utf8").includes(id),
   );
   assert.equal((await call(["agent", "init"])).created.length, 0);
-  for (const schema of ["manifest", "module", "plan", "resolutions"])
+  const studioData = {
+    formatVersion: 1,
+    positions: { "scene-001": { x: 20, y: 40 } },
+    variables: {
+      entered: {
+        label: "调查进度说明",
+        type: "boolean",
+        description: "创作注释不会初始化变量",
+      },
+    },
+    presets: [],
+  };
+  write(path.join(authoring, "studio.json"), studioData);
+  for (const schema of [
+    "manifest",
+    "module",
+    "plan",
+    "resolutions",
+    "studio",
+    "preset",
+  ])
     assert.ok((await cli(["schema", schema])).properties);
   const sourceFiles = new Map();
   for (const [name, body] of [
@@ -418,6 +438,11 @@ try {
   assert.deepEqual(fs.readFileSync(stateFile), oldState);
   const zip = path.join(temp, "创作资料.magickisa.zip");
   await call(["package", "export", "--out", zip]);
+  assert.deepEqual(
+    json(path.join(authoring, "studio.json")),
+    studioData,
+    "Agent sync must preserve independent Studio authoring",
+  );
   const imported = await call(["package", "import", "--file", zip]);
   created.add(imported.id);
   const importedHome = path.join(
@@ -431,6 +456,11 @@ try {
     false,
   );
   assert.ok(fs.existsSync(path.join(importedHome, ".sync-state.json")));
+  assert.deepEqual(
+    json(path.join(importedHome, "studio.json")),
+    studioData,
+    "Studio authoring must survive actual ZIP roundtrip",
+  );
   assert.ok(
     json(path.join(importedHome, "manifest.json")).sources.every(
       (s) =>
@@ -457,6 +487,7 @@ try {
   const importedPlan = path.join(temp, "迁移后方案.json");
   await importedCall(["sync", "plan", "--out", importedPlan]);
   await importedCall(["sync", "apply", "--file", importedPlan]);
+  assert.deepEqual(json(path.join(importedHome, "studio.json")), studioData);
   await importedCall(["build"]);
   assert.ok(
     fs.existsSync(

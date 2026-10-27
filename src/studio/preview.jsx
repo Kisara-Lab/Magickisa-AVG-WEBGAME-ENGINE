@@ -1,4 +1,5 @@
 import { requireModernProfile, requireModernProject } from "../engine/support";
+import { explainBranches, explainNext } from "../engine/investigation";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 const send = (data) => parent.postMessage(data, location.origin);
@@ -203,8 +204,10 @@ window.addEventListener("message", async (e) => {
         store = new EngineStore(project, {
           persist: false,
           slotId: "studio-preview",
+          initialSave: d.testState,
         });
-        store.jump(d.nodeId || project.startNodeId, d.line || 0);
+        if (!d.testState)
+          store.jump(d.nodeId || project.startNodeId, d.line || 0);
         store.subscribe(() =>
           send({
             type: "studio:state",
@@ -216,11 +219,37 @@ window.addEventListener("message", async (e) => {
           type: "studio:state",
           save: store.getSnapshot(),
         });
+        const explain = () =>
+          send({
+            type: "studio:explanation",
+            nodeId: store.runtime.node.id,
+            completed: store.getSnapshot().completed,
+            explanations: explainBranches(
+              project,
+              store.runtime.node,
+              store.getSnapshot(),
+            ),
+            next: explainNext(project, store.runtime.node, store.getSnapshot()),
+          });
+        store.subscribe(explain);
+        explain();
       }
     }
     if (d.type === "studio:variable") {
       if (store) store.setVariable(d.key, d.value);
     }
+    if (d.type === "studio:explain" && store?.runtime.node)
+      send({
+        type: "studio:explanation",
+        nodeId: store.runtime.node.id,
+        completed: store.getSnapshot().completed,
+        explanations: explainBranches(
+          project,
+          store.runtime.node,
+          store.getSnapshot(),
+        ),
+        next: explainNext(project, store.runtime.node, store.getSnapshot()),
+      });
   } catch (error) {
     send({
       type: "studio:error",

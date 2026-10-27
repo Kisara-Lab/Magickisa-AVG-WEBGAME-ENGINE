@@ -1,4 +1,12 @@
-# MAGICKISA CLI（2.0.0-dev.2）
+# MAGICKISA CLI（2.0.0-dev.3）
+
+## 调查逻辑与连接诊断
+
+条件新增 `material`（资料 `unlocked/read`，`value` 默认 true）与 `contains`（列表中包含 JSON 深度相等值）。工程 schemaVersion 仍为 2；使用新条件须配套新版运行时。完整示例见 [调查工作台](INVESTIGATION.md)。
+
+`graph --workspace ID --json` 保留原字段，追加稳定连接 `key`、`kind`、`crossChapter`、强连通循环 `cycles` 与定位诊断 `diagnostics`。有意的调查循环是警告；静态连通不证明实际条件下可通行。
+
+`schema studio --json`、`schema preset --json` 可读取独立创作数据与测试预设结构。`authoring/studio.json` 不属于游戏 schema；使用 Studio 独立 revision 保存，CLI／Agent 原有同步会保留它。变量说明不初始化运行值，测试预设只用于真实预览。
 
 面向终端开发者与 AI Agent。只编辑现代版磁盘工作区，无须打开浏览器或启动 Studio 服务。安装 Node.js 22+，在引擎目录执行 `npm ci` 后使用：
 

@@ -7,6 +7,11 @@ import { safeData } from "../cli/operations";
 import { stateSchema, type SyncState } from "./model";
 import { projectSchema } from "../../src/engine/schema";
 import { buildContent } from "../content";
+import {
+  studioDataSchema,
+  type StudioData,
+} from "../../src/studio/investigationModel";
+const studioFile = (ctx: ProjectContext) => contained(home(ctx), "studio.json");
 export const hash = (bytes: string | Buffer) =>
   crypto.createHash("sha256").update(bytes).digest("hex");
 export function fileHash(file: string) {
@@ -51,6 +56,8 @@ const journalSchema = z
     projectAfter: z.string(),
     stateBefore: z.string().nullable(),
     stateAfter: z.string(),
+    studioBefore: z.string().nullable().optional(),
+    studioAfter: z.string().optional(),
   })
   .strict();
 function writeBytes(file: string, bytes: Buffer) {
@@ -67,7 +74,10 @@ export function beginCommit(
   ctx: ProjectContext,
   project: unknown,
   state: SyncState,
+  studio?: StudioData,
 ) {
+  if (studio && Buffer.byteLength(JSON.stringify(studio)) > 32 * 1024 * 1024)
+    throw new Error("创作资料超过 32 MiB，未提交工程");
   if (
     Buffer.byteLength(JSON.stringify(state, null, 2) + "\n") >
     32 * 1024 * 1024
@@ -78,6 +88,16 @@ export function beginCommit(
     : null;
   atomicJson(journalFile(ctx), {
     version: 1,
+    ...(studio
+      ? {
+          studioBefore: fs.existsSync(studioFile(ctx))
+            ? fs.readFileSync(studioFile(ctx)).toString("base64")
+            : null,
+          studioAfter: Buffer.from(
+            JSON.stringify(studio, null, 2) + "\n",
+          ).toString("base64"),
+        }
+      : {}),
     projectBefore: fs.readFileSync(ctx.projectFile).toString("base64"),
     projectAfter: Buffer.from(JSON.stringify(project, null, 2) + "\n").toString(
       "base64",
@@ -88,8 +108,13 @@ export function beginCommit(
     ),
   });
 }
-export function finishCommit(ctx: ProjectContext, state: SyncState) {
+export function finishCommit(
+  ctx: ProjectContext,
+  state: SyncState,
+  studio?: StudioData,
+) {
   atomicJson(stateFile(ctx), state);
+  if (studio) atomicJson(studioFile(ctx), studio);
   fs.rmSync(journalFile(ctx));
 }
 // Called only while holding the shared project lock. Roll back both authoritative
@@ -103,9 +128,19 @@ export function recoverCommit(ctx: ProjectContext) {
   const stateNow = fs.existsSync(stateFile(ctx))
     ? fs.readFileSync(stateFile(ctx)).toString("base64")
     : null;
+  const studioNow = fs.existsSync(studioFile(ctx))
+    ? fs.readFileSync(studioFile(ctx)).toString("base64")
+    : null;
+  if (
+    (journal.studioBefore !== undefined) !==
+    (journal.studioAfter !== undefined)
+  )
+    throw new Error("不完整的创作资料恢复日志，已停止写入");
   if (
     ![journal.projectBefore, journal.projectAfter].includes(projectNow) ||
-    ![journal.stateBefore, journal.stateAfter].includes(stateNow)
+    ![journal.stateBefore, journal.stateAfter].includes(stateNow) ||
+    (journal.studioBefore !== undefined &&
+      ![journal.studioBefore, journal.studioAfter].includes(studioNow))
   )
     throw Object.assign(
       new Error("同步恢复遇到外部修改，保留提交日志并停止写入"),
@@ -121,9 +156,17 @@ export function recoverCommit(ctx: ProjectContext) {
     stateSchema.parse(
       JSON.parse(Buffer.from(journal.stateBefore, "base64").toString("utf8")),
     );
+  if (journal.studioBefore)
+    studioDataSchema.parse(
+      JSON.parse(Buffer.from(journal.studioBefore, "base64").toString("utf8")),
+    );
   writeBytes(ctx.projectFile, Buffer.from(journal.projectBefore, "base64"));
   if (journal.stateBefore === null) fs.rmSync(stateFile(ctx), { force: true });
   else writeBytes(stateFile(ctx), Buffer.from(journal.stateBefore, "base64"));
+  if (journal.studioBefore === null)
+    fs.rmSync(studioFile(ctx), { force: true });
+  else if (journal.studioBefore !== undefined)
+    writeBytes(studioFile(ctx), Buffer.from(journal.studioBefore, "base64"));
   buildContent(prior, ctx.public, ctx.id.startsWith("builtin-"));
   fs.rmSync(journalFile(ctx));
   return true;
