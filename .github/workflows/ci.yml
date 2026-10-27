@@ -15,6 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run test:cli
       - run: npm run test:authoring
       - run: npm run package:release

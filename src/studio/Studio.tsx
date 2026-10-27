@@ -77,7 +77,12 @@ import type { AuthorProject, Profile, Section } from "./model";
 import { newNode, copy, uniqueId } from "./model";
 import { Card, Field, Check, JsonField } from "./fields";
 import { ScriptEditor } from "./ScriptEditor";
-import { GraphEditor } from "./GraphEditor";
+import { GraphEditor } from "./GraphCanvas";
+import { useStudioData } from "./useStudioData";
+import { InvestigationPanel } from "./InvestigationPanel";
+import { TargetPicker } from "./TargetPicker";
+import { presetSave, type TestPreset } from "./investigationModel";
+import type { EngineSave } from "../engine/types";
 import { PresentationEditor } from "./PresentationEditor";
 import { ProjectDetails } from "./ProjectDetails";
 import type { PresentationMode } from "./PresentationEditor";
@@ -87,6 +92,7 @@ import "./studio.css";
 import "./brand.css";
 import "./usability.css";
 const tabs = [
+  ["investigation", "变量与线索", Search],
   ["script", "剧本", BookOpen],
   ["graph", "流程图", GitBranch],
   ["presentations", "演出", Clapperboard],
@@ -98,6 +104,7 @@ const tabs = [
   ["publish", "发行", Package],
 ] as const;
 interface PreviewData {
+  testState?: EngineSave;
   sectionLevels?: Record<string, number>;
   project: AuthorProject;
   profile: Profile;
@@ -198,6 +205,7 @@ export function Studio() {
       ? preferenceScope(profile, sourceId.current || project.id)
       : "";
   const sequences = useSequenceKeys(scope, project);
+  const authoring = useStudioData(scope);
   const [items, setItems] = useState<Record<string, string>>({});
   const [navigationVersion, setNavigationVersion] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -555,14 +563,14 @@ export function Studio() {
   }, [notice]);
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
-      if (dirty && !leavingWorkspace.current) {
+      if ((dirty || authoring.dirty) && !leavingWorkspace.current) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", listener);
     return () => window.removeEventListener("beforeunload", listener);
-  }, [dirty]);
+  }, [dirty, authoring.dirty]);
   useEffect(() => {
     const listener = (e: MessageEvent) => {
       if (
@@ -794,6 +802,28 @@ export function Studio() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   });
+  async function runPreset(preset: TestPreset) {
+    if (!project || !(await validate())) return;
+    try {
+      const testState = presetSave(project, preset);
+      select(preset.nodeId);
+      setPreviewVisible(true);
+      setPlaying(false);
+      setRuntime(null);
+      setPreview({
+        project: copy(project),
+        profile,
+        nodeId: preset.nodeId,
+        line: 0,
+        mode: "scene",
+        pageIndex: 0,
+        time: 0,
+        testState,
+      });
+    } catch (e) {
+      setError(String(e));
+    }
+  }
   async function runPreview(
     previewMode: PreviewData["mode"] = "scene",
     pageIndex = 0,
@@ -898,7 +928,7 @@ export function Studio() {
   }
   function requestWorkspace(item: WorkspaceItem) {
     if (busy || job.status === "running") return;
-    if (dirty) setPendingWorkspace(item);
+    if (dirty || authoring.dirty) setPendingWorkspace(item);
     else openWorkspace(item);
   }
   function setTime(value: number) {
@@ -1093,6 +1123,11 @@ export function Studio() {
                 },
           ),
         warning: setNotice,
+        visitNode: (id) => {
+          select(id);
+          setItems((items) => ({ ...items, "graph-edge": "" }));
+          if (section !== "graph") setSection("script");
+        },
         sequences,
         navigationVersion,
       }}
@@ -1388,8 +1423,7 @@ export function Studio() {
               {project && node && (
                 <div className="st-scene-navigation">
                   <span>
-                    {node.chapter || "当前场景"} /{" "}
-                    <strong>{node.title}</strong>
+                    {node.chapter || "当前场景"} / <strong>{node.title}</strong>
                   </span>
                   <div>
                     <button
@@ -1610,6 +1644,27 @@ export function Studio() {
                       selected={node.id}
                       onSelect={select}
                       onEdit={() => setSection("script")}
+                      onChange={edit}
+                      onDelete={deleteNode}
+                      authoring={authoring}
+                      scope={scope}
+                      runtime={runtime as EngineSave | null}
+                      runtimeStale={
+                        !preview ||
+                        JSON.stringify(preview.project) !==
+                          JSON.stringify(project)
+                      }
+                    />
+                  )}
+                  {section === "investigation" && (
+                    <InvestigationPanel
+                      project={project}
+                      controller={authoring}
+                      onSelect={(id) => {
+                        select(id);
+                        setSection("graph");
+                      }}
+                      onPreview={(p) => void runPreset(p)}
                     />
                   )}
                   {section === "presentations" && (
@@ -1674,13 +1729,10 @@ export function Studio() {
                               })
                             }
                           />
-                          <Field
+                          <TargetPicker
                             label="起始场景"
+                            nodes={project.nodes}
                             value={project.startNodeId}
-                            options={project.nodes.map((n) => ({
-                              value: n.id,
-                              label: n.title,
-                            }))}
                             onChange={(startNodeId) =>
                               mutate((p) => {
                                 p.startNodeId = startNodeId;
@@ -2130,7 +2182,9 @@ export function Studio() {
               <button
                 className="primary"
                 onClick={async () => {
-                  if (await save()) openWorkspace(pendingWorkspace);
+                  if (!(await save())) return;
+                  if (authoring.dirty && !(await authoring.save())) return;
+                  openWorkspace(pendingWorkspace);
                 }}
               >
                 保存并打开项目

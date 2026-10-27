@@ -1,4 +1,5 @@
-﻿import fs from "node:fs";
+import { analyzeGraph } from "../../src/engine/graph";
+import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
@@ -7,6 +8,10 @@ import { spawn } from "node:child_process";
 import { Console } from "node:console";
 import { z } from "zod";
 import { projectSchema } from "../../src/engine/schema";
+import {
+  studioDataSchema,
+  presetSchema,
+} from "../../src/studio/investigationModel";
 import { usages } from "../../src/studio/discovery";
 import {
   applyOperations,
@@ -66,6 +71,8 @@ const commands: Record<string, string[]> = {
   studio: [],
   help: [],
   schema: [
+    "studio",
+    "preset",
     "project",
     "transaction",
     "manifest",
@@ -274,27 +281,7 @@ function writeOutput(file: string, content: string | Buffer) {
   return destination;
 }
 function graph(project: ReturnType<typeof readSnapshot>["project"]) {
-  const edges = project.nodes.flatMap((n) => [
-    ...(n.next
-      ? [{ from: n.id, to: n.next, kind: "next", conditional: false }]
-      : []),
-    ...(n.choices ?? []).map((c) => ({
-      from: n.id,
-      to: c.target,
-      kind: "choice",
-      id: c.id,
-      conditional: !!(c.condition || c.once),
-    })),
-  ]);
-  const reachable = new Set([project.startNodeId]);
-  for (let changed = true; changed;) {
-    changed = false;
-    for (const edge of edges)
-      if (reachable.has(edge.from) && !reachable.has(edge.to)) {
-        reachable.add(edge.to);
-        changed = true;
-      }
-  }
+  const { edges, reachable, cycles, issues } = analyzeGraph(project);
   return {
     nodes: project.nodes.map((n) => ({
       id: n.id,
@@ -303,6 +290,8 @@ function graph(project: ReturnType<typeof readSnapshot>["project"]) {
       condition: n.condition,
     })),
     edges,
+    cycles,
+    diagnostics: issues,
     unreachable: project.nodes
       .filter((n) => !reachable.has(n.id))
       .map((n) => n.id),
@@ -421,7 +410,13 @@ export async function execute(args: string[], signal: AbortSignal) {
     );
   if (group === "schema")
     return z.toJSONSchema(
-      action === "project" ? projectSchema : transactionSchema,
+      action === "studio"
+        ? studioDataSchema
+        : action === "preset"
+          ? presetSchema
+          : action === "project"
+            ? projectSchema
+            : transactionSchema,
     );
   if (group === "project" && action === "list")
     return { projects: workspaces() };

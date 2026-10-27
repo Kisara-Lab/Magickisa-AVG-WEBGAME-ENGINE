@@ -6,7 +6,7 @@ export const selectUnlockedMaterials = (p: StoryProject, s: EngineSave) =>
   p.materials.filter(
     (m) =>
       s.unlockedMaterials.includes(m.id) &&
-      evaluateCondition(m.unlock, s.variables, s.visitedNodes),
+      evaluateCondition(m.unlock, s.variables, s.visitedNodes, s),
   );
 export function selectContext(
   project: StoryProject,

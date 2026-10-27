@@ -1,5 +1,7 @@
 import type { AuthorProject, Profile } from "./model";
 import type { Condition } from "../engine/types";
+import { analyzeGraph } from "../engine/graph";
+import { variableIndex } from "./logicIndex";
 export function authorWarnings(p: AuthorProject, profile: Profile) {
   const issues: {
     code: string;
@@ -106,5 +108,19 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
     );
   }
   p.materials.forEach((m) => condition(m.unlock, m.title));
+  issues.push(
+    ...analyzeGraph(p)
+      .issues.filter((i) => i.severity === "warning")
+      .map((i) => ({ ...i, severity: "warning" as const })),
+  );
+  for (const variable of variableIndex(p))
+    for (const message of variable.warnings)
+      issues.push({
+        code: "variable-usage",
+        severity: "warning",
+        message: `${variable.key}：${message}`,
+        nodeId: variable.locations[0]?.nodeId,
+        field: variable.locations[0]?.field,
+      });
   return issues;
 }

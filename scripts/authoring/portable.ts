@@ -3,6 +3,7 @@ import path from "node:path";
 import { contained, atomicJson, type ProjectContext } from "../workspaces";
 import { manifestSchema, moduleSchema, stateSchema } from "./model";
 import { sourceFile } from "./sources";
+import { studioDataSchema } from "../../src/studio/investigationModel";
 import {
   home,
   hash,
@@ -20,7 +21,11 @@ export function exportAuthoring(
   assertNoPendingCommit(ctx);
   const sourceRoot = home(ctx),
     manifestFile = contained(sourceRoot, "manifest.json");
-  if (!fs.existsSync(manifestFile)) return () => {};
+  if (
+    !fs.existsSync(manifestFile) &&
+    !fs.existsSync(contained(sourceRoot, "studio.json"))
+  )
+    return () => {};
   const expected = new Map<string, string>();
   const read = (file: string) => {
     const bytes = fs.readFileSync(file);
@@ -28,14 +33,23 @@ export function exportAuthoring(
     return bytes;
   };
   const manifest = manifestSchema.parse(
-    JSON.parse(
-      read(manifestFile)
-        .toString("utf8")
-        .replace(/^\uFEFF/, ""),
-    ),
+    fs.existsSync(manifestFile)
+      ? JSON.parse(
+          read(manifestFile)
+            .toString("utf8")
+            .replace(/^\uFEFF/, ""),
+        )
+      : { formatVersion: 1, modules: [] },
   );
   const output = contained(snapshot, "content/authoring");
   fs.mkdirSync(output, { recursive: true });
+  if (fs.existsSync(contained(sourceRoot, "studio.json"))) {
+    const bytes = read(contained(sourceRoot, "studio.json"));
+    studioDataSchema.parse(
+      JSON.parse(bytes.toString("utf8").replace(/^\uFEFF/, "")),
+    );
+    fs.writeFileSync(contained(output, "studio.json"), bytes);
+  }
   for (const module of manifest.modules) {
     const file = contained(sourceRoot, module),
       bytes = read(file);
@@ -87,6 +101,10 @@ export function restoreAuthoring(stage: string) {
     readJson(contained(sourceRoot, "manifest.json")),
   );
   const files = new Set(["manifest.json"]);
+  if (fs.existsSync(contained(sourceRoot, "studio.json"))) {
+    studioDataSchema.parse(readJson(contained(sourceRoot, "studio.json")));
+    files.add("studio.json");
+  }
   if (fs.existsSync(contained(sourceRoot, ".sync-state.json"))) {
     stateSchema.parse(readJson(contained(sourceRoot, ".sync-state.json")));
     files.add(".sync-state.json");

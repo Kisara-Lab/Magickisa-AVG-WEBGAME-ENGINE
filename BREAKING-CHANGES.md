@@ -1,6 +1,8 @@
 # v2.0.0 开发版破坏性变更
 
-当前版本为 2.0.0-dev.0，尚未发布 v2 正式 Release。
+当前版本为 2.0.0-dev.3，尚未发布 v2 正式 Release。
+
+dev.3 保持 schemaVersion 2 与存档字段，新增 `material` 和 `contains` 条件。使用这些条件的工程须使用新版运行时，旧引擎可能拒绝。旧工程无须迁移。Studio 创作资料保存为 `authoring/studio.json`，默认随格式 1 工程包迁移，不进入发行文件。
 
 - 删除兼容运行时、旧内容生成器、专用构建和测试；现代版唯一，移除运行模式选择与 `dev:release` / `build:release`。
 - 预览直接使用现代运行时与样式；完整 JSON、高级条件效果、图层、调试、献词、OP/ED、引擎标识和熔金色 UI 保留。

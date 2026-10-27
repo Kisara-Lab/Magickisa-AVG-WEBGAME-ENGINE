@@ -1,6 +1,6 @@
 {
   "name": "magickisa-avg-webgame-engine",
-  "version": "2.0.0-dev.2",
+  "version": "2.0.0-dev.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,6 +22,8 @@
     "test:authoring": "node scripts/authoring-test.mjs"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.3",
+    "@xyflow/react": "^12.12.0",
     "lucide-react": "0.468.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",

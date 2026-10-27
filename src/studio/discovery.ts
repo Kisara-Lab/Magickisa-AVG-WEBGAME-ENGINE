@@ -62,6 +62,7 @@ export function expressionReferences(
   );
 }
 export const sectionNames: Record<Section, string> = {
+  investigation: "变量与线索",
   script: "剧本",
   graph: "流程图",
   presentations: "演出",
@@ -188,6 +189,7 @@ export function usages(p: AuthorProject): Usage[] {
   ): void => {
     if (!c) return;
     if (c.type === "visited") add("script", c.nodeId, label, field, position);
+    if (c.type === "material") add("materials", c.id, label, field, position);
     if (c.type === "not") condition(c.condition, label, field, position);
     if (c.type === "all" || c.type === "any")
       c.conditions.forEach((v) => condition(v, label, field, position));
@@ -430,6 +432,16 @@ export const helpContent: Record<
     advanced: string;
   }
 > = {
+  investigation: {
+    purpose: "汇总变量、线索和测试状态，检查调查逻辑。",
+    steps: [
+      "查看变量读取与写入位置。",
+      "建立测试预设，再打开真实预览。",
+      "创作资料与游戏工程分别保存。",
+    ],
+    advanced:
+      "测试预设不会写入玩家存档；静态连接与单状态解释不能证明全部剧情可通行。",
+  },
   script: {
     purpose: "编写连续台词并配置场景与分支。",
     steps: [
@@ -438,17 +450,17 @@ export const helpContent: Record<
       "条件控制是否显示，例如 visited 判断已访问场景；效果改变变量或解锁资料。",
       "所有选项被条件隐藏或已用尽时，会尝试进入下一场景；未设置下一场景或其条件不满足时停留当前节点。",
     ],
-    advanced:
-      "展开场景属性、条件、效果和图层；完整结构可在 JSON 编辑。",
+    advanced: "展开场景属性、条件、效果和图层；完整结构可在 JSON 编辑。",
   },
   graph: {
-    purpose: "查看场景之间的跳转关系。",
+    purpose: "在可编辑画布上组织场景、跳转与调查逻辑。",
     steps: [
       "适应视图查看全局，定位当前节点查看邻接关系。",
-      "选择节点后前往剧本修改分支目标。",
+      "拖线创建下一场景或分支，点击连线使用侧栏精确编辑。",
+      "大型工程可按章节／邻域过滤；手机使用入边／出边列表。",
     ],
     advanced:
-      "连线关系由剧本中的 next 和 choices 决定；条件与效果在剧本中编辑。",
+      "条件、效果在侧栏就地编辑；布局与测试状态单独保存，状态解释不能证明全图可通行。",
   },
   presentations: {
     purpose: "编辑献词、OP 和 ED。",

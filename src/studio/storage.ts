@@ -45,6 +45,7 @@ export function readLayout(profile: Profile): Layout {
     const allowed = [
       "script",
       "graph",
+      "investigation",
       "presentations",
       "assets",
       "characters",
