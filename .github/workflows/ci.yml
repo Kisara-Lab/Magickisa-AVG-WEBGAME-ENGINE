@@ -16,6 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:cli
+      - run: npm run test:authoring
       - run: npm run package:release
       - run: npm run test:launcher
   verify:

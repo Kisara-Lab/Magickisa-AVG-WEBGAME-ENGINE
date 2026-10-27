@@ -1,6 +1,6 @@
 {
   "name": "magickisa-avg-webgame-engine",
-  "version": "2.0.0-dev.1",
+  "version": "2.0.0-dev.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,8 @@
     "test": "tsx --test tests/*.test.ts",
     "test:studio": "node scripts/studio-test.mjs",
     "content:build": "tsx scripts/content.ts build",
-    "content:validate": "tsx scripts/content.ts validate"
+    "content:validate": "tsx scripts/content.ts validate",
+    "test:authoring": "node scripts/authoring-test.mjs"
   },
   "dependencies": {
     "lucide-react": "0.468.0",

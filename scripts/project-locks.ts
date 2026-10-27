@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { recoverCommit } from "./authoring/storage";
 import { repository, workspaceRoot, type ProjectContext } from "./workspaces";
 
 export const buildLockPath = path.join(repository, ".magickisa-build.lock");
@@ -93,7 +94,14 @@ export function acquireProjectWrite(ctx: ProjectContext) {
   const gate = acquireLock(gatePath);
   try {
     if (lockInfo(buildLockPath)) throw busy("正在构建，请完成后再写入工程");
-    return acquireLock(projectLockPath(ctx));
+    const unlock = acquireLock(projectLockPath(ctx));
+    try {
+      recoverCommit(ctx);
+      return unlock;
+    } catch (error) {
+      unlock();
+      throw error;
+    }
   } finally {
     gate();
   }

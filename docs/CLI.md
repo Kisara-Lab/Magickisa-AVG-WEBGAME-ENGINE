@@ -1,4 +1,4 @@
-# MAGICKISA CLI（2.0.0-dev.1）
+# MAGICKISA CLI（2.0.0-dev.2）
 
 面向终端开发者与 AI Agent。只编辑现代版磁盘工作区，无须打开浏览器或启动 Studio 服务。安装 Node.js 22+，在引擎目录执行 `npm ci` 后使用：
 
@@ -58,6 +58,12 @@ node scripts/magickisa.mjs doctor --workspace WORKSPACE_ID --json
 | `package export/import` | export 使用 out；import 使用 file，可指定 name，建立独立工作区 |
 | `build` | 构建所选磁盘工作区，返回输出目录 |
 | `studio` | 启动本地服务并打开指定工程；Ctrl+C 停止 |
+| `agent init/context` | 初始化通用创作目录；context 支持 scene/query/limit/offset |
+| `source add/list/status` | add 使用 file 与可选 id；检查来源 SHA256、变化及缺失 |
+| `sync plan` | 可选 file（默认 authoring/manifest.json）、resolutions；必须指定新 out 文件 |
+| `sync apply/status/recover` | apply 使用方案 file，支持 dry-run/if-revision；recover 恢复未完成提交 |
+
+反复接入用户文件见 [创作与增量同步](AUTHORING.md)。`schema manifest/module/plan/resolutions --json` 提供结构发现。`package export --include-sources` 才包含原始附件；默认仅包含结构稿与基线。来源登记不执行或自动理解文件。
 
 素材导入与 Studio 一致：png/jpg/jpeg/webp/svg/mp3/ogg/wav/lrc，单文件不为空且不超过 8 MB，同名自动加序号。大素材自行放入该项目 public，再用 entity/media/场景字段登记路径。
 

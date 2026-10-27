@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 
 export async function cliBrowserRegression(browser, origin) {
   const root = process.cwd();
-  async function cli(args, value) {
+  async function cli(args, value, expected = 0) {
     const result = await new Promise((resolve, reject) => {
       const child = spawn(
         process.execPath,
@@ -26,8 +26,8 @@ export async function cliBrowserRegression(browser, origin) {
       });
       child.stdin.end(value);
     });
-    assert.equal(result.code, 0, JSON.stringify(result));
-    return result.data;
+    assert.equal(result.code, expected, JSON.stringify(result));
+    return expected === 0 ? result.data : result.error;
   }
   const created = await cli([
     "project",
@@ -54,6 +54,35 @@ export async function cliBrowserRegression(browser, origin) {
         ],
       }),
     );
+    await cli(["agent", "init", "--workspace", id]);
+    const moduleFile = path.join(directory, "authoring/modules/story.json");
+    const module = {
+      formatVersion: 1,
+      nodes: [
+        { id: "scene-001", lines: [{ id: "line-001", text: "CLI first" }] },
+      ],
+    };
+    fs.writeFileSync(moduleFile, JSON.stringify(module));
+    const resolutions = path.join(directory, "adoption.json"),
+      syncPlan = path.join(directory, "plan.json");
+    fs.writeFileSync(
+      resolutions,
+      JSON.stringify({
+        formatVersion: 1,
+        resolutions: [{ path: "/nodes/@scene-001", take: "incoming" }],
+      }),
+    );
+    await cli([
+      "sync",
+      "plan",
+      "--workspace",
+      id,
+      "--resolutions",
+      resolutions,
+      "--out",
+      syncPlan,
+    ]);
+    await cli(["sync", "apply", "--workspace", id, "--file", syncPlan]);
     await page.goto(`${origin}/engine.html?workspaceId=${id}`);
     const line = page.locator(".st-line textarea").first();
     await line.waitFor();
@@ -129,6 +158,19 @@ export async function cliBrowserRegression(browser, origin) {
     } finally {
       await freshContext.close();
     }
+    module.nodes[0].lines[0].text = "New incoming script";
+    fs.writeFileSync(moduleFile, JSON.stringify(module));
+    const conflictingPlan = path.join(directory, "conflict.json");
+    await cli(
+      ["sync", "plan", "--workspace", id, "--out", conflictingPlan],
+      undefined,
+      1,
+    );
+    assert.ok(
+      JSON.parse(fs.readFileSync(conflictingPlan, "utf8")).conflicts.some(
+        (item) => item.path === "/nodes/@scene-001/lines/@line-001/text",
+      ),
+    );
     console.log(
       "PASS CLI/Studio: shared project editing, stale draft 409, cross-process write lock, continued save",
     );

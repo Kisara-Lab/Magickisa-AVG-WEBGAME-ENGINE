@@ -40,8 +40,13 @@ import {
 } from "../project-locks";
 import { ProjectPackages } from "../project-packages";
 import { exportMarkdown, importMarkdown } from "../content";
+import * as authoring from "../authoring/service";
+import { readJson, home } from "../authoring/storage";
 
 const commands: Record<string, string[]> = {
+  agent: ["init", "context"],
+  source: ["add", "list", "status"],
+  sync: ["plan", "apply", "status", "recover"],
   project: ["list", "create", "show", "update"],
   scene: ["list", "show", "add", "update", "remove", "move", "link"],
   line: ["list", "show", "add", "update", "remove", "move"],
@@ -60,7 +65,14 @@ const commands: Record<string, string[]> = {
   build: [],
   studio: [],
   help: [],
-  schema: ["project", "transaction"],
+  schema: [
+    "project",
+    "transaction",
+    "manifest",
+    "module",
+    "plan",
+    "resolutions",
+  ],
   doctor: [],
 };
 const booleanOptions = new Set([
@@ -69,6 +81,7 @@ const booleanOptions = new Set([
   "help",
   "recover",
   "no-open",
+  "include-sources",
 ]);
 const valueOptions = new Set([
   "workspace",
@@ -90,6 +103,10 @@ const valueOptions = new Set([
   "if-revision",
   "token",
   "lock",
+  "query",
+  "limit",
+  "offset",
+  "resolutions",
 ]);
 function failure(
   message: string,
@@ -135,6 +152,14 @@ function parse(args: string[]) {
   }
   const shared = ["json", "help", "workspace"];
   const allowed: Record<string, string[]> = {
+    agent: action === "context" ? ["scene", "query", "limit", "offset"] : [],
+    source: action === "add" ? ["file", "id"] : [],
+    sync:
+      action === "plan"
+        ? ["file", "out", "resolutions"]
+        : action === "apply"
+          ? ["file", "dry-run", "if-revision"]
+          : [],
     project:
       action === "create"
         ? ["name"]
@@ -183,7 +208,7 @@ function parse(args: string[]) {
       : ["data", "file", "dry-run", "if-revision"],
     package:
       action === "export"
-        ? ["out", "if-revision"]
+        ? ["out", "if-revision", "include-sources"]
         : ["file", "name", "if-revision"],
     refs: ["id", "kind"],
     build: ["if-revision"],
@@ -304,7 +329,12 @@ async function packageCommand(
     if (action === "export") {
       if (!options.out) throw failure("package export 需要 --out");
       release = acquireProjectWrite(ctx);
-      task = packages.export(ctx, current.project, current.revision);
+      task = packages.export(
+        ctx,
+        current.project,
+        current.revision,
+        !!options["include-sources"],
+      );
     } else {
       if (!options.file) throw failure("package import 需要 --file");
       task = await packages.upload(
@@ -383,6 +413,12 @@ export async function execute(args: string[], signal: AbortSignal) {
       docs: "docs/CLI.md",
       protocolVersion: 1,
     };
+  if (group === "schema" && Object.hasOwn(authoring.authoringSchemas, action!))
+    return z.toJSONSchema(
+      authoring.authoringSchemas[
+        action as keyof typeof authoring.authoringSchemas
+      ],
+    );
   if (group === "schema")
     return z.toJSONSchema(
       action === "project" ? projectSchema : transactionSchema,
@@ -415,6 +451,51 @@ export async function execute(args: string[], signal: AbortSignal) {
     throw failure(
       "操作工程需要显式 --workspace <ID>；默认工程为 builtin-modern",
     );
+  if (group === "agent")
+    return action === "init"
+      ? authoring.init(ctx)
+      : authoring.context(ctx, {
+          scene: text("scene"),
+          query: text("query"),
+          limit: o.limit === undefined ? undefined : Number(o.limit),
+          offset: o.offset === undefined ? undefined : Number(o.offset),
+        });
+  if (group === "source")
+    return action === "add"
+      ? authoring.addSource(ctx, need("file"), text("id"))
+      : { sources: authoring.sources(ctx) };
+  if (group === "sync") {
+    if (action === "recover") {
+      const release = acquireProjectWrite(ctx);
+      release();
+      return { recovered: true, revision: readSnapshot(ctx).revision };
+    }
+    if (action === "status") return authoring.status(ctx);
+    if (action === "apply")
+      return authoring.applyPlan(
+        ctx,
+        readJson(path.resolve(need("file"))),
+        !!o["dry-run"],
+        text("if-revision"),
+      );
+    const plan = authoring.makePlan(
+      ctx,
+      o.file
+        ? path.resolve(need("file"))
+        : path.join(home(ctx), "manifest.json"),
+      o.resolutions ? readJson(path.resolve(need("resolutions"))) : undefined,
+    );
+    const file = writeOutput(need("out"), JSON.stringify(plan, null, 2) + "\n");
+    if (
+      plan.conflicts.length ||
+      plan.issues.some((i: any) => i.severity === "error")
+    )
+      throw failure("同步方案需要处理冲突或错误", "VALIDATION", 1, {
+        file,
+        plan,
+      });
+    return { file, plan };
+  }
   const current = readSnapshot(ctx),
     p = current.project;
   if (group === "project" && action === "show") return current;
@@ -460,6 +541,7 @@ export async function execute(args: string[], signal: AbortSignal) {
     const { createServer, createLogger } = await import("vite");
     const terminationListeners = new Set(process.listeners("SIGTERM"));
     const stdinEndListeners = new Set(process.stdin.listeners("end"));
+    const stdinWasFlowing = process.stdin.readableFlowing === true;
     let server: import("vite").ViteDevServer | undefined;
     const detachViteShutdown = () => {
       for (const listener of process.listeners("SIGTERM"))
@@ -515,6 +597,9 @@ export async function execute(args: string[], signal: AbortSignal) {
     } finally {
       detachViteShutdown();
       await server?.close();
+      // Vite resumes piped stdin. Restore its prior state so an open caller pipe
+      // does not keep a stopped CLI alive after the final JSON response.
+      if (!stdinWasFlowing) process.stdin.pause();
     }
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
@@ -687,7 +772,12 @@ export async function main(args: string[]) {
             .join("\n") +
           "\n\n工程操作使用 --workspace ID；数据使用 --data JSON|@文件|-。\n完整用法：docs/CLI.md；Agent：docs/AGENT-GUIDE.md\n",
       );
-    else if (data && typeof data === "object" && "changed" in data) {
+    else if (
+      data &&
+      typeof data === "object" &&
+      "changed" in data &&
+      "operations" in data
+    ) {
       const summary = data as {
         changed: boolean;
         dryRun?: boolean;
