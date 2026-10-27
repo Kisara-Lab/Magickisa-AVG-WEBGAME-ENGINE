@@ -511,7 +511,7 @@ export function EffectsEditor({
         </button>
       </div>
       <small className="st-field-help">
-        效果会改变运行状态，例如设置变量或解锁资料。兼容版使用原节点效果时机，现代版区分进入与完成效果。
+        效果会改变运行状态，例如设置变量或解锁资料。场景区分进入时与完成时效果，分支效果在选择时应用。
       </small>
       {value.map((effect, i) => {
         const change = (v: Effect) =>

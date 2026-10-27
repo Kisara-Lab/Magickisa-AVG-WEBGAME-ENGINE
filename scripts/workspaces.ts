@@ -7,6 +7,7 @@ import type { Profile } from "../src/studio/model";
 import {
   requireModernProfile,
   requireModernProject,
+  LEGACY_UNSUPPORTED,
 } from "../src/engine/support";
 
 export const repository = path.resolve(
@@ -31,6 +32,8 @@ export function projectContext(
   id?: string | null,
 ): ProjectContext {
   requireModernProfile(profile);
+  if (id === "builtin-release" || id === "default-release")
+    throw new Error(LEGACY_UNSUPPORTED);
   if (!id || id === `builtin-${profile}`) {
     const directory = defaultDirectory(profile);
     const content = path.join(directory, "content");

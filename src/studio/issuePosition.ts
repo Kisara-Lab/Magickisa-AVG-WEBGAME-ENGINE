@@ -127,13 +127,11 @@ export function issuePosition(
     const rule =
       part === "condition"
         ? "进入条件"
-        : part === "effects"
-          ? "场景效果"
-          : part === "onEnter"
-            ? "进入时效果"
-            : part === "onComplete"
-              ? "完成时效果"
-              : undefined;
+        : part === "onEnter"
+          ? "进入时效果"
+          : part === "onComplete"
+            ? "完成时效果"
+            : undefined;
     if (rule) pos.field = rule;
     if (part === "condition")
       pos.selector = conditionSelector("进入条件", path.slice(3));

@@ -1481,7 +1481,6 @@ export function Studio() {
                             characterLayers: "人物图层与位置",
                             onEnter: "进入时效果",
                             onComplete: "完成时效果",
-                            effects: "场景效果",
                           };
                           visit({
                             section: "script",

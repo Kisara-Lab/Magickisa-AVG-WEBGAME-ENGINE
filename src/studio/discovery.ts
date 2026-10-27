@@ -233,7 +233,7 @@ export function usages(p: AuthorProject): Usage[] {
       ...pos,
       field: "场景背景",
     });
-    if (!n.background || false)
+    if (!n.background)
       asset(
         resolveScene(modern, n.title),
         n.title,

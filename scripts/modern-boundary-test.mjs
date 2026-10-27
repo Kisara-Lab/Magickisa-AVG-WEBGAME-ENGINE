@@ -131,6 +131,7 @@ export async function modernBoundaryRegression(origin, page) {
     assert.ok(!list.projects.some((p) => p.id === id));
     for (const route of [
       "project?profile=release",
+      "project?workspaceId=builtin-release",
       `project?workspaceId=${id}`,
       "media/release/file.png",
     ]) {

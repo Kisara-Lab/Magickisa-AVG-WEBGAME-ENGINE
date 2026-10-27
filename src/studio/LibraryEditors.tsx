@@ -130,14 +130,6 @@ export function AssetEditor({
     const p = structuredClone(project),
       id = backdrop();
     if (
-      target === "scene" &&
-      false &&
-      !p.nodes.find((n) => n.id === nodeId)?.title.trim()
-    ) {
-      notice("兼容版背景规则需要非空场景标题，请先填写标题。");
-      return;
-    }
-    if (
       (target === "scene" || target === "op") &&
       !p.backdrops.some((b) => b.id === id)
     )
@@ -420,7 +412,7 @@ export function AssetEditor({
                 if (
                   i === 0 &&
                   !window.confirm(
-                    "这是未匹配背景时的默认首项（兼容版首页也可能使用）。移除会改变这些画面，确认继续？",
+                    "这是未匹配背景时的默认首项。移除会改变这些画面，确认继续？",
                   )
                 )
                   return;
