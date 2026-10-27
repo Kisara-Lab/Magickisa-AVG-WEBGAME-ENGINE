@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:launcher": "node scripts/launcher-test.mjs",
+    "package:release": "node scripts/package-release.mjs",
     "notices:update": "node scripts/third-party-notices.mjs",
     "notices:check": "node scripts/third-party-notices.mjs --check",
     "dev": "vite --host 127.0.0.1 --open /engine.html",

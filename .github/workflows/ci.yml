@@ -3,7 +3,22 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  launcher:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run package:release
+      - run: npm run test:launcher
   verify:
+    needs: launcher
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
