@@ -77,6 +77,8 @@ npm run dev
 
 > **版本选择：** `main` 当前为 **2.0.0-dev.3**，仅开发现代版，尚未发布 V2 正式 Release。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，其中提供双模式源码与联网启动包；旧兼容档已停止维护，不提供自动转换。详见 [破坏性变更](BREAKING-CHANGES.md)。
 
+**使用 v1.0legacy？请阅读 [Legacy 专用手册](docs/legacy/README.md)**，涵盖下载安装、双模式创作、剧情逻辑、献词／OP／ED、工程迁移、备份恢复与网页发行。
+
 ## 用 Studio 制作游戏
 
 ### 1. 写剧本，连接场景
@@ -192,6 +194,7 @@ node scripts/magickisa.mjs build --workspace WORKSPACE_ID --json
 
 | 我想了解…… | 阅读 |
 | --- | --- |
+| v1.0legacy 的完整使用方法 | [Legacy 专用手册](docs/legacy/README.md) |
 | 启动脚本、环境要求、安装与连接故障 | [启动说明](START-HERE.md) |
 | 复杂跳转、资料条件、测试预设与画布操作 | [调查工作台手册](docs/INVESTIGATION.md) |
 | 全部命令、JSON 事务、退出码与工程包操作 | [CLI 手册](docs/CLI.md) |
