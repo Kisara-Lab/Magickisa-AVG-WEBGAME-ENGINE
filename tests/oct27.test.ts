@@ -8,7 +8,6 @@ import { assertProject } from "../src/engine/schema";
 import { StoryRuntime } from "../src/engine/runtime";
 import { createSave } from "../src/engine/save";
 import { importSave } from "../src/engine/save";
-import * as release from "../src/compat/release/engine/index.js";
 import { EngineStore } from "../src/engine/store";
 import { ReleasePresentation } from "../src/engine/ReleasePresentation";
 import {
@@ -23,7 +22,6 @@ import {
   hasPlayerProgress,
   backupAndClearSlot,
 } from "../src/engine/recovery.js";
-
 test("portable package paths reject files colliding with directories in either order", () => {
   for (const names of [
     ["public/foo", "public/FOO/a"],
@@ -35,14 +33,30 @@ test("portable package paths reject files colliding with directories in either o
     assert.throws(() => registerPackagePath(paths, names[1]), /Unicode/);
   }
 });
-
 test("restart guards cover early progress; recovery preserves quota failures and concurrent updates", () => {
-  assert.equal(hasPlayerProgress({ history: [], playerNotes: "keep" }), true);
   assert.equal(
-    hasPlayerProgress({ history: [], variables: { name: "player" } }),
+    hasPlayerProgress({
+      history: [],
+      playerNotes: "keep",
+    }),
     true,
   );
-  assert.equal(hasPlayerProgress({ history: [], variables: {} }), false);
+  assert.equal(
+    hasPlayerProgress({
+      history: [],
+      variables: {
+        name: "player",
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    hasPlayerProgress({
+      history: [],
+      variables: {},
+    }),
+    false,
+  );
   let current: string | null = "old",
     fail = false;
   const storage = {
@@ -61,7 +75,6 @@ test("restart guards cover early progress; recovery preserves quota failures and
   assert.throws(() => backupAndClearSlot(storage, "slot"), /quota/);
   assert.equal(current, "newer-from-other-tab");
 });
-
 test("resource IDs, literal paths and external URLs share validation/runtime resolution", () => {
   const p = assertProject(blankProject("modern"));
   p.characters = [
@@ -69,12 +82,19 @@ test("resource IDs, literal paths and external URLs share validation/runtime res
       id: "hero",
       name: "Hero",
       portrait: "hero",
-      expressions: { smile: "images/smile.webp" },
+      expressions: {
+        smile: "images/smile.webp",
+      },
     },
   ];
   assert.ok(resourceReferences(p).includes("/assets/hero.png"));
   assert.ok(resourceReferences(p).includes("/images/smile.webp"));
-  p.audio = [{ id: "literal", src: "music/theme.mp3" }];
+  p.audio = [
+    {
+      id: "literal",
+      src: "music/theme.mp3",
+    },
+  ];
   assert.ok(resourceReferences(p).includes("/music/theme.mp3"));
   assert.equal(resolveImage(p, "//cdn.example/a.png"), "//cdn.example/a.png");
   assert.ok(isExternalResource("HTTPS://example/a"));
@@ -83,9 +103,14 @@ test("resource IDs, literal paths and external URLs share validation/runtime res
   assert.equal(materialCategory("evidence"), "clue");
   assert.equal(materialCategory("notes"), "note");
 });
-
 test("OP renderer tolerates both absent and empty subtitle arrays", () => {
-  for (const opening of [undefined, {}, { pages: [] }]) {
+  for (const opening of [
+    undefined,
+    {},
+    {
+      pages: [],
+    },
+  ]) {
     const p = assertProject(blankProject("modern"));
     p.media.opening = opening;
     assert.doesNotThrow(() =>
@@ -101,18 +126,25 @@ test("OP renderer tolerates both absent and empty subtitle arrays", () => {
     );
   }
 });
-
 test("read chapter jumps do not reapply onEnter and blocked chapters reject jumps", () => {
   const p = assertProject(blankProject("modern"));
-  p.nodes[0].onEnter = [{ type: "increment", key: "count", amount: 1 }];
+  p.nodes[0].onEnter = [
+    {
+      type: "increment",
+      key: "count",
+      amount: 1,
+    },
+  ];
   const r = new StoryRuntime(p, createSave(p));
   r.jump(p.startNodeId);
   assert.equal(r.save.variables.count, 1);
   assert.equal(r.save.lineIndex, 0);
-  p.nodes[0].condition = { type: "flag", key: "blocked" };
+  p.nodes[0].condition = {
+    type: "flag",
+    key: "blocked",
+  };
   assert.throws(() => r.jump(p.startNodeId), /条件/);
 });
-
 test("storage quota failure stays visible across gameplay and retry can recover", () => {
   const p = assertProject(blankProject("modern"));
   let fails = true,
@@ -135,30 +167,18 @@ test("storage quota failure stays visible across gameplay and retry can recover"
   assert.equal(store.persistenceError, "");
   assert.ok(written);
 });
-
-test("new saves detect reordered positional lines in both modes; old saves remain readable", () => {
+test("new saves detect reordered positional lines in modern mode; old saves remain readable", () => {
   const p = assertProject(blankProject("modern"));
-  p.nodes[0].lines.push({ id: "second", text: "second" });
-  const modern = createSave(p),
-    compat = release.createSave(p.startNodeId, "auto", {
-      ...p,
-      media: { ...p.media },
-      titleScreen: { ...p.titleScreen },
-      ui: { ...p.ui },
-    });
-  const q = {
-    ...p,
-    media: { ...p.media },
-    titleScreen: { ...p.titleScreen },
-    ui: { ...p.ui },
-  };
+  p.nodes[0].lines.push({
+    id: "second",
+    text: "second",
+  });
+  const modern = createSave(p);
   p.nodes[0].lines.reverse();
   assert.throws(() => importSave(modern, p), /结构/);
-  assert.throws(() => release.importSave(compat, q), /结构/);
   delete modern.contentLayout;
   assert.doesNotThrow(() => importSave(modern, p));
 });
-
 test("rollback retains player notes, achievements and collected/read materials", () => {
   const p = assertProject(blankProject("modern")),
     r = new StoryRuntime(p, createSave(p));
@@ -171,27 +191,4 @@ test("rollback retains player notes, achievements and collected/read materials",
   assert.equal(r.save.playerNotes, "keep");
   assert.deepEqual(r.save.completedEndings, ["end"]);
   assert.deepEqual(r.save.unlockedMaterials, ["m"]);
-});
-
-test("author diagnostics explain compat disclosures, unreachable credits and dangling music rules", () => {
-  const p = blankProject("release");
-  const project = {
-    ...p,
-    materials: [
-      { id: "m", category: "note", title: "Hidden", body: "spoiler" },
-    ],
-    media: {
-      ...p.media,
-      opening: { images: [], credits: { artist: "Artist" } },
-      chapterMusicRules: [{ keywords: [""], track: "missing" }],
-    },
-  };
-  const codes = authorWarnings(project, "release").map((i) => i.code);
-  for (const code of [
-    "legacy-public-material",
-    "opening-credit-shots",
-    "empty-keyword",
-    "missing-chapter-track",
-  ])
-    assert.ok(codes.includes(code));
 });

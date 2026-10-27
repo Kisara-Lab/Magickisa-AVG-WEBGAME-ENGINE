@@ -1,6 +1,6 @@
 {
   "name": "magickisa-avg-webgame-engine",
-  "version": "1.0.0",
+  "version": "2.0.0-dev.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,7 @@
     "notices:update": "node scripts/third-party-notices.mjs",
     "notices:check": "node scripts/third-party-notices.mjs --check",
     "dev": "vite --host 127.0.0.1 --open /engine.html",
-    "dev:release": "vite --mode release --host 127.0.0.1 --open /engine.html",
     "build": "tsc --noEmit && vite build",
-    "build:release": "vite build --mode release",
     "build:studio": "node scripts/build-studio.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",

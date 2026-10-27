@@ -35,28 +35,55 @@ export function AssetEditor({
       "characters",
       project.characters[0]?.id || "",
     );
-  const [uploads, setUploads] = useState<{ name: string; state: string }[]>([]);
+  const [uploads, setUploads] = useState<
+    {
+      name: string;
+      state: string;
+    }[]
+  >([]);
   const [uploading, setUploading] = useState(false);
   async function importFiles(files: FileList | File[]) {
     if (uploading) return;
     setUploading(true);
     const queue = Array.from(files);
-    setUploads(queue.map((f) => ({ name: f.name, state: "等待导入" })));
+    setUploads(
+      queue.map((f) => ({
+        name: f.name,
+        state: "等待导入",
+      })),
+    );
     for (const [i, file] of queue.entries()) {
       setUploads((v) =>
-        v.map((x, j) => (j === i ? { ...x, state: "导入中…" } : x)),
+        v.map((x, j) =>
+          j === i
+            ? {
+                ...x,
+                state: "导入中…",
+              }
+            : x,
+        ),
       );
       try {
         const url = await onUpload(file);
         setUploads((v) =>
           v.map((x, j) =>
-            j === i ? { ...x, state: `✓ 已导入 ${url || ""}` } : x,
+            j === i
+              ? {
+                  ...x,
+                  state: `✓ 已导入 ${url || ""}`,
+                }
+              : x,
           ),
         );
       } catch (e) {
         setUploads((v) =>
           v.map((x, j) =>
-            j === i ? { ...x, state: `失败：${String(e)}` } : x,
+            j === i
+              ? {
+                  ...x,
+                  state: `失败：${String(e)}`,
+                }
+              : x,
           ),
         );
       }
@@ -103,28 +130,16 @@ export function AssetEditor({
     const p = structuredClone(project),
       id = backdrop();
     if (
-      target === "scene" &&
-      profile === "release" &&
-      !p.nodes.find((n) => n.id === nodeId)?.title.trim()
-    ) {
-      notice("兼容版背景规则需要非空场景标题，请先填写标题。");
-      return;
-    }
-    if (
       (target === "scene" || target === "op") &&
       !p.backdrops.some((b) => b.id === id)
     )
-      p.backdrops.push({ id, src: selected });
+      p.backdrops.push({
+        id,
+        src: selected,
+      });
     if (target === "scene") {
       const node = p.nodes.find((n) => n.id === nodeId)!;
       node.background = id;
-      if (profile === "release")
-        p.resources.sceneRules = [
-          { keywords: [node.title], asset: id },
-          ...(p.resources.sceneRules || []).filter(
-            (r) => !r.keywords.includes(node.title),
-          ),
-        ];
     }
     if (target === "op")
       p.media.opening = {
@@ -132,15 +147,24 @@ export function AssetEditor({
         images: [...(p.media.opening?.images || []), id],
       };
     if (target === "ed")
-      p.media.ending = { ...p.media.ending, image: selected };
+      p.media.ending = {
+        ...p.media.ending,
+        image: selected,
+      };
     if (target === "character") {
       const c = p.characters.find((c) => c.id === character);
       if (c) c.portrait = selected;
     }
     if (target === "op-audio")
-      p.media.opening = { ...p.media.opening, audio: selected };
+      p.media.opening = {
+        ...p.media.opening,
+        audio: selected,
+      };
     if (target === "ed-audio")
-      p.media.ending = { ...p.media.ending, audio: selected };
+      p.media.ending = {
+        ...p.media.ending,
+        audio: selected,
+      };
     onChange(p);
     notice("资源已应用到草稿。保存工程后可用于发行构建。");
   }
@@ -372,7 +396,12 @@ export function AssetEditor({
                 onChange({
                   ...project,
                   backdrops: project.backdrops.map((v, j) =>
-                    j === i ? { ...v, src } : v,
+                    j === i
+                      ? {
+                          ...v,
+                          src,
+                        }
+                      : v,
                   ),
                 })
               }
@@ -383,7 +412,7 @@ export function AssetEditor({
                 if (
                   i === 0 &&
                   !window.confirm(
-                    "这是未匹配背景时的默认首项（兼容版首页也可能使用）。移除会改变这些画面，确认继续？",
+                    "这是未匹配背景时的默认首项。移除会改变这些画面，确认继续？",
                   )
                 )
                   return;
@@ -413,7 +442,10 @@ export function AssetEditor({
                   ...project.resources,
                   sceneRules: [
                     ...(project.resources.sceneRules || []),
-                    { keywords: ["新场景"], asset },
+                    {
+                      keywords: ["新场景"],
+                      asset,
+                    },
                   ],
                 },
               })
@@ -459,7 +491,12 @@ export function AssetEditor({
                   resources: {
                     ...project.resources,
                     sceneRules: project.resources.sceneRules!.map((x, j) =>
-                      j === i ? { ...x, asset } : x,
+                      j === i
+                        ? {
+                            ...x,
+                            asset,
+                          }
+                        : x,
                     ),
                   },
                 })
@@ -507,7 +544,12 @@ export function CharacterEditor({
     onChange({
       ...project,
       characters: project.characters.map((c) =>
-        c.id === character.id ? { ...c, ...patch } : c,
+        c.id === character.id
+          ? {
+              ...c,
+              ...patch,
+            }
+          : c,
       ),
     });
   return (
@@ -527,7 +569,11 @@ export function CharacterEditor({
               ...project,
               characters: [
                 ...project.characters,
-                { id, name: "新人物", renderer: "portrait" },
+                {
+                  id,
+                  name: "新人物",
+                  renderer: "portrait",
+                },
               ],
             });
             setSelected(id);
@@ -574,17 +620,29 @@ export function CharacterEditor({
               <Field
                 label="人物名称"
                 value={character.name}
-                onChange={(name) => update({ name })}
+                onChange={(name) =>
+                  update({
+                    name,
+                  })
+                }
               />
               <Field
                 label="人物立绘路径"
                 value={character.portrait}
-                onChange={(portrait) => update({ portrait })}
+                onChange={(portrait) =>
+                  update({
+                    portrait,
+                  })
+                }
               />
               <PickAsset
                 kind="image"
                 label="挑选人物立绘"
-                onPick={(portrait) => update({ portrait })}
+                onPick={(portrait) =>
+                  update({
+                    portrait,
+                  })
+                }
               />
               <div className="wide">
                 <Fold
@@ -595,18 +653,32 @@ export function CharacterEditor({
                     label="渲染方式"
                     value={character.renderer || "portrait"}
                     options={[
-                      { value: "portrait", label: "图片立绘" },
-                      { value: "live2d", label: "Live2D（需模型与适配器）" },
+                      {
+                        value: "portrait",
+                        label: "图片立绘",
+                      },
+                      {
+                        value: "live2d",
+                        label: "Live2D（需模型与适配器）",
+                      },
                     ]}
                     onChange={(renderer) =>
-                      update({ renderer: renderer as "portrait" | "live2d" })
+                      update({
+                        renderer: renderer as "portrait" | "live2d",
+                      })
                     }
                   />
                   {character.renderer === "live2d" && (
                     <Field
                       label="Live2D 模型路径"
                       value={character.live2d?.model}
-                      onChange={(model) => update({ live2d: { model } })}
+                      onChange={(model) =>
+                        update({
+                          live2d: {
+                            model,
+                          },
+                        })
+                      }
                     />
                   )}
                 </Fold>
@@ -681,7 +753,10 @@ export function CharacterEditor({
                   value={value}
                   onChange={(v) =>
                     update({
-                      expressions: { ...character.expressions, [key]: v },
+                      expressions: {
+                        ...character.expressions,
+                        [key]: v,
+                      },
                     })
                   }
                 />
@@ -690,7 +765,10 @@ export function CharacterEditor({
                   label={`挑选表情 ${key}`}
                   onPick={(v) =>
                     update({
-                      expressions: { ...character.expressions, [key]: v },
+                      expressions: {
+                        ...character.expressions,
+                        [key]: v,
+                      },
                     })
                   }
                 />
@@ -709,9 +787,13 @@ export function CharacterEditor({
                       return;
                     }
                     setExpressionError("");
-                    const expressions = { ...character.expressions };
+                    const expressions = {
+                      ...character.expressions,
+                    };
                     delete expressions[key];
-                    update({ expressions });
+                    update({
+                      expressions,
+                    });
                   }}
                 >
                   删除表情
@@ -782,7 +864,12 @@ export function MaterialEditor({
     onChange({
       ...project,
       materials: project.materials.map((m) =>
-        m.id === material.id ? { ...m, ...patch } : m,
+        m.id === material.id
+          ? {
+              ...m,
+              ...patch,
+            }
+          : m,
       ),
     });
   return (
@@ -802,7 +889,12 @@ export function MaterialEditor({
               ...project,
               materials: [
                 ...project.materials,
-                { id, title: "新的资料", category: "encyclopedia", body: "" },
+                {
+                  id,
+                  title: "新的资料",
+                  category: "encyclopedia",
+                  body: "",
+                },
               ],
             });
             setSelected(id);
@@ -851,7 +943,11 @@ export function MaterialEditor({
             <Field
               label="资料标题"
               value={material.title}
-              onChange={(title) => update({ title })}
+              onChange={(title) =>
+                update({
+                  title,
+                })
+              }
             />
             <Field
               label="资料类别"
@@ -874,17 +970,29 @@ export function MaterialEditor({
                   } as Record<string, string>
                 )[v],
               }))}
-              onChange={(category) => update({ category })}
+              onChange={(category) =>
+                update({
+                  category,
+                })
+              }
             />
             <Field
               label="解锁场景"
               value={material.unlockNode || ""}
               options={[
-                { value: "", label: "不按场景解锁" },
-                ...project.nodes.map((n) => ({ value: n.id, label: n.title })),
+                {
+                  value: "",
+                  label: "不按场景解锁",
+                },
+                ...project.nodes.map((n) => ({
+                  value: n.id,
+                  label: n.title,
+                })),
               ]}
               onChange={(v) => {
-                const next = { ...material };
+                const next = {
+                  ...material,
+                };
                 if (v) next.unlockNode = v;
                 else delete next.unlockNode;
                 onChange({
@@ -900,7 +1008,11 @@ export function MaterialEditor({
             label="资料正文"
             value={material.body}
             multiline
-            onChange={(body) => update({ body })}
+            onChange={(body) =>
+              update({
+                body,
+              })
+            }
           />
           <Fold
             title="资料高级解锁条件"
@@ -911,7 +1023,9 @@ export function MaterialEditor({
               value={material.unlock}
               nodes={project.nodes}
               onChange={(unlock) => {
-                const next = { ...material };
+                const next = {
+                  ...material,
+                };
                 if (unlock) next.unlock = unlock;
                 else delete next.unlock;
                 onChange({

@@ -11,6 +11,13 @@ import { resourceReferences } from "./content";
 import { isExternalResource } from "../src/engine/resource.js";
 import { registerPackagePath } from "./package-paths";
 import {
+  requireModernProfile,
+  requireModernProject,
+} from "../src/engine/support";
+const studioVersion = JSON.parse(
+  fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version as string;
+import {
   repository,
   workspaceRoot,
   workspaces,
@@ -34,7 +41,7 @@ interface FileRecord {
 interface Manifest {
   format: "magickisa-project";
   version: 1;
-  studioVersion: "1.0.0";
+  studioVersion: string;
   profile: Profile;
   name: string;
   files: FileRecord[];
@@ -195,8 +202,8 @@ export class ProjectPackages {
       });
     const warnings: string[] = [],
       p = this.hooks.validate(input, ctx, warnings);
-    if ((ctx.profile === "modern") !== (p.schemaVersion === 2))
-      throw new Error("工程数据与运行模式不匹配，工程包不执行版本转换");
+    requireModernProfile(ctx.profile);
+    requireModernProject(p);
     const names = publicFiles(ctx),
       included = new Set(names);
     for (const ref of resourceReferences(
@@ -279,7 +286,7 @@ export class ProjectPackages {
       const manifest: Manifest = {
         format: "magickisa-project",
         version: 1,
-        studioVersion: "1.0.0",
+        studioVersion,
         profile: ctx.profile,
         name: ctx.name,
         files: records,
@@ -435,10 +442,12 @@ export class ProjectPackages {
     if (
       manifest.format !== "magickisa-project" ||
       manifest.version !== 1 ||
-      manifest.studioVersion !== "1.0.0" ||
-      !["modern", "release"].includes(manifest.profile)
+      typeof manifest.studioVersion !== "string" ||
+      !manifest.studioVersion.trim()
     )
       throw new Error("不支持的工程包或 Studio 版本");
+    requireModernProfile(manifest.profile);
+    if (manifest.profile !== "modern") throw new Error("工程包缺少现代版模式元数据");
     if (
       typeof manifest.name !== "string" ||
       !manifest.name.trim() ||
@@ -468,8 +477,7 @@ export class ProjectPackages {
     const p = JSON.parse(
       fs.readFileSync(path.join(stage, "project.json"), "utf8"),
     );
-    if ((manifest.profile === "modern") !== (p.schemaVersion === 2))
-      throw new Error("工程数据与运行模式不匹配");
+    requireModernProject(p);
     const ctx = {
       ...projectContextForStage(stage, manifest.profile),
       name: manifest.name,

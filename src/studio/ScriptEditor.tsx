@@ -34,7 +34,10 @@ export function ScriptEditor({
       lines: node.lines.map((l, i) => (i === lineIndex ? next : l)),
     });
   const targets = [
-    { value: "", label: "无 / 停止于此" },
+    {
+      value: "",
+      label: "无 / 停止于此",
+    },
     ...project.nodes.map((n) => ({
       value: n.id,
       label: `${n.id} · ${n.title}`,
@@ -49,7 +52,12 @@ export function ScriptEditor({
             className="st-scene-title-input"
             aria-label="场景标题"
             value={node.title}
-            onChange={(e) => onChange({ ...node, title: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                title: e.target.value,
+              })
+            }
           />
         </div>
         <div className="st-inline">
@@ -67,14 +75,21 @@ export function ScriptEditor({
           <Field
             label="默认说话人"
             value={node.speaker}
-            onChange={(speaker) => onChange({ ...node, speaker })}
+            onChange={(speaker) =>
+              onChange({
+                ...node,
+                speaker,
+              })
+            }
           />
           <Field
             label="下一场景"
             value={node.next}
             options={targets}
             onChange={(next) => {
-              const n = { ...node };
+              const n = {
+                ...node,
+              };
               if (next) n.next = next;
               else delete n.next;
               onChange(n);
@@ -84,33 +99,19 @@ export function ScriptEditor({
             label="场景背景"
             value={node.background}
             options={[
-              { value: "", label: "按场景规则自动匹配" },
-              ...project.backdrops.map((b) => ({ value: b.id, label: b.id })),
+              {
+                value: "",
+                label: "按场景规则自动匹配",
+              },
+              ...project.backdrops.map((b) => ({
+                value: b.id,
+                label: b.id,
+              })),
             ]}
             onChange={(background) => {
-              if (project.schemaVersion !== 2) {
-                if (!node.title.trim()) {
-                  window.alert("请先填写非空场景标题，再建立兼容版背景规则。");
-                  return;
-                }
-                const p = structuredClone(project);
-                p.nodes = p.nodes.map((n) =>
-                  n.id === node.id
-                    ? { ...n, background: background || undefined }
-                    : n,
-                );
-                p.resources.sceneRules = (p.resources.sceneRules || []).filter(
-                  (r) => !r.keywords.includes(node.title),
-                );
-                if (background)
-                  p.resources.sceneRules.unshift({
-                    keywords: [node.title],
-                    asset: background,
-                  });
-                onProjectChange(p);
-                return;
-              }
-              const n = { ...node };
+              const n = {
+                ...node,
+              };
               if (background) n.background = background;
               else delete n.background;
               onChange(n);
@@ -120,22 +121,16 @@ export function ScriptEditor({
             kind="image"
             label="挑选场景背景"
             onPick={(url) => {
-              if (project.schemaVersion !== 2 && !node.title.trim()) {
-                window.alert("请先填写非空场景标题，再建立兼容版背景规则。");
-                return;
-              }
               const p = structuredClone(project);
               const background = registerBackdrop(p, url);
               p.nodes = p.nodes.map((n) =>
-                n.id === node.id ? { ...n, background } : n,
+                n.id === node.id
+                  ? {
+                      ...n,
+                      background,
+                    }
+                  : n,
               );
-              if (project.schemaVersion !== 2)
-                p.resources.sceneRules = [
-                  { keywords: [node.title], asset: background },
-                  ...(p.resources.sceneRules || []).filter(
-                    (r) => !r.keywords.includes(node.title),
-                  ),
-                ];
               onProjectChange(p);
             }}
           />
@@ -145,30 +140,51 @@ export function ScriptEditor({
             <Field
               label="所属章节"
               value={node.chapter}
-              onChange={(chapter) => onChange({ ...node, chapter })}
+              onChange={(chapter) =>
+                onChange({
+                  ...node,
+                  chapter,
+                })
+              }
             />
             <Field
               label="目录层级"
               value={String(node.sourceLevel || sourceLevel || 2)}
               options={[
-                { value: "1", label: "一级 · 章节" },
-                { value: "2", label: "二级 · 场景" },
-                { value: "3", label: "三级 · 小节" },
+                {
+                  value: "1",
+                  label: "一级 · 章节",
+                },
+                {
+                  value: "2",
+                  label: "二级 · 场景",
+                },
+                {
+                  value: "3",
+                  label: "三级 · 小节",
+                },
               ]}
-              onChange={(v) => onChange({ ...node, sourceLevel: Number(v) })}
+              onChange={(v) =>
+                onChange({
+                  ...node,
+                  sourceLevel: Number(v),
+                })
+              }
             />
-            {project.schemaVersion === 2 && (
+            {
               <Field
                 label="结局标识"
                 value={node.ending}
                 onChange={(v) => {
-                  const n = { ...node };
+                  const n = {
+                    ...node,
+                  };
                   if (v) n.ending = v;
                   else delete n.ending;
                   onChange(n);
                 }}
               />
-            )}
+            }
             <Field
               label="标签（逗号分隔）"
               value={node.tags?.join(", ")}
@@ -186,12 +202,23 @@ export function ScriptEditor({
               label="场景演出"
               value={node.presentation || ""}
               options={[
-                { value: "", label: "普通剧情" },
-                { value: "dedication", label: "开场献词 → OP" },
-                { value: "ending", label: "结局 → ED" },
+                {
+                  value: "",
+                  label: "普通剧情",
+                },
+                {
+                  value: "dedication",
+                  label: "开场献词 → OP",
+                },
+                {
+                  value: "ending",
+                  label: "结局 → ED",
+                },
               ]}
               onChange={(v) => {
-                const n = { ...node };
+                const n = {
+                  ...node,
+                };
                 if (v) {
                   n.presentation = v as "dedication" | "ending";
                 } else {
@@ -203,7 +230,12 @@ export function ScriptEditor({
             <Check
               label="可游玩场景"
               value={node.playable !== false}
-              onChange={(playable) => onChange({ ...node, playable })}
+              onChange={(playable) =>
+                onChange({
+                  ...node,
+                  playable,
+                })
+              }
             />
           </div>
         </Fold>
@@ -219,7 +251,13 @@ export function ScriptEditor({
               );
               onChange({
                 ...node,
-                lines: [...node.lines, { id, text: "新的台词。" }],
+                lines: [
+                  ...node.lines,
+                  {
+                    id,
+                    text: "新的台词。",
+                  },
+                ],
               });
               setLine(node.lines.length);
               requestAnimationFrame(() =>
@@ -262,7 +300,12 @@ export function ScriptEditor({
                     onChange({
                       ...node,
                       lines: node.lines.map((v, j) =>
-                        j === i ? { ...v, text: e.target.value } : v,
+                        j === i
+                          ? {
+                              ...v,
+                              text: e.target.value,
+                            }
+                          : v,
                       ),
                     })
                   }
@@ -281,7 +324,10 @@ export function ScriptEditor({
                         node.lines.map((l) => l.id),
                       ),
                     });
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(i + 1);
                   }}
                 >
@@ -298,7 +344,10 @@ export function ScriptEditor({
                       ),
                       text: "",
                     });
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(i + 1);
                     requestAnimationFrame(() =>
                       document
@@ -317,7 +366,10 @@ export function ScriptEditor({
                   onClick={() => {
                     const lines = [...node.lines];
                     [lines[i - 1], lines[i]] = [lines[i], lines[i - 1]];
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(i - 1);
                   }}
                 >
@@ -329,7 +381,10 @@ export function ScriptEditor({
                   onClick={() => {
                     const lines = [...node.lines];
                     [lines[i + 1], lines[i]] = [lines[i], lines[i + 1]];
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(i + 1);
                   }}
                 >
@@ -368,7 +423,10 @@ export function ScriptEditor({
                       lines[lineIndex],
                       lines[lineIndex - 1],
                     ];
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(lineIndex - 1);
                   }}
                 >
@@ -382,7 +440,10 @@ export function ScriptEditor({
                       lines[lineIndex],
                       lines[lineIndex + 1],
                     ];
-                    onChange({ ...node, lines });
+                    onChange({
+                      ...node,
+                      lines,
+                    });
                     setLine(lineIndex + 1);
                   }}
                 >
@@ -407,26 +468,36 @@ export function ScriptEditor({
               summary={`${line.characterId || "无人物"} · ${line.characterLayers?.length || 0} 个图层`}
             >
               <div className="st-fields">
-                {project.schemaVersion === 2 && (
+                {
                   <Field
                     label="本句说话人"
                     value={line.speaker}
                     placeholder="沿用场景说话人"
-                    onChange={(speaker) => changeLine({ ...line, speaker })}
+                    onChange={(speaker) =>
+                      changeLine({
+                        ...line,
+                        speaker,
+                      })
+                    }
                   />
-                )}
+                }
                 <Field
                   label="本句人物"
                   value={line.characterId || ""}
                   options={[
-                    { value: "", label: "无 / 使用多人物层" },
+                    {
+                      value: "",
+                      label: "无 / 使用多人物层",
+                    },
                     ...project.characters.map((c) => ({
                       value: c.id,
                       label: c.name,
                     })),
                   ]}
                   onChange={(characterId) => {
-                    const l = { ...line };
+                    const l = {
+                      ...line,
+                    };
                     if (characterId) l.characterId = characterId;
                     else delete l.characterId;
                     changeLine(l);
@@ -436,13 +507,24 @@ export function ScriptEditor({
                   label="本句表情"
                   value={line.expression}
                   options={[
-                    { value: "", label: "默认表情" },
+                    {
+                      value: "",
+                      label: "默认表情",
+                    },
                     ...Object.keys(
                       project.characters.find((c) => c.id === line.characterId)
                         ?.expressions || {},
-                    ).map((e) => ({ value: e, label: e })),
+                    ).map((e) => ({
+                      value: e,
+                      label: e,
+                    })),
                   ]}
-                  onChange={(expression) => changeLine({ ...line, expression })}
+                  onChange={(expression) =>
+                    changeLine({
+                      ...line,
+                      expression,
+                    })
+                  }
                 />
               </div>
               <Fold
@@ -454,7 +536,12 @@ export function ScriptEditor({
                     changeLine({
                       ...line,
                       characterLayers: line.characterLayers!.map((l, j) =>
-                        j === i ? { ...l, ...patch } : l,
+                        j === i
+                          ? {
+                              ...l,
+                              ...patch,
+                            }
+                          : l,
                       ),
                     });
                   return (
@@ -467,20 +554,34 @@ export function ScriptEditor({
                             value: c.id,
                             label: c.name,
                           }))}
-                          onChange={(characterId) => update({ characterId })}
+                          onChange={(characterId) =>
+                            update({
+                              characterId,
+                            })
+                          }
                         />
                         <Field
                           label="图层表情"
                           value={layer.expression || ""}
                           options={[
-                            { value: "", label: "默认" },
+                            {
+                              value: "",
+                              label: "默认",
+                            },
                             ...Object.keys(
                               project.characters.find(
                                 (c) => c.id === layer.characterId,
                               )?.expressions || {},
-                            ).map((e) => ({ value: e, label: e })),
+                            ).map((e) => ({
+                              value: e,
+                              label: e,
+                            })),
                           ]}
-                          onChange={(expression) => update({ expression })}
+                          onChange={(expression) =>
+                            update({
+                              expression,
+                            })
+                          }
                         />
                         <Field
                           label="图层位置"
@@ -491,7 +592,11 @@ export function ScriptEditor({
                               label: ["左侧", "中央", "右侧", "自定义"][i],
                             }),
                           )}
-                          onChange={(position) => update({ position })}
+                          onChange={(position) =>
+                            update({
+                              position,
+                            })
+                          }
                         />
                         {(
                           ["x", "y", "scale", "opacity", "zIndex"] as const
@@ -537,8 +642,15 @@ export function ScriptEditor({
                             "slide-left",
                             "slide-right",
                             "none",
-                          ].map((v) => ({ value: v, label: v }))}
-                          onChange={(enter) => update({ enter })}
+                          ].map((v) => ({
+                            value: v,
+                            label: v,
+                          }))}
+                          onChange={(enter) =>
+                            update({
+                              enter,
+                            })
+                          }
                         />
                       </div>
                       <button
@@ -576,13 +688,15 @@ export function ScriptEditor({
                   添加人物图层
                 </button>
               </Fold>
-              {project.schemaVersion === 2 && (
+              {
                 <Fold title="本句条件与玩家输入">
                   <ConditionEditor
                     nodes={project.nodes}
                     value={line.condition}
                     onChange={(condition) => {
-                      const l = { ...line };
+                      const l = {
+                        ...line,
+                      };
                       if (condition) l.condition = condition;
                       else delete l.condition;
                       changeLine(l);
@@ -592,7 +706,9 @@ export function ScriptEditor({
                     label="要求玩家输入"
                     value={!!line.input}
                     onChange={(v) => {
-                      const l = { ...line };
+                      const l = {
+                        ...line,
+                      };
                       if (v)
                         l.input = {
                           key: "playerText",
@@ -611,7 +727,10 @@ export function ScriptEditor({
                         onChange={(key) =>
                           changeLine({
                             ...line,
-                            input: { ...line.input!, key },
+                            input: {
+                              ...line.input!,
+                              key,
+                            },
                           })
                         }
                       />
@@ -621,7 +740,10 @@ export function ScriptEditor({
                         onChange={(label) =>
                           changeLine({
                             ...line,
-                            input: { ...line.input!, label },
+                            input: {
+                              ...line.input!,
+                              label,
+                            },
                           })
                         }
                       />
@@ -634,14 +756,17 @@ export function ScriptEditor({
                         onChange={(v) =>
                           changeLine({
                             ...line,
-                            input: { ...line.input!, maxLength: Number(v) },
+                            input: {
+                              ...line.input!,
+                              maxLength: Number(v),
+                            },
                           })
                         }
                       />
                     </div>
                   )}
                 </Fold>
-              )}
+              }
             </Fold>
             <button className="primary" onClick={onPreview}>
               从本句预览
@@ -702,13 +827,23 @@ export function ScriptEditor({
                 <Field
                   label={`分支 ${i + 1} 文案`}
                   value={c.label}
-                  onChange={(label) => change({ ...c, label })}
+                  onChange={(label) =>
+                    change({
+                      ...c,
+                      label,
+                    })
+                  }
                 />
                 <Field
                   label={`分支 ${i + 1} 目标`}
                   value={c.target}
                   options={targets.filter((t) => t.value)}
-                  onChange={(target) => change({ ...c, target })}
+                  onChange={(target) =>
+                    change({
+                      ...c,
+                      target,
+                    })
+                  }
                 />
               </div>
               <Fold
@@ -718,14 +853,21 @@ export function ScriptEditor({
                 <Check
                   label="仅可选择一次"
                   value={c.once}
-                  onChange={(once) => change({ ...c, once })}
+                  onChange={(once) =>
+                    change({
+                      ...c,
+                      once,
+                    })
+                  }
                 />
                 <ConditionEditor
                   label="可选条件"
                   nodes={project.nodes}
                   value={c.condition}
                   onChange={(condition) => {
-                    const next = { ...c };
+                    const next = {
+                      ...c,
+                    };
                     if (condition) next.condition = condition;
                     else delete next.condition;
                     change(next);
@@ -736,7 +878,12 @@ export function ScriptEditor({
                   materials={project.materials}
                   label="选择后效果"
                   value={c.effects}
-                  onChange={(effects) => change({ ...c, effects })}
+                  onChange={(effects) =>
+                    change({
+                      ...c,
+                      effects,
+                    })
+                  }
                 />
               </Fold>
             </div>
@@ -748,50 +895,49 @@ export function ScriptEditor({
       </Card>
       <Fold
         title="场景逻辑"
-        summary={`${node.condition ? 1 : 0} 个进入条件 · ${(node.effects?.length || 0) + (node.onEnter?.length || 0) + (node.onComplete?.length || 0)} 个效果`}
+        summary={`${node.condition ? 1 : 0} 个进入条件 · ${(node.onEnter?.length || 0) + (node.onComplete?.length || 0)} 个效果`}
       >
         <ConditionEditor
           label="进入条件"
           nodes={project.nodes}
           value={node.condition}
           onChange={(condition) => {
-            const n = { ...node };
+            const n = {
+              ...node,
+            };
             if (condition) n.condition = condition;
             else delete n.condition;
             onChange(n);
           }}
         />
-        {project.schemaVersion !== 2 ? (
-          <>
-            <EffectsEditor
-              audio={project.audio}
-              materials={project.materials}
-              label="场景效果"
-              value={node.effects}
-              onChange={(effects) => onChange({ ...node, effects })}
-            />
-            <p className="st-muted">
-              原发行版会在节点结束、以及通过分支进入目标节点时执行场景效果。
-            </p>
-          </>
-        ) : (
+        {
           <>
             <EffectsEditor
               audio={project.audio}
               materials={project.materials}
               label="进入时效果"
               value={node.onEnter}
-              onChange={(onEnter) => onChange({ ...node, onEnter })}
+              onChange={(onEnter) =>
+                onChange({
+                  ...node,
+                  onEnter,
+                })
+              }
             />
             <EffectsEditor
               audio={project.audio}
               materials={project.materials}
               label="完成时效果"
               value={node.onComplete}
-              onChange={(onComplete) => onChange({ ...node, onComplete })}
+              onChange={(onComplete) =>
+                onChange({
+                  ...node,
+                  onComplete,
+                })
+              }
             />
           </>
-        )}
+        }
       </Fold>
     </>
   );

@@ -1,10 +1,9 @@
 import type { StoryProject, StoryNode, Effect } from "../engine/types";
 import { randomId } from "../engine/id";
 import { resolveImage, isExternalResource } from "../engine/resource.js";
-export type AuthorNode = StoryNode & { effects?: Effect[]; act?: string };
-export type Profile = "modern" | "release";
-export type AuthorProject = Omit<StoryProject, "schemaVersion" | "nodes"> & {
-  schemaVersion?: 2;
+export type AuthorNode = StoryNode;
+export type Profile = "modern";
+export type AuthorProject = Omit<StoryProject, "nodes"> & {
   nodes: AuthorNode[];
 };
 export type Section =
@@ -34,7 +33,12 @@ export function newNode(p: AuthorProject): StoryNode {
     id,
     title: "新的场景",
     speaker: "旁白",
-    lines: [{ id: `${id}-line-0`, text: "在这里写下新的故事。" }],
+    lines: [
+      {
+        id: `${id}-line-0`,
+        text: "在这里写下新的故事。",
+      },
+    ],
     playable: true,
     tags: [],
   };
@@ -49,5 +53,5 @@ export function mediaUrl(profile: Profile, s: string) {
 }
 export function assetUrl(p: AuthorProject, s: string) {
   const ref = resolveImage(p, s);
-  return mediaUrl(p.schemaVersion === 2 ? "modern" : "release", ref);
+  return mediaUrl("modern", ref);
 }

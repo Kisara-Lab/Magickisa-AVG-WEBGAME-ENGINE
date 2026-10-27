@@ -51,20 +51,6 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
       });
   const shots = p.media.opening?.images?.length || 0;
   if (
-    profile === "release" &&
-    p.materials.some(
-      (m) =>
-        !m.unlockNode && !m.unlock && !p.nodes.some((n) => n.title === m.title),
-    )
-  )
-    issues.push({
-      code: "legacy-public-material",
-      severity: "warning",
-      message:
-        "兼容版存在未配置解锁条件且没有同名场景的资料，这些资料会立即公开。请设置明确的解锁条件以避免剧透。",
-      field: "materials",
-    });
-  if (
     (p.media.opening?.credits?.artist && shots < 2) ||
     (p.media.opening?.credits?.production?.length && shots < 5)
   )
@@ -75,7 +61,6 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
       field: "media",
     });
   if (
-    profile === "modern" &&
     p.nodes.some(
       (n) => n.tags?.includes("dedication") && n.presentation !== "dedication",
     )
@@ -103,29 +88,6 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
         message: `${n.title} 的选项或目标可能全部不可用，且没有无条件下一场景；请确认这是预期的停留或结局。`,
         nodeId: n.id,
         field: "下一场景",
-      });
-    if (
-      profile === "release" &&
-      n.choices?.some((c) => targetConditional(c.target))
-    )
-      issues.push({
-        code: "release-choice-timing",
-        severity: "warning",
-        message: `${n.title} 含带进入条件的分支目标：兼容版先应用选项效果与 once，再检查目标条件；条件不满足时仍停留原场景。`,
-        nodeId: n.id,
-        field: "分支选择",
-      });
-    if (
-      profile === "release" &&
-      (!n.next || targetConditional(n.next)) &&
-      n.effects?.some((e) => e.type === "increment" || e.type === "toggle")
-    )
-      issues.push({
-        code: "release-repeat-effects",
-        severity: "warning",
-        message: `${n.title} 无下一场景或目标带进入条件，兼容版在结束后每次继续都会应用节点效果；累加或切换可能重复发生。`,
-        nodeId: n.id,
-        field: "场景效果",
       });
     if (n.sequenceId)
       issues.push({

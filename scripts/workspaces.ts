@@ -4,6 +4,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { Profile } from "../src/studio/model";
+import {
+  requireModernProfile,
+  requireModernProject,
+  LEGACY_UNSUPPORTED,
+} from "../src/engine/support";
 
 export const repository = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -26,10 +31,14 @@ export function projectContext(
   profile: Profile,
   id?: string | null,
 ): ProjectContext {
+  requireModernProfile(profile);
+  if (id === "builtin-release" || id === "default-release")
+    throw new Error(LEGACY_UNSUPPORTED);
   if (!id || id === `builtin-${profile}`) {
     const directory = defaultDirectory(profile);
     const content = path.join(directory, "content");
     const projectFile = path.join(directory, "project.json");
+    requireModernProject(JSON.parse(fs.readFileSync(projectFile, "utf8")));
     let lastOpened = 0;
     try {
       lastOpened =
@@ -60,8 +69,13 @@ export function projectContext(
   const info = JSON.parse(
     fs.readFileSync(path.join(directory, "workspace.json"), "utf8"),
   );
-  if (info.id !== id || info.profile !== profile)
+  if (info.id !== id || info.profile !== profile) {
+    requireModernProfile(info.profile);
     throw new Error("工程运行模式不匹配");
+  }
+  requireModernProject(
+    JSON.parse(fs.readFileSync(path.join(directory, "project.json"), "utf8")),
+  );
   return {
     ...info,
     directory,
@@ -73,7 +87,7 @@ export function projectContext(
   };
 }
 export function workspaces() {
-  const projects = [projectContext("modern"), projectContext("release")];
+  const projects = [projectContext("modern")];
   if (fs.existsSync(workspaceRoot))
     for (const id of fs.readdirSync(workspaceRoot)) {
       try {
@@ -95,6 +109,28 @@ export function workspaces() {
     lastOpened: lastOpened || 0,
     directory,
   }));
+}
+export function unsupportedWorkspaceCount() {
+  if (!fs.existsSync(workspaceRoot)) return 0;
+  let count = 0;
+  for (const id of fs.readdirSync(workspaceRoot)) {
+    if (
+      id === "default-release" &&
+      fs.existsSync(path.join(workspaceRoot, id, "project.json"))
+    ) {
+      count++;
+      continue;
+    }
+    try {
+      const info = JSON.parse(
+        fs.readFileSync(path.join(workspaceRoot, id, "workspace.json"), "utf8"),
+      );
+      if (info.profile === "release") count++;
+    } catch {
+      /* Other files are not workspace records. */
+    }
+  }
+  return count;
 }
 export function markOpened(ctx: ProjectContext) {
   if (ctx.id.startsWith("builtin-")) {
@@ -136,15 +172,22 @@ export function contained(base: string, ref: string) {
 }
 
 export function createWorkspace(profile: Profile, name: string) {
+  requireModernProfile(profile);
   const title = typeof name === "string" ? name.trim() : "";
-  if (!title || title.length > 100) throw new Error("Project name must be 1-100 characters");
+  if (!title || title.length > 100)
+    throw new Error("Project name must be 1-100 characters");
   const id = crypto.randomUUID();
   const temporary = path.join(workspaceRoot, `.create-${id}`);
   const destination = path.join(workspaceRoot, id);
   fs.mkdirSync(workspaceRoot, { recursive: true });
   try {
     initializeProject(temporary, profile, title);
-    atomicJson(path.join(temporary, "workspace.json"), { id, profile, name: title, lastOpened: Date.now() });
+    atomicJson(path.join(temporary, "workspace.json"), {
+      id,
+      profile,
+      name: title,
+      lastOpened: Date.now(),
+    });
     fs.renameSync(temporary, destination);
     return projectContext(profile, id);
   } finally {
