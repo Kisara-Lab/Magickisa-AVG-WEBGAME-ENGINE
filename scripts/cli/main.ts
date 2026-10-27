@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
@@ -458,6 +458,8 @@ export async function execute(args: string[], signal: AbortSignal) {
   }
   if (group === "studio") {
     const { createServer, createLogger } = await import("vite");
+    const terminationListeners = new Set(process.listeners("SIGTERM"));
+    const stdinEndListeners = new Set(process.stdin.listeners("end"));
     const server = await createServer({
       root: repository,
       configFile: path.join(repository, "vite.config.ts"),
@@ -470,33 +472,44 @@ export async function execute(args: string[], signal: AbortSignal) {
       }),
       server: { host: "127.0.0.1", port: 5173, open: false },
     });
-    await server.listen();
-    const address =
-      server.httpServer!.address() as import("node:net").AddressInfo;
-    const url = `http://127.0.0.1:${address.port}/engine.html?profile=modern&workspaceId=${ctx.id}`;
-    process.stderr.write(`Studio: ${url}\nCtrl+C 停止服务\n`);
-    if (!o["no-open"]) {
-      const child =
-        process.platform === "win32"
-          ? spawn("rundll32.exe", ["url.dll,FileProtocolHandler", url], {
-              windowsHide: true,
-              stdio: "ignore",
-            })
-          : spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
-              stdio: "ignore",
-            });
-      child.on("error", () => {});
-      child.unref();
-    }
+    // The CLI owns shutdown and its final protocol response. Vite otherwise
+    // calls process.exit() from its SIGTERM/stdin callbacks before JSON is flushed.
+    for (const listener of process.listeners("SIGTERM"))
+      if (!terminationListeners.has(listener)) process.off("SIGTERM", listener);
+    for (const listener of process.stdin.listeners("end"))
+      if (!stdinEndListeners.has(listener))
+        process.stdin.off("end", listener as () => void);
     try {
+      await server.listen();
+      const address =
+        server.httpServer!.address() as import("node:net").AddressInfo;
+      const url = `http://127.0.0.1:${address.port}/engine.html?profile=modern&workspaceId=${ctx.id}`;
+      process.stderr.write(`Studio: ${url}\nCtrl+C 停止服务\n`);
+      if (!o["no-open"]) {
+        const child =
+          process.platform === "win32"
+            ? spawn("rundll32.exe", ["url.dll,FileProtocolHandler", url], {
+                windowsHide: true,
+                stdio: "ignore",
+              })
+            : spawn(
+                process.platform === "darwin" ? "open" : "xdg-open",
+                [url],
+                {
+                  stdio: "ignore",
+                },
+              );
+        child.on("error", () => {});
+        child.unref();
+      }
       if (!signal.aborted)
         await new Promise<void>((resolve) =>
           signal.addEventListener("abort", () => resolve(), { once: true }),
         );
+      return { url, stopped: true };
     } finally {
       await server.close();
     }
-    return { url, stopped: true };
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
   if (

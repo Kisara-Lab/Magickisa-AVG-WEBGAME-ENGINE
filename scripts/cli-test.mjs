@@ -415,10 +415,24 @@ try {
     undefined,
     5,
   );
+  const studioArgs = [entry, "studio", ...w, "--no-open", "--json"];
+  // Windows kill() terminates immediately. IPC emits the same Node signal event
+  // as console Ctrl+C so we can verify graceful shutdown and the final envelope.
   const studio = spawn(
     process.execPath,
-    [entry, "studio", ...w, "--no-open", "--json"],
-    { cwd: temporary, windowsHide: true },
+    process.platform === "win32"
+      ? [
+          "-e",
+          'process.once("message", () => { process.disconnect(); process.emit("SIGTERM"); }); import(require("node:url").pathToFileURL(process.argv[1]).href);',
+          ...studioArgs,
+        ]
+      : studioArgs,
+    {
+      cwd: temporary,
+      windowsHide: true,
+      stdio:
+        process.platform === "win32" ? ["pipe", "pipe", "pipe", "ipc"] : "pipe",
+    },
   );
   let studioLog = "",
     studioOutput = "";
@@ -451,14 +465,13 @@ try {
     assert.equal(response.status, 200);
     assert.ok((await response.text()).includes("engine"));
   } finally {
-    studio.kill("SIGTERM");
+    if (process.platform === "win32" && studio.connected) studio.send("stop");
+    else studio.kill("SIGTERM");
     await studioClosed;
-    if (process.platform !== "win32") {
-      const stopped = JSON.parse(studioOutput);
-      assert.equal(stopped.ok, true);
-      assert.equal(stopped.data.stopped, true);
-    } else assert.equal(studioOutput, "");
   }
+  const stopped = JSON.parse(studioOutput);
+  assert.equal(stopped.ok, true);
+  assert.equal(stopped.data.stopped, true);
   const markdown = path.join(temporary, "剧本.md");
   await call(["script", "export-markdown", "--out", markdown]);
   fs.writeFileSync(
