@@ -1157,11 +1157,11 @@ export function Studio() {
             >
               <img src={brand} alt="MAGICKISA 星芒工坊" />
             </a>
-            {tabs.map(([id, label, Icon], index) => (
+            {tabs.map(([id, label, Icon]) => (
               <div key={id} className="st-nav-item">
-                {[0, 3, 6].includes(index) && (
+                {["investigation", "assets", "project"].includes(id) && (
                   <small className="st-nav-group">
-                    {index === 0 ? "创作" : index === 3 ? "资源" : "工程"}
+                    {id === "investigation" ? "创作" : id === "assets" ? "资源" : "工程"}
                   </small>
                 )}
                 <button
@@ -1186,7 +1186,7 @@ export function Studio() {
             <span className="st-rail-version">
               MK
               <br />
-              1.0
+              2.0
             </span>
           </nav>
           <header className="st-topbar">
