@@ -37,7 +37,7 @@ jobs:
       - run: npm ci
       - run: npm run notices:check
       - run: npm run typecheck
-      - run: npm test
+      # Unit tests already pass on every launcher matrix OS before this gate.
       - run: npx playwright install --with-deps chromium
       - run: npm run test:studio
       - run: npm run build:studio

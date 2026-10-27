@@ -736,10 +736,14 @@ export function Studio() {
       return false;
     }
   }
-  async function save() {
+  async function save(withAuthoring = false) {
     if (!project || saving.current || busy || job?.status === "running") return;
     if (rawDirty) {
       setError("请先在 JSON 工作区应用修改，再保存工程。");
+      return;
+    }
+    if (withAuthoring && (!authoring.ready || authoring.busy)) {
+      setError("创作资料尚未读取或正在保存，请稍后重试。");
       return;
     }
     saving.current = true;
@@ -748,7 +752,17 @@ export function Studio() {
       const data = await request(profile, "project", {
         project,
         revision,
+        ...(withAuthoring
+          ? {
+              studioUpdate: {
+                data: authoring.data,
+                revision: authoring.revision,
+              },
+            }
+          : {}),
       });
+      if (data.studio)
+        authoring.acceptSaved(data.studio.data, data.studio.revision);
       setSaved(JSON.stringify(project));
       setRevision(data.revision);
       setValidated(JSON.stringify(project));
@@ -1161,7 +1175,11 @@ export function Studio() {
               <div key={id} className="st-nav-item">
                 {["investigation", "assets", "project"].includes(id) && (
                   <small className="st-nav-group">
-                    {id === "investigation" ? "创作" : id === "assets" ? "资源" : "工程"}
+                    {id === "investigation"
+                      ? "创作"
+                      : id === "assets"
+                        ? "资源"
+                        : "工程"}
                   </small>
                 )}
                 <button
@@ -2182,8 +2200,10 @@ export function Studio() {
               <button
                 className="primary"
                 onClick={async () => {
-                  if (!(await save())) return;
-                  if (authoring.dirty && !(await authoring.save())) return;
+                  if (dirty) {
+                    if (!(await save(authoring.dirty))) return;
+                  } else if (authoring.dirty && !(await authoring.save()))
+                    return;
                   openWorkspace(pendingWorkspace);
                 }}
               >

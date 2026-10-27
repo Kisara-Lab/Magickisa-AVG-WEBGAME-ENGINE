@@ -276,6 +276,22 @@ test("independent revision, shared locks, backups, coordinated recovery and auth
     assert.equal(readSnapshot(ctx).project.title, "合并提交");
     assert.equal(readStudioData(ctx).data.variables.progress.label, "进度");
     assert.equal(fs.readdirSync(ctx.backups).length, 2);
+    const beforeConflict = fs.readFileSync(ctx.projectFile),
+      currentRevision = readSnapshot(ctx).revision;
+    assert.throws(
+      () =>
+        saveProject(
+          ctx,
+          { ...readSnapshot(ctx).project, title: "不得部分提交" },
+          currentRevision,
+          false,
+          undefined,
+          { data, revision: initial.revision },
+        ),
+      (e: any) => e.status === 409,
+    );
+    assert.deepEqual(fs.readFileSync(ctx.projectFile), beforeConflict);
+    assert.equal(fs.readdirSync(ctx.backups).length, 2);
     const projectBefore = fs.readFileSync(ctx.projectFile),
       studioBefore = fs.readFileSync(studioDataFile(ctx)),
       stateBefore = fs.readFileSync(stateFile(ctx));

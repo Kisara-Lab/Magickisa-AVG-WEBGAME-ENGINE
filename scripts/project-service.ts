@@ -35,6 +35,7 @@ import type { EditorPosition } from "../src/studio/workspace";
 import { isExternalResource } from "../src/engine/resource.js";
 import { studioDataFile, readStudioData } from "./studio-data";
 import { studioDataSchema } from "../src/studio/investigationModel";
+import { safeData } from "./cli/operations";
 import { requireModernProject } from "../src/engine/support";
 const digest = (value: string | Buffer) =>
   crypto.createHash("sha256").update(value).digest("hex");
@@ -329,6 +330,7 @@ export function saveProject(
   const unlock = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
   try {
     assertRevision(ctx, expected);
+    if (studioUpdate) safeData(studioUpdate.data);
     const studio = studioUpdate
       ? studioDataSchema.parse(studioUpdate.data)
       : undefined;
@@ -351,7 +353,12 @@ export function saveProject(
       JSON.stringify(readStudioData(ctx).data) === JSON.stringify(studio) &&
       !syncState
     )
-      return { revision: revision(ctx.profile, ctx), issues, backup: null };
+      return {
+        revision: revision(ctx.profile, ctx),
+        issues,
+        backup: null,
+        studio: readStudioData(ctx),
+      };
     if (syncState && !studio && !projectChanged) {
       beginCommit(ctx, project, syncState);
       try {
@@ -398,6 +405,7 @@ export function saveProject(
     return {
       revision: revision(ctx.profile, ctx),
       backup: path.relative(root, backup),
+      ...(studio ? { studio: readStudioData(ctx) } : {}),
       issues,
     };
   } finally {

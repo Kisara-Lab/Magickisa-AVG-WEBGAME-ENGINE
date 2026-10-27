@@ -295,8 +295,39 @@ export async function investigationBrowser(browser, origin) {
     await page.getByRole("alert").filter({ hasText: "偏好未保存" }).waitFor();
     await page.evaluate(() => window.__restoreGraphStorage());
     await page.getByLabel("筛选流程节点").fill("");
-    id = (await api("workspaces/create", { name: "大型调查性能验收" })).id;
-    created.push(id);
+    const nextId = (
+      await api("workspaces/create", { name: "大型调查性能验收" })
+    ).id;
+    created.push(nextId);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.reload();
+    await page
+      .getByRole("dialog", { name: "发现未保存草稿", exact: true })
+      .waitFor();
+    await page.getByRole("button", { name: "丢弃", exact: true }).click();
+    await page.getByRole("button", { name: "流程图", exact: true }).click();
+    await page.locator('.react-flow__node[data-id="hub"]').focus();
+    await page.locator('.react-flow__node[data-id="hub"]').press("Enter");
+    await page.locator('.react-flow__node[data-id="hub"]').press("ArrowRight");
+    await page.getByLabel("场景标题", { exact: true }).fill("联合保存后的大厅");
+    await page.getByRole("button", { name: "项目与迁移", exact: true }).click();
+    await page
+      .locator(".st-package-project")
+      .filter({ hasText: "大型调查性能验收" })
+      .getByRole("button", { name: "打开项目", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "保存并打开项目", exact: true })
+      .click();
+    await page.waitForURL(
+      (url) => url.searchParams.get("workspaceId") === nextId,
+    );
+    assert.equal(
+      (await api("project")).project.nodes[0].title,
+      "联合保存后的大厅",
+    );
+    assert.equal((await api("studio-data")).data.positions.hub.x, 70);
+    id = nextId;
     const large = await api("project");
     large.project.startNodeId = "n0";
     large.project.nodes = Array.from({ length: 1000 }, (_, i) => ({

@@ -76,6 +76,12 @@ export function useStudioData(scope: string) {
     }
   }
   return {
+    revision,
+    acceptSaved: (snapshot: StudioData, nextRevision: string) => {
+      setSaved(JSON.stringify(snapshot));
+      setRevision(nextRevision);
+      setError("");
+    },
     data,
     change,
     save,
