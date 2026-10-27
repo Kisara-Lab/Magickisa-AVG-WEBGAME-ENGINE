@@ -96,8 +96,15 @@ Remove-Item Env:MAGICKISA_WORKSPACE
 
 macOS／Linux：
 
+按工程模式选择下面的一条命令执行。内联环境变量只作用于该次命令，不改变终端的长期设置。
+
 ```sh
 MAGICKISA_WORKSPACE="替换为现代工程工作区ID" npm run build
+```
+
+发行兼容工程：
+
+```sh
 MAGICKISA_WORKSPACE="替换为兼容工程工作区ID" npm run build:release
 ```
 

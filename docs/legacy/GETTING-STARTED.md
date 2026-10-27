@@ -39,6 +39,8 @@ Get-Content .\SHA256SUMS.txt
 
 比较同名文件的哈希，两者必须完全一致，大小写可忽略。Linux 可在附件与校验文件所在目录执行 `sha256sum -c SHA256SUMS.txt`；macOS 使用 `shasum -a 256 -c SHA256SUMS.txt`。只下载一个 ZIP 时，另一个附件会提示缺失，请确认已下载附件本身通过；也可下载两个 ZIP 后执行完整检查。
 
+这里使用的是 Release 原附的 `SHA256SUMS.txt`，由打包程序按 `<哈希><两个空格><文件名>` 写入。不要用 `Get-FileHash` 的表格输出覆盖它。macOS 也可执行 `shasum -a 256 MAGICKISA-v1.0legacy-Studio-start.zip`，再与原校验文件中同名项手动比较。
+
 ### 使用 Git 获取冻结源码
 
 ```sh
