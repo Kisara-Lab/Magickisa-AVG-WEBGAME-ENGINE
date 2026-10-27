@@ -1,84 +1,52 @@
-# MAGICKISA AVG WEBGAME ENGINE
+# MAGICKISA
+
+### 在浏览器中呈现故事，用 Studio、代码或 AI Agent 创作游戏。
 
 [![CI](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/main-2.0.0--dev.3-blue.svg)](CHANGELOG.md)
 
-**用网页技术制作、编辑和发行 AVG / 视觉小说。**
+**MAGICKISA 是一套开源的网页 AVG／视觉小说引擎，附带可视化编辑器 MAGICKISA Studio 和面向终端、AI Agent 的 CLI。** 从连续台词、人物立绘到复杂分支、线索条件和 OP／ED，可以在同一工程中创作、调试并构建为网页游戏。
 
-MAGICKISA 由 **Kisara-Lab** 维护，包含 React / TypeScript 运行时和可视化创作工作台 **MAGICKISA Studio**。剧本、资源、演出、预览与发行在同一工作台完成。
+**[▶ 在线体验实际作品](https://ilmarin.kisara.info/) · [快速开始](#快速开始) · [Studio 创作](#用-studio-制作游戏) · [AI Agent 接入](#让-ai-agent-接入你的剧本) · [文档导航](#文档导航)**
 
-## 当前版本与 Legacy
+## 先看看能做出什么
 
-`main` 当前为 **2.0.0-dev.3**，目标正式版本为 v2.0.0，尚未发布 v2 正式 Release。现代版成为唯一开发模式。
+### 成果演示：《伊尔玛林的黄昏》
 
-## 复杂流程与侦探调查
+**[点击进入游戏 → https://ilmarin.kisara.info/](https://ilmarin.kisara.info/)**
 
-Studio 提供可编辑流程画布：拖线创建下一场景或分支、独立连接侧栏、可搜索目标、章节与两层邻域筛选、自动布局及手动整理。资料可作为线索，条件支持已解锁／已阅读和列表包含；变量工作台汇总读写位置，具名测试预设可启动带状态的真实预览并解释分支门槛。
+这是一部使用 MAGICKISA 制作的实际作品。想先了解引擎呈现出的游戏体验，可以直接打开游玩；想了解如何制作，请看下面的 Studio 界面与上手步骤。
 
-布局、变量说明和测试预设保存到独立创作文件，与游戏工程分别保存，不进入玩家存档和发行产物。用法、兼容说明和截图见 [调查工作台手册](docs/INVESTIGATION.md)。适合单人非线性文字叙事，本轮没有多人主持或玩家举证系统。
+> 演示站点独立维护，不保证与 `main` 开发版同步。游戏剧情、图片、音乐等内容不包含在本仓库中，也不因引擎使用 MIT 许可证而获得 MIT 授权。本仓库提供引擎与编辑器，暂不附带 Demo 工程或游戏素材。
 
-## CLI 与 Agent 开发
+### 创作界面：MAGICKISA Studio
 
-无须浏览器即可通过命令编辑剧本、跳转、条件效果、人物和演出，支持 JSON 批量事务、dry-run、revision 保护、引用检查、工程包与构建。CLI 与 Studio 共用保存、备份和跨进程锁，操作同一套现代工作区。
+![MAGICKISA Studio：熔金色工作台、剧情流程画布与分支编辑侧栏](docs/images/investigation-flow.png)
 
-```sh
-node scripts/magickisa.mjs help
-node scripts/magickisa.mjs project create --name "我的作品" --json
-# 把 ID 替换成返回的 workspaceId
-node scripts/magickisa.mjs edit --workspace ID --file story.json --dry-run --json
-node scripts/magickisa.mjs edit --workspace ID --file story.json --json
-node scripts/magickisa.mjs build --workspace ID --json
-```
+*在图上组织场景与跳转，在侧栏精确编辑分支、条件和效果。也可以通过关系列表与表单操作，无须拖线。*
 
-完整事务示例与命令见 [CLI 手册](docs/CLI.md)，Agent 工作循环见 [Agent 开发指南](docs/AGENT-GUIDE.md)。本轮为静态检查，不提供剧情模拟、MCP 或专用剧本语法；实际剧情仍在 Studio 预览验收。
+## 为什么选择 MAGICKISA
 
-### 让 Agent 接入用户剧本并持续改稿
-
-新增 `agent init/context`、`source add/list/status` 与 `sync plan/apply/status`。用户提供 UTF-8 TXT、Markdown 或 JSON，Agent 先读取工程上下文，再整理为按稳定 ID 组织的多文件结构稿。CLI 生成可检查的差异与事务，三方比较保护 Studio 人工修改；首次接管和同字段冲突须显式选择。CLI 不理解自然语言，不执行用户脚本，也不调用模型。
-
-```sh
-node scripts/magickisa.mjs agent init --workspace ID --json
-node scripts/magickisa.mjs agent context --workspace ID --limit 20 --json
-node scripts/magickisa.mjs source add --workspace ID --id chapter-1 --file "我的剧本.txt" --json
-# Agent 整理 authoring/manifest.json 与 modules/*.json 后：
-node scripts/magickisa.mjs sync plan --workspace ID --out plan.json --json
-node scripts/magickisa.mjs sync apply --workspace ID --file plan.json --dry-run --json
-node scripts/magickisa.mjs sync apply --workspace ID --file plan.json --json
-```
-
-详见 [多文件接入与增量同步手册](docs/AUTHORING.md)。工程包默认保留结构稿、映射与同步基线；原始附件仅通过 CLI `package export --include-sources` 或导出 API 的 `includeSources: true` 加入。创作资料不进入游戏发行产物。
-
-**需要兼容档，请下载 [v1.0legacy — 双模式最终版](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。** 这是首次 GitHub Release，包含最新双模式修复、源码 ZIP、跨平台联网启动包和 SHA256；其 npm 内部版本保持 1.0.0。更早的 `v1.0.0` 标签保留原样。
-
-兼容档已停止支持，不建立持续维护的 Legacy 分支，不提供自动转换。v2 拒绝兼容档工作区、JSON、工程包及 `profile=release` 链接，并指向冻结 Release；原文件与浏览器记录不会删除。详见 [破坏性变更](BREAKING-CHANGES.md) 和 [版本记录](CHANGELOG.md)。
-
-## 成果演示
-
-### 《伊尔玛林的黄昏》
-
-**在线体验：[https://ilmarin.kisara.info/](https://ilmarin.kisara.info/)**
-
-这是使用 MAGICKISA 制作的实际游戏成果。演示站点独立维护，本次版本切换不改变站点部署。游戏剧情、图片、音乐及其他内容不包含在本仓库中，也不会因引擎采用 MIT 许可而自动获得 MIT 授权。当前不附带游戏工程包或 Demo。
-
-## 功能概览
-
-| 模块 | 能力 |
+| 你想完成的事 | MAGICKISA 提供的能力 |
 | --- | --- |
-| 剧情 | 场景、连续台词、分支、进入条件、变量、进入与完成效果、历史回退 |
-| 人物与画面 | 背景、人物、表情、立绘图层与布局、资源预加载 |
-| 演出 | 引擎标识动画、献词、OP 镜头、定时字幕、双语 ED 与鸣谢 |
-| 音频与资料 | 工程音轨、章节音乐规则、音乐鉴赏、资料解锁与阅读 |
-| 玩家 | 存档与读档、存档导入导出、笔记、历史、自动播放与已读快进 |
-| 工作台 | 熔金色 UI、章节导航、流程图、撤销重做、可调整面板 |
-| 编辑便利 | 命令搜索、返回前进、帮助抽屉、引用追踪、素材选择器 |
-| 工程 | 独立项目、素材上传、整体工程包、校验、备份与构建日志 |
-| 高级编辑 | 完整 JSON、条件效果、图层、精确时间、运行变量调试 |
+| 把剧本做成可玩的视觉小说 | 场景与连续台词、人物与表情、背景与立绘图层、音轨、历史、自动播放、已读快进与存读档 |
+| 编排复杂分支，不迷失在跳转里 | 可编辑流程画布、独立分支连线、自环与地点回访、章节／邻域筛选、自动布局、入边与出边追踪 |
+| 制作单人侦探调查与非线性叙事 | 用资料表达线索，组合变量、访问记录、资料解锁／阅读和列表条件，配置一次性选择与多结局 |
+| 调试“为什么这个选项不能选” | 变量与线索工作台、具名测试状态、从指定场景真实预览、分支条件与目标门槛解释 |
+| 让 Codex 等 Agent 帮忙落地剧本 | CLI、JSON 批量事务、工程上下文、差异方案、增量同步和人工修改冲突保护 |
+| 为作品编排开场与片尾 | 引擎标识动画、献词、OP 镜头与定时字幕、双语 ED 与鸣谢编辑 |
+| 换电脑继续开发，再发布给玩家 | 工程与全部素材整体打包、独立导入、备份与版本冲突检查，构建可部署的静态网页 |
 
-Live2D 提供适配器、生命周期接入与回退渲染；仓库不附 Cubism SDK 或模型，需自行接入并处理许可。
+**可视化与代码编辑可以交替使用。** Studio 保留完整 JSON、递归条件、效果、图层、精确时间和运行变量调试；CLI 与 Studio 共用工程规则、revision 检查和写锁。
+
+适合视觉小说、分支互动故事、单人调查游戏，以及剧本杀式文字叙事。当前不提供多人联网、主持人系统、玩家举证界面或专用任务系统。
 
 ## 快速开始
 
-需要 **Node.js 22+（含 npm）**、可写目录和现代浏览器。支持 Windows、macOS 与 Linux。首次安装需联网。
+需要 **[Node.js 22+](https://nodejs.org/)（包含 npm）**、现代浏览器和可写目录。支持 Windows、macOS、Linux；首次安装依赖需要联网。
+
+### 方式一：获取源码并启动
 
 ```sh
 git clone https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE.git
@@ -87,146 +55,189 @@ npm ci
 npm run dev
 ```
 
-浏览器打开终端实际地址下的 `/engine.html`，通常为 `http://127.0.0.1:5173/engine.html`。端口占用时以终端为准；服务只监听 `127.0.0.1`。
+启动后会打开工程管理页，通常为 **http://127.0.0.1:5173/engine.html**。以终端显示的实际地址为准。
 
-也可运行 `Start-Studio.cmd`（Windows）、`Start-Studio.command`（macOS）或 `sh Start-Studio.sh`（Linux）。共用启动器会检查环境、首次安装依赖并打开工程管理页。详见 [启动说明](START-HERE.md)。静态 `dist-studio/` 不能替代完整本地服务。
+1. 输入作品名称，选择“创建并打开”；也可以导入已有 `.magickisa.zip` 工程包。
+2. 编辑起始场景的台词，添加场景与分支。
+3. 点击预览或按 `Ctrl+Enter`，在真实运行时中检查效果。
 
-首次打开工程管理，输入名称并“创建并打开”，或导入 `.magickisa.zip`。空白工程仅包含格式要求的最小场景，不附剧情或媒体。默认工程位于 `workspace-projects/default-modern/`，独立工程位于 `workspace-projects/<workspaceId>/`。
+新工程只包含满足格式要求的最小内容，剧情与媒体由你添加。使用期间请保持终端运行，按 `Ctrl+C` 停止服务；服务仅监听 `127.0.0.1`。
 
-## 从空白工程到发行
+### 方式二：使用仓库中的启动入口
 
-1. 创建工程，编辑起始场景和台词，再增加场景、下一场景或分支。
-2. 上传背景、人物和音频，使用素材选择器回填字段。
-3. 按需展开条件、效果与图层；保留稳定 ID，修改标题不会替换 ID。
-4. 在演出页编排献词、OP 和 ED；没有需要时可以不配置。
-5. 点击预览或按 `Ctrl+Enter`，在真实运行时检查。
-6. 检查内容、保存工程，再构建发行包。
-7. 导出整体工程包，用于迁移与长期归档。
+获取并解压完整源码后，也可以使用以下脚本，由启动器检查环境、安装依赖并打开 Studio：
 
-### 工作台与高级编辑
+| 系统 | 启动方式 |
+| --- | --- |
+| Windows | 双击 `Start-Studio.cmd` |
+| macOS | 双击 `Start-Studio.command`，或执行 `sh Start-Studio.command` |
+| Linux | 执行 `sh Start-Studio.sh` |
 
-导航按创作、资源、工程分组。左侧章节、中间编辑、右侧预览可折叠和调宽；返回/前进记录当前标签页最近 30 个位置。命令面板搜索操作、场景、台词、人物、资料和素材；引用面板基于已应用草稿计算，未应用 JSON 不参与引用索引。
+这些入口仍需要预装 Node.js。后续启动复用已安装依赖，锁文件或环境变化时重新安装。同一目录只运行一个 Studio。详见 [启动与故障排查](START-HERE.md)。
 
-连续台词输入以失焦、切换字段或停止输入 800ms 归组撤销，结构操作单独入栈。保留最近 40 步工程撤销；输入框的 `Ctrl+Z` 保留正常文字编辑行为。高级属性就地展开，完整 JSON 页面保留原始未应用输入。
+> **版本选择：** `main` 当前为 **2.0.0-dev.3**，仅开发现代版，尚未发布 V2 正式 Release。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，其中提供双模式源码与联网启动包；旧兼容档已停止维护，不提供自动转换。详见 [破坏性变更](BREAKING-CHANGES.md)。
+
+## 用 Studio 制作游戏
+
+### 1. 写剧本，连接场景
+
+在剧本页连续编辑台词，设置人物、表情、背景与图层。在流程页拖线创建“下一场景”或选择分支，也可以用侧栏表单操作。目标支持按 ID、标题和章节搜索。
+
+剧情较大时，切换到章节或一至两层邻域，查看入边、出边与跨范围连接。自动整理是显式操作；普通文字修改不会重排手动位置。跳转、条件和效果保留稳定 ID，方便引用追踪与 Agent 协作。
+
+### 2. 配置线索、变量与门槛
+
+在资料页建立线索，使用解锁、阅读和变量效果推进调查；用“全部／任一／取反”组合条件，表达询问、地点回访、调查进度与结局门槛。“变量与线索”页汇总读写与使用位置，可添加用途说明。
+
+### 3. 带着测试状态预览
+
+建立具名预设，设置变量、访问记录、已用分支与资料状态，从指定场景启动真实预览。连接解释可以说明分支条件、一次性限制及效果执行后的目标门槛。
+
+![测试预设与调查逻辑调试](docs/images/investigation-debug.png)
+
+测试预设不写入真实玩家存档。静态连接分析和单状态解释不能证明所有路线都可通行，仍需实际游玩检查创作意图。完整步骤见 [调查与复杂流程手册](docs/INVESTIGATION.md)。
+
+### 4. 添加素材与演出
+
+通过素材选择器回填背景、立绘和音频，在演出页编排献词、OP 与 ED。支持字幕时间轴、镜头排序与精确数字输入；不配置特殊演出也可以制作游戏。
+
+单素材上传上限为 **8 MB**。更大音频可放进当前项目 `public/`，再填写资源路径，例如 `public/audio/theme.mp3` 对应 `/audio/theme.mp3`。不要填写本机绝对路径。Live2D 提供适配器接入能力，Cubism SDK、模型及其许可需自行准备。
+
+### 常用快捷键与保存规则
 
 | 快捷键 | 操作 |
 | --- | --- |
-| `Ctrl+K` | 命令面板 |
+| `Ctrl+K` | 搜索操作、场景、台词、人物、资料与素材 |
 | `Ctrl+S` | 保存工程 |
-| `Ctrl+Enter` | 更新预览 |
+| `Ctrl+Enter` | 更新真实预览 |
 | `Esc` | 关闭浮层 |
 
-### 草稿、保存与预览
+浏览器草稿、磁盘工程和预览有各自状态：**“草稿已保留”不等于工程已保存**。输入时不会自动重启剧情；修改后手动更新预览。有未应用 JSON 时，先处理输入，再保存、导出或构建。外部修改触发 409 冲突，不会静默覆盖。
 
-停止输入 500ms 后保留 IndexedDB 草稿；刷新或重新启动可恢复或丢弃。草稿按项目及标签页隔离，现代工程原有存储键继续可读，兼容档记录保留但不加载。
+节点坐标、变量注释与测试预设另存于 `authoring/studio.json`，有独立保存状态，不进入游戏发行产物。
 
-“草稿已保留”表示浏览器副本，不等于磁盘已保存；“预览已同步”表示已应用内容已送入预览。输入时不自动重启剧情。存在未应用 JSON 时，先应用或处理输入，再保存、导出或构建。磁盘被外部修改会返回 409，恢复草稿不绕过版本检查。存储失败会明确提示。
+## 让 AI Agent 接入你的剧本
 
-### 素材、献词与 OP/ED
+可以把 UTF-8 TXT、Markdown、JSON 剧本和逻辑说明交给 Codex 等外部 Agent。由 Agent 理解内容、读取工程上下文并整理结构稿，再用 MAGICKISA 检查差异与应用。
 
-单素材上传上限 **8 MB**；更大音频可直接放入当前项目 `public/`。例如 `public/audio/theme.mp3` 对应字段 `/audio/theme.mp3`，不要填本机磁盘绝对路径。所有素材请求按工作区解析。
+**提供原稿 → 读取上下文 → 整理多文件结构稿 → 检查方案 → 应用 → 校验与真实预览。**
 
-献词按页面编辑；OP/ED 支持时间轴、定位、字幕拖动和精确数字调整。OP 镜头可排序，节奏遵循现代运行时，不增加独立镜头时长。ED 保留双语字幕与鸣谢。无音频时使用计时后备，默认 OP 89 秒、ED 198 秒；署名依赖镜头位置，检查会提示镜头不足。现代献词由场景的 `presentation` 控制，单独添加标签不会触发。
-
-## 整体工程导入导出
-
-在“工程”页打开“项目管理与整体导入导出”，按 **检查 → 查看摘要 → 导出** 操作。默认包含已应用但未保存的表单修改，以及全部素材（含未使用素材和大音频）；不会先覆盖磁盘项目。
-
-```text
-manifest.json   格式版本、Studio 版本、profile、逐文件大小与 SHA256
-project.json    当前已应用工程快照
-content/        配套创作数据
-public/         全部项目静态素材
-README.txt      导入说明、联网依赖与警告
-```
-
-工程包格式继续为 **版本 1**，`profile: modern` 保留。可导入 v1.0legacy 导出的现代工程包；导出记录实际 Studio 版本，不硬编码 1.0.0。**新版导出不保证能由冻结 Legacy Studio 打开。**
-
-在另一台兼容 Studio 上选择或拖入包，经检查、确认名称后建立独立工程。重复导入不会覆盖原项目，工作区随机 ID 与游戏内部 ID 分开，稳定 ID 保留。同名工程自动加序号。
-
-| 限制 | 数值 |
-| --- | --- |
-| 工程 ZIP | 2 GiB |
-| 解压总量 | 8 GiB |
-| 文件数 | 50,000 |
-
-导入检查清单、校验值、工程结构和本地引用，拒绝越界、符号链接、重复路径、大小写及 Unicode 冲突、清单外文件和损坏包。兼容档包明确拒绝，不转换。外链保留原链接，不自动下载。
-
-包不含引擎、依赖、浏览器草稿、偏好、玩家存档、备份或构建输出。高级 JSON 导入导出**不含素材**。尚不支持项目合并、覆盖恢复或识别任意 ZIP 目录。
-
-### 磁盘备份与存档
-
-每次保存前备份旧 `project.json`，项目管理可打开备份目录。恢复前关闭 Studio，先复制整个项目目录，再把选中的备份 `project.json` 放回项目根目录，重启检查后保存。备份不包含全部素材，完整归档请导出工程包。
-
-备份不自动清理、没有一键回退；管理功能追踪 [#6](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/6)。异常写入会尝试回滚，但不承诺断电事务恢复。
-
-现代玩家存档格式保持 v2。工程 ID 与内容版本必须匹配；新存档包含节点/台词顺序签名，重排会拒绝错位加载。旧存档缺少签名时仍按原规则读取，因此内容变化应提升工程版本并自行设计迁移。Studio 预览使用内存，不写真实玩家存档。
-
-同包副本保留内部 ID，在同一域名部署会共享玩家存档标识；独立作品应有不同工程 ID 或独立来源。玩家存档尚无跨标签页协调，请避免并发游玩同项目与槽位，追踪 [#63](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/63)。读取损坏或存储失败会保留原记录并提示，可导出进度后重试。
-
-## 构建与部署
-
-推荐在 Studio 按 **检查内容 → 保存工程 → 构建发行包** 执行。独立项目输出 `workspace-projects/<workspaceId>/dist/`；默认项目输出 `workspace-projects/default-modern/dist/`。
+安装依赖后，CLI 无须启动 Studio 服务即可工作：
 
 ```sh
-npm run build
-# macOS / Linux 指定工程
-MAGICKISA_WORKSPACE="工作区ID" npm run build
+node scripts/magickisa.mjs project create --name "我的调查故事" --json
 ```
 
-PowerShell：
+将下面的 `WORKSPACE_ID` 替换为创建结果中的 `workspaceId`：
 
-```powershell
-$env:MAGICKISA_WORKSPACE = "工作区ID"
-npm run build
-Remove-Item Env:MAGICKISA_WORKSPACE
+```sh
+node scripts/magickisa.mjs agent init --workspace WORKSPACE_ID --json
+node scripts/magickisa.mjs agent context --workspace WORKSPACE_ID --limit 20 --json
+node scripts/magickisa.mjs source add --workspace WORKSPACE_ID --id chapter-1 --file "我的剧本.txt" --json
 ```
 
-命令行读取磁盘工程，不包含浏览器未保存修改。把 `dist/` 内容部署到静态网站根目录，通过 HTTP(S) 打开；子路径部署需要额外路径配置。外部素材仍依赖外部服务。
+让 Agent 阅读 [Agent 开发指南](docs/AGENT-GUIDE.md)，参考生成的 `authoring/AGENTS.md` 和模板，整理 `authoring/manifest.json` 与模块文件。**登记原稿不会自动生成游戏**；结构稿准备好后执行：
 
-## 源码与验证
+```sh
+node scripts/magickisa.mjs sync plan --workspace WORKSPACE_ID --out plan.json --json
+node scripts/magickisa.mjs sync apply --workspace WORKSPACE_ID --file plan.json --dry-run --json
+node scripts/magickisa.mjs sync apply --workspace WORKSPACE_ID --file plan.json --json
+node scripts/magickisa.mjs validate --workspace WORKSPACE_ID --json
+node scripts/magickisa.mjs graph --workspace WORKSPACE_ID --json
+node scripts/magickisa.mjs build --workspace WORKSPACE_ID --json
+```
+
+方案会展示差异、诊断和冲突；首次接管已有内容或同字段冲突需要显式选择。再次改稿采用三方比较保护 Studio 人工编辑，省略内容不会自动删除。输出文件需使用新路径，避免覆盖旧方案。
+
+CLI 不调用模型、不执行用户提供的 JS／TS，也不替 Agent 理解自然语言。完整多文件示例见 [剧本接入与增量同步](docs/AUTHORING.md)。
+
+### 更喜欢直接写代码？
+
+可以直接用 `scene`、`line`、`choice`、`condition`、`effect`、`entity`、`media` 等命令编辑，也可以准备 JSON 事务，一次提交跨场景修改：
+
+```sh
+node scripts/magickisa.mjs help --json
+node scripts/magickisa.mjs schema transaction --json
+# 按 CLI 手册准备 story.json 后：
+node scripts/magickisa.mjs edit --workspace WORKSPACE_ID --file story.json --dry-run --json
+node scripts/magickisa.mjs edit --workspace WORKSPACE_ID --file story.json --json
+```
+
+支持文件／stdin 输入、稳定 ID、批量前向引用、revision 保护与整批失败不写入。CLI 编辑磁盘工程，不读取浏览器未保存草稿。命令清单与可执行事务示例见 [CLI 手册](docs/CLI.md)。
+
+## 导出工程与发布游戏
+
+这两种输出用途不同：
+
+| 输出 | 用途 | 如何获取 |
+| --- | --- | --- |
+| **整体工程包** `.magickisa.zip` | 换电脑、交接、归档后继续编辑 | 工程页执行“检查 → 查看摘要 → 导出”，或使用 CLI `package export` |
+| **游戏发行产物** `dist/` | 部署网站，供玩家游玩 | Studio 执行“检查内容 → 保存工程 → 构建发行包”，或使用 CLI `build` |
+
+**工程包**携带工程、全部素材（包括未使用素材）、结构稿、同步基线与 Studio 创作资料。默认不携带原始附件，CLI 加 `--include-sources` 才加入；也不包含引擎、依赖、浏览器草稿、玩家存档或历史备份。导入始终创建独立工程，重复导入不会覆盖原项目。
+
+工程包使用格式 1，按文件校验 SHA256；ZIP 上限 2 GiB、解压总量 8 GiB、文件数 50,000。外部资源保留链接，不自动下载。旧版现代工程包可导入，新版导出不保证能由冻结的 Legacy Studio 打开。
+
+**游戏构建**也可以从命令行执行：
+
+```sh
+node scripts/magickisa.mjs build --workspace WORKSPACE_ID --json
+```
+
+独立工程输出到 `workspace-projects/<workspaceId>/dist/`。将该目录内容部署到静态网站根目录，通过 HTTP(S) 游玩；子路径部署需要额外路径配置，外链素材仍依赖对应服务。**玩家无需安装 Node.js 或 Studio。**
+
+工程保存在 `workspace-projects/`，不会提交到引擎仓库。保存前会备份旧工程，但历史备份不代替含全部素材的整体工程包；升级引擎前建议先导出归档。
+
+## 文档导航
+
+| 我想了解…… | 阅读 |
+| --- | --- |
+| 启动脚本、环境要求、安装与连接故障 | [启动说明](START-HERE.md) |
+| 复杂跳转、资料条件、测试预设与画布操作 | [调查工作台手册](docs/INVESTIGATION.md) |
+| 全部命令、JSON 事务、退出码与工程包操作 | [CLI 手册](docs/CLI.md) |
+| 怎样让 Codex 等 Agent 安全参与开发 | [Agent 开发指南](docs/AGENT-GUIDE.md) |
+| 多文件剧本接入、改稿同步与冲突处理 | [创作接入手册](docs/AUTHORING.md) |
+| 版本变化与旧工程兼容边界 | [变更记录](CHANGELOG.md) · [破坏性变更](BREAKING-CHANGES.md) |
+| 修改引擎、运行测试与提交 PR | [贡献说明](CONTRIBUTING.md) |
+
+## 引擎开发与能力边界
+
+引擎采用 **React + TypeScript**，流程画布使用 React Flow 与 Dagre。运行时公开入口为 [src/engine/index.ts](src/engine/index.ts)，条件与效果可注册扩展处理器。
 
 ```text
-src/engine/         TypeScript 运行时、渲染、存档与校验
-src/game/           通用游戏界面
-src/studio/         Studio、共享编辑控件与品牌资产
-scripts/            内容生成、本地服务、工程包与验收
-tests/              程序生成最小数据的通用测试
-workspace-projects/ 本地工程与输出（Git 忽略）
+src/engine/         运行时、状态、条件效果、存档与校验
+src/game/           通用玩家界面
+src/studio/         可视化编辑器与品牌样式
+scripts/            CLI、本地服务、Agent 同步、工程包与构建
+tests/              使用生成数据的通用测试
+workspace-projects/ 本地工程、素材与输出（Git 忽略）
 ```
 
-运行时入口为 [src/engine/index.ts](src/engine/index.ts)，公开引擎、Store、Session、Runtime、校验与渲染能力；条件和效果可注册扩展处理器。现代 schemaVersion、稳定 ID、存档格式及预览消息协议保持原契约。
+安装依赖后，可按顺序运行：
 
 ```sh
 npm run typecheck
 npm test
+npm run test:cli
+npm run test:authoring
 npx playwright install chromium
 npm run test:studio
 npm run notices:check
 npm run build:studio
-# 打包当前已提交源码，用于本地验收，不会创建 GitHub Release
-npm run package:release
-npm run test:launcher
 ```
 
-浏览器可用 `MAGICKISA_BROWSER` 指向 Chromium/Edge；Linux 可用 `npx playwright install --with-deps chromium`。涉及工程写入的测试顺序执行。CI 在 Windows/macOS/Linux 验证启动包，Ubuntu 验证类型、运行时、浏览器和 Studio 构建。
+涉及工程写入的验收请顺序执行。Linux 浏览器依赖安装及完整开发约定见 [贡献说明](CONTRIBUTING.md)。CI 在 Windows、macOS、Linux 执行通用、CLI、Agent 和启动器验收，并在 Ubuntu 执行类型检查、浏览器验收与 Studio 构建。
 
-浏览器验收覆盖创建、未保存快照导出、SHA256、Legacy 现代包导入、中文空格路径、大素材、保存、预览、OP/ED/献词、启动标识、实际构建、390px 布局，以及兼容输入拒绝与原文件保留。
+使用前请了解这些边界：
 
-## 常见问题与边界
+- 当前 V2 是开发版；兼容档停留在 `v1.0legacy`，不提供转换工具。
+- 新增资料／列表条件仍使用 `schemaVersion: 2`，但使用这些条件的作品需要新版引擎；旧版可能拒绝。
+- 没有内置模型调用、MCP、专用剧本语言或无界面剧情模拟；剧情效果需要真实预览验收。
+- 当前不提供 npm 发行包或托管 Studio 服务；静态 `dist-studio/` 不能替代完整本地服务。
+- 备份管理改进见 [#6](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/6)；玩家存档的多标签页协调见 [#63](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/63)，请避免同时游玩同一项目与槽位。
 
-- **连接被拒绝**：保持本地服务运行，使用终端实际端口；旧书签端口可能不同。
-- **修改后预览没变**：先应用 JSON，再按 `Ctrl+Enter`。
-- **条件没有出口**：选项全隐藏或 once 用尽后尝试 next；目标条件不满足时停留，校验会警告。空 all 恒真，空 any 恒假。
-- **数字或子 JSON 尚未应用**：保留上次有效值，处理输入后再保存。可选数字清空恢复默认值。
-- **演出元数据**：presentation 与 media 决定播放；sequenceId 是保留元数据，不是独立序列注册表。
-- **音频**：setAudio 引用 audio 中注册的 ID；指定音轨优先于章节规则，曲目音量乘全局音量。音乐鉴赏暂停章节 BGM。
-- **商业使用**：MIT 允许商业使用；需保留版权与许可声明，第三方资源、SDK 与游戏内容分别授权。
+## 许可与参与
 
-尚未发布 npm 包、托管编辑服务或 Demo。没有原游戏专用存档迁移、历史发行 bundle 或对照基准。
+**引擎、Studio 与仓库自有品牌 SVG 使用 [MIT License](LICENSE)，允许商业使用。** 请保留版权与许可声明；第三方依赖、SDK、游戏剧本和媒体分别遵守各自授权。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 许可与贡献
-
-引擎、Studio 与本仓库自有品牌 SVG 使用 **[MIT License](LICENSE)**。第三方依赖见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，开发与 PR 约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-提交问题请附系统、Node.js 版本、复现步骤及日志，移除凭据与私人项目内容。维护组织：[Kisara-Lab](https://github.com/Kisara-Lab)。
+由 **[Kisara-Lab](https://github.com/Kisara-Lab)** 维护。欢迎 [提交 Issue](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues) 或通过 PR 改进引擎；报告问题时请附系统、Node.js 版本与复现步骤，并移除凭据和私人游戏内容。
