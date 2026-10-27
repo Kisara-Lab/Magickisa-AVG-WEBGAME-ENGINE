@@ -1,6 +1,8 @@
 node_modules/
 release-artifacts/
 .magickisa-studio.lock
+.magickisa-*.lock/
+.magickisa-*.lock.recovered-*/
 workspace-projects/
 .studio-transfers/
 dist-studio/

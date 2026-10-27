@@ -1,9 +1,11 @@
 {
   "name": "magickisa-avg-webgame-engine",
-  "version": "2.0.0-dev.0",
+  "version": "2.0.0-dev.1",
   "private": true,
   "type": "module",
   "scripts": {
+    "magickisa": "node scripts/magickisa.mjs",
+    "test:cli": "node scripts/cli-test.mjs",
     "test:launcher": "node scripts/launcher-test.mjs",
     "package:release": "node scripts/package-release.mjs",
     "notices:update": "node scripts/third-party-notices.mjs",
