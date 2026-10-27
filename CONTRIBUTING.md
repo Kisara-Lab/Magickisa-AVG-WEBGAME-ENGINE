@@ -40,6 +40,8 @@ git push -u origin feat/my-change
 
 ## 开发与验证
 
+CLI 和 Studio 共用工程服务；新增写入入口必须遵守跨进程工程锁、revision 和构建串行保护，不直接覆盖 project.json。运行 `npm run test:cli` 验证命令、事务、包往返和实际构建；再顺序执行 Studio 验收验证跨进程互锁与旧草稿冲突。CLI stdout 的协议版本、退出码和错误代码是 Agent 接口，变更需说明兼容性。用法见 [CLI](docs/CLI.md) 与 [Agent 指南](docs/AGENT-GUIDE.md)。
+
 使用 Node.js 22+，执行 `npm ci`，再执行 `npx playwright install chromium` 安装浏览器验收需要的 Chromium。Linux 如需同时安装系统依赖，使用 `npx playwright install --with-deps chromium`；也可以设置 `MAGICKISA_BROWSER` 指向已安装的 Chromium / Edge 可执行文件。修改后运行 `npm run typecheck`、`npm test`、`npm run test:studio` 和 `npm run build:studio`。工程写入与浏览器验收应串行执行。
 
 新增测试使用生成的最小数据，不引入原游戏剧情、素材或发行包。当前为 2.0.0-dev.0，仅开发现代版；兼容档在 v1.0legacy 冻结，不建立维护分支或转换工具。请保持现代稳定 ID、schemaVersion: 2、玩家存档与 Studio 预览消息协议；兼容输入应明确拒绝并提供 Legacy 链接，原文件与浏览器记录不得删除。详见 [破坏性变更](BREAKING-CHANGES.md)。

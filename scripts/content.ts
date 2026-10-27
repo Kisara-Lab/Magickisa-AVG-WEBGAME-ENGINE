@@ -15,7 +15,8 @@ export const root = path.resolve(
   "..",
 );
 export const projectFile = path.join(
-  defaultDirectory("modern"),
+  root,
+  "workspace-projects/default-modern",
   "project.json",
 );
 export function resourceReferences(p: StoryProject): string[] {
@@ -76,6 +77,7 @@ export function validateResources(p: StoryProject): void {
   if (errors.length) throw new Error(errors.join("\n"));
 }
 export function readProject() {
+  defaultDirectory("modern");
   const p = assertProject(JSON.parse(fs.readFileSync(projectFile, "utf8")));
   validateResources(p);
   return p;

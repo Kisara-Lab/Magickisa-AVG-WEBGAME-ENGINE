@@ -1,15 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { Transform } from "node:stream";
+import { Transform, type Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
 import * as yazl from "yazl";
 import * as yauzl from "yauzl";
 import type { AuthorProject, Profile } from "../src/studio/model";
 import { resourceReferences } from "./content";
 import { isExternalResource } from "../src/engine/resource.js";
 import { registerPackagePath } from "./package-paths";
+import { acquireRegistry } from "./project-locks";
 import {
   requireModernProfile,
   requireModernProject,
@@ -29,10 +30,6 @@ import {
 const GiB = 1024 ** 3;
 const limits = { compressed: 2 * GiB, expanded: 8 * GiB, files: 50_000 };
 const transferRoot = path.join(repository, ".studio-transfers");
-const temporary = path.join(
-  transferRoot,
-  `${process.pid}-${crypto.randomUUID()}`,
-);
 interface FileRecord {
   path: string;
   bytes: number;
@@ -133,6 +130,10 @@ function safeName(name: string) {
   return name;
 }
 export class ProjectPackages {
+  private temporary = path.join(
+    transferRoot,
+    `${process.pid}-${crypto.randomUUID()}`,
+  );
   tasks = new Map<string, Task>();
   constructor(
     private hooks: {
@@ -162,11 +163,11 @@ export class ProjectPackages {
         });
       }
     }
-    fs.mkdirSync(temporary, { recursive: true });
+    fs.mkdirSync(this.temporary, { recursive: true });
   }
   private task(kind: Task["kind"], ctx: ProjectContext) {
     const id = crypto.randomUUID(),
-      directory = path.join(temporary, id);
+      directory = path.join(this.temporary, id);
     fs.mkdirSync(directory);
     const task: Task = {
       id,
@@ -342,7 +343,7 @@ export class ProjectPackages {
     });
     return this.view(task);
   }
-  async upload(ctx: ProjectContext, req: IncomingMessage) {
+  async upload(ctx: ProjectContext, req: Readable) {
     const task = this.task("import", ctx);
     try {
       await pipeline(
@@ -447,7 +448,8 @@ export class ProjectPackages {
     )
       throw new Error("不支持的工程包或 Studio 版本");
     requireModernProfile(manifest.profile);
-    if (manifest.profile !== "modern") throw new Error("工程包缺少现代版模式元数据");
+    if (manifest.profile !== "modern")
+      throw new Error("工程包缺少现代版模式元数据");
     if (
       typeof manifest.name !== "string" ||
       !manifest.name.trim() ||
@@ -507,48 +509,64 @@ export class ProjectPackages {
   async commit(task: Task, requested: string) {
     if (task.kind !== "import" || task.status !== "ready")
       throw new Error("导入尚未检查通过");
-    let name = requested?.trim() || task.name!;
-    if (name.length > 200 || /[\x00-\x1f]/.test(name))
-      throw new Error("工程名称无效");
-    const names = new Set(workspaces().map((p) => p.name)),
-      base = name;
-    let i = 2;
-    while (names.has(name)) name = `${base} (${i++})`;
-    const id = crypto.randomUUID(),
-      stage = path.join(task.directory, "snapshot");
-    fs.mkdirSync(workspaceRoot, { recursive: true });
-    atomicJson(path.join(stage, "workspace.json"), {
-      id,
-      profile: task.profile,
-      name,
-      lastOpened: Date.now(),
-    });
-    this.committing.add(task.id);
+    const unlock = acquireRegistry();
     try {
-      for (let attempt = 0; ; attempt++) {
-        try {
-          await fs.promises.rename(stage, path.join(workspaceRoot, id));
-          break;
-        } catch (error) {
-          if (
-            attempt >= 9 ||
-            !["EPERM", "EACCES", "EBUSY"].includes(
-              (error as NodeJS.ErrnoException).code || "",
+      let name = requested?.trim() || task.name!;
+      if (name.length > 200 || /[\x00-\x1f]/.test(name))
+        throw new Error("工程名称无效");
+      const names = new Set(workspaces().map((p) => p.name)),
+        base = name;
+      let i = 2;
+      while (names.has(name)) name = `${base} (${i++})`;
+      const id = crypto.randomUUID(),
+        stage = path.join(task.directory, "snapshot");
+      fs.mkdirSync(workspaceRoot, { recursive: true });
+      atomicJson(path.join(stage, "workspace.json"), {
+        id,
+        profile: task.profile,
+        name,
+        lastOpened: Date.now(),
+      });
+      this.committing.add(task.id);
+      try {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await fs.promises.rename(stage, path.join(workspaceRoot, id));
+            break;
+          } catch (error) {
+            if (
+              attempt >= 9 ||
+              !["EPERM", "EACCES", "EBUSY"].includes(
+                (error as NodeJS.ErrnoException).code || "",
+              )
             )
-          )
-            throw error;
-          await new Promise((resolve) =>
-            setTimeout(resolve, (attempt + 1) * 100),
-          );
+              throw error;
+            await new Promise((resolve) =>
+              setTimeout(resolve, (attempt + 1) * 100),
+            );
+          }
         }
+      } finally {
+        this.committing.delete(task.id);
       }
+      task.status = "complete";
+      task.phase = "已建立独立项目";
+      fs.rmSync(task.directory, { recursive: true, force: true });
+      return { id, profile: task.profile, name };
     } finally {
-      this.committing.delete(task.id);
+      unlock();
     }
-    task.status = "complete";
-    task.phase = "已建立独立项目";
-    fs.rmSync(task.directory, { recursive: true, force: true });
-    return { id, profile: task.profile, name };
+  }
+  async dispose() {
+    for (const task of this.tasks.values()) await this.cancel(task);
+    while (this.running.size)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    await fs.promises.rm(this.temporary, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
   }
   async cancel(task: Task) {
     if (this.committing.has(task.id))

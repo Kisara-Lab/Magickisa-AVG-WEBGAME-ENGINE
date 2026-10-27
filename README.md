@@ -9,7 +9,22 @@ MAGICKISA 由 **Kisara-Lab** 维护，包含 React / TypeScript 运行时和可�
 
 ## 当前版本与 Legacy
 
-`main` 当前为 **2.0.0-dev.0**，目标正式版本为 v2.0.0，尚未发布 v2 正式 Release。现代版成为唯一开发模式。
+`main` 当前为 **2.0.0-dev.1**，目标正式版本为 v2.0.0，尚未发布 v2 正式 Release。现代版成为唯一开发模式。
+
+## CLI 与 Agent 开发
+
+无须浏览器即可通过命令编辑剧本、跳转、条件效果、人物和演出，支持 JSON 批量事务、dry-run、revision 保护、引用检查、工程包与构建。CLI 与 Studio 共用保存、备份和跨进程锁，操作同一套现代工作区。
+
+```sh
+node scripts/magickisa.mjs help
+node scripts/magickisa.mjs project create --name "我的作品" --json
+# 把 ID 替换成返回的 workspaceId
+node scripts/magickisa.mjs edit --workspace ID --file story.json --dry-run --json
+node scripts/magickisa.mjs edit --workspace ID --file story.json --json
+node scripts/magickisa.mjs build --workspace ID --json
+```
+
+完整事务示例与命令见 [CLI 手册](docs/CLI.md)，Agent 工作循环见 [Agent 开发指南](docs/AGENT-GUIDE.md)。本轮为静态检查，不提供剧情模拟、MCP 或专用剧本语法；实际剧情仍在 Studio 预览验收。
 
 **需要兼容档，请下载 [v1.0legacy — 双模式最终版](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。** 这是首次 GitHub Release，包含最新双模式修复、源码 ZIP、跨平台联网启动包和 SHA256；其 npm 内部版本保持 1.0.0。更早的 `v1.0.0` 标签保留原样。
 

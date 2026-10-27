@@ -6,6 +6,7 @@ import http from "node:http";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 import { editorRegression } from "./editor-regression.mjs";
+import { cliBrowserRegression } from "./cli-browser-test.mjs";
 import { legacyModernPackage, modernBoundaryRegression, rejectLegacyPackages } from "./modern-boundary-test.mjs";
 const server = await createServer({
   server: {
@@ -45,6 +46,7 @@ try {
       errors.push(`${r.status()} ${new URL(r.url()).pathname}`);
   });
   await editorRegression(browser, origin);
+  await cliBrowserRegression(browser, origin);
   await modernBoundaryRegression(origin, page);
   const api = async (profile, route, body, id) => {
     const response = await fetch(
