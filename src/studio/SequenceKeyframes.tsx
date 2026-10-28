@@ -87,7 +87,7 @@ export function SequenceKeyframes({
             ...frames,
             {
               at,
-              value: property === "scale" || property === "opacity" ? 1 : 0,
+              value: ["scale", "opacity", "volume"].includes(property) ? 1 : 0,
               easing: "linear",
             },
           ]);

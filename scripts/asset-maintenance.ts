@@ -116,8 +116,11 @@ export async function changeAsset(
       action: staged ? "replaced" : "removed",
     };
   } finally {
-    staged?.cleanup();
-    release();
+    try {
+      staged?.cleanup();
+    } finally {
+      release();
+    }
   }
 }
 const AssetBackupSchema = z.object({
@@ -193,7 +196,10 @@ export async function restoreAsset(
     fs.renameSync(temporary, file);
     return { url: record.url, sha256: record.sha256 };
   } finally {
-    if (temporary) fs.rmSync(temporary, { force: true });
-    release();
+    try {
+      if (temporary) fs.rmSync(temporary, { force: true });
+    } finally {
+      release();
+    }
   }
 }

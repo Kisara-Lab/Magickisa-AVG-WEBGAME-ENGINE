@@ -106,7 +106,10 @@ export async function importAssetStream(
       sha256: staged.sha256,
     };
   } finally {
-    staged?.cleanup();
-    release();
+    try {
+      staged?.cleanup();
+    } finally {
+      release();
+    }
   }
 }

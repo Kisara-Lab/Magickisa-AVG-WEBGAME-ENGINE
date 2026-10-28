@@ -174,6 +174,76 @@ test("asset replacement and removal check references and bytes, and restore back
   }
 });
 
+test("asset cleanup failure always releases the project lock", async (t) => {
+  const ctx = fixture();
+  const remove = fs.rmSync.bind(fs);
+  try {
+    const asset = await importAssetStream(
+      ctx,
+      "cleanup.svg",
+      Readable.from([Buffer.from("<svg/>")]),
+    );
+    const plan = inspectAsset(ctx, asset.url);
+    t.mock.method(fs, "rmSync", (...args: Parameters<typeof fs.rmSync>) => {
+      if (String(args[0]).includes(".asset-upload-"))
+        throw new Error("injected cleanup failure");
+      return remove(...args);
+    });
+    await assert.rejects(
+      () =>
+        changeAsset(ctx, plan, {
+          name: "replacement.svg",
+          stream: Readable.from([Buffer.from("<svg>new</svg>")]),
+        }),
+      /injected cleanup failure/,
+    );
+    const release = acquireProjectWrite(ctx);
+    release();
+  } finally {
+    t.mock.restoreAll();
+    remove(ctx.directory, { recursive: true, force: true });
+  }
+});
+
+test("external modification during backup aborts asset replacement without overwriting external bytes", async (t) => {
+  const ctx = fixture();
+  try {
+    const asset = await importAssetStream(
+      ctx,
+      "external.svg",
+      Readable.from([Buffer.from("<svg/>")]),
+    );
+    const plan = inspectAsset(ctx, asset.url);
+    const copy = fs.promises.copyFile.bind(fs.promises);
+    t.mock.method(
+      fs.promises,
+      "copyFile",
+      async (...args: Parameters<typeof fs.promises.copyFile>) => {
+        await copy(...args);
+        fs.writeFileSync(path.join(ctx.public, asset.url), "external edit");
+      },
+    );
+    await assert.rejects(
+      () =>
+        changeAsset(ctx, plan, {
+          name: "replacement.svg",
+          stream: Readable.from([Buffer.from("replacement")]),
+        }),
+      (error: any) => error.status === 409,
+    );
+    assert.equal(
+      fs.readFileSync(path.join(ctx.public, asset.url), "utf8"),
+      "external edit",
+    );
+    assert.equal(assetBackups(ctx).length, 0);
+    const release = acquireProjectWrite(ctx);
+    release();
+  } finally {
+    t.mock.restoreAll();
+    fs.rmSync(ctx.directory, { recursive: true, force: true });
+  }
+});
+
 test("creative module restoration detects changed input and recovers interrupted multi-file commits", () => {
   const ctx = fixture();
   try {

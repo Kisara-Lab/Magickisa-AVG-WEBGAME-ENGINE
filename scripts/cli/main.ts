@@ -792,6 +792,9 @@ export async function execute(args: string[], signal: AbortSignal) {
       // Vite resumes piped stdin. Restore its prior state so an open caller pipe
       // does not keep a stopped CLI alive after the final JSON response.
       if (!stdinWasFlowing) process.stdin.pause();
+      // Node 22 on Windows retains a referenced pipe handle even after pause().
+      // A stopped Studio command never reads further input; release that pipe.
+      if (!process.stdin.isTTY) process.stdin.destroy();
     }
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
