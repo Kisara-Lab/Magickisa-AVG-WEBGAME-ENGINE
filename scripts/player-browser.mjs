@@ -465,6 +465,13 @@ export async function playerBrowser(browser, origin) {
     await close();
     assert.deepEqual(errors, []);
   } finally {
+    if (!page.isClosed())
+      await page
+        .evaluate(() => {
+          if (window.originalPlayerSet)
+            Storage.prototype.setItem = window.originalPlayerSet;
+        })
+        .catch(() => {});
     await context.close();
   }
   // Missing lock API offers only explicit temporary play, never persists actual slots.

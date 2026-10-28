@@ -170,7 +170,13 @@ export function GameSession({
     [error, setError] = useState(""),
     [blocked, setBlocked] = useState(false),
     [search, setSearch] = useState("");
-  const slotStorage = useMemo(() => storage ?? memoryStorage(), [storage]);
+  const slotStorage = useMemo(
+    () =>
+      embedded || store.temporary
+        ? memoryStorage()
+        : (storage ?? memoryStorage()),
+    [storage, embedded, store.temporary],
+  );
   const slots = useMemo(
     () => new PlayerSlots(project, slotStorage),
     [project, slotStorage],
