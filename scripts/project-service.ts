@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { assetKind } from "../src/authoring/assetKind";
 import {
   creativeSnapshot,
   type CreativeFiles,
@@ -295,7 +296,8 @@ export function listAssets(ctx: ProjectContext) {
     .filter(
       (f): f is string =>
         typeof f === "string" &&
-        /\.(png|jpe?g|svg|webp|mp3|ogg|wav|lrc)$/i.test(f),
+        assetKind(f) !== "other" &&
+        fs.statSync(contained(ctx.public, f)).isFile(),
     )
     .map((f) => ({
       url: "/" + f.replaceAll("\\", "/"),

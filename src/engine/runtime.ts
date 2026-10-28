@@ -5,16 +5,34 @@ import { snapshot, importSave } from "./save";
 import { randomId } from "./id";
 import { SequenceClock } from "./sequence";
 export class StoryRuntime {
+  private indexedNodes?: StoryProject["nodes"];
+  private nodeIndex = new Map<string, number>();
+  private nodeCount = -1;
+  private findNode(id: string) {
+    if (
+      this.indexedNodes !== this.project.nodes ||
+      this.nodeCount !== this.project.nodes.length ||
+      this.project.nodes[this.nodeIndex.get(id) ?? -1]?.id !== id
+    ) {
+      this.indexedNodes = this.project.nodes;
+      this.nodeCount = this.project.nodes.length;
+      this.nodeIndex = new Map(
+        this.project.nodes.map((node, index) => [node.id, index]),
+      );
+    }
+    return this.project.nodes[this.nodeIndex.get(id) ?? -1];
+  }
   constructor(
     public project: StoryProject,
     public save: EngineSave,
+    private observeCondition?: Parameters<typeof evaluateCondition>[4],
   ) {
     this.enter();
     this.skipHidden();
     this.syncPosition();
   }
   get node() {
-    return this.project.nodes.find((n) => n.id === this.save.nodeId);
+    return this.findNode(this.save.nodeId);
   }
   get line() {
     return this.node?.lines[this.save.lineIndex];
@@ -35,13 +53,14 @@ export class StoryRuntime {
           basis.variables,
           basis.visitedNodes,
           basis,
+          this.observeCondition,
         ) &&
         this.targetAllowed(c, basis),
     );
   }
   private targetAllowed(c: StoryChoice, basis: EngineSave) {
     const simulated = applyEffects(basis, c.effects);
-    const target = this.project.nodes.find((n) => n.id === c.target);
+    const target = this.findNode(c.target);
     return (
       !!target &&
       evaluateCondition(
@@ -49,6 +68,7 @@ export class StoryRuntime {
         simulated.variables,
         simulated.visitedNodes,
         simulated,
+        this.observeCondition,
       )
     );
   }
@@ -79,6 +99,7 @@ export class StoryRuntime {
           this.save.variables,
           this.save.visitedNodes,
           this.save,
+          this.observeCondition,
         ) &&
         !this.save.unlockedMaterials.includes(m.id)
       )
@@ -92,6 +113,7 @@ export class StoryRuntime {
         this.save.variables,
         this.save.visitedNodes,
         this.save,
+        this.observeCondition,
       )
     )
       this.save.lineIndex++;
@@ -219,7 +241,7 @@ export class StoryRuntime {
     if (this.choices.length) return this.syncPosition();
     const next = this.node.next;
     if (next) {
-      const target = this.project.nodes.find((n) => n.id === next);
+      const target = this.findNode(next);
       if (
         target &&
         evaluateCondition(
@@ -227,6 +249,7 @@ export class StoryRuntime {
           this.save.variables,
           this.save.visitedNodes,
           this.save,
+          this.observeCondition,
         )
       ) {
         this.checkpoint();
@@ -287,13 +310,14 @@ export class StoryRuntime {
   jump(nodeId: string, lineIndex = 0) {
     if (!this.project.nodes.some((n) => n.id === nodeId))
       throw new Error("节点不存在。");
-    const target = this.project.nodes.find((n) => n.id === nodeId)!;
+    const target = this.findNode(nodeId)!;
     if (
       !evaluateCondition(
         target.condition,
         this.save.variables,
         this.save.visitedNodes,
         this.save,
+        this.observeCondition,
       )
     )
       throw new Error("当前条件不允许进入此场景。");

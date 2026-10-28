@@ -4,6 +4,8 @@ import { storyTestSuiteSchema, runStorySuite } from "../engine/storyTest";
 import type { StudioDataController } from "./useStudioData";
 import { Card } from "./fields";
 import { Fold } from "./components";
+import { VariableDeclarations } from "./VariableDeclarations";
+import { GalleryEditor } from "./GalleryEditor";
 export const defaultTheme: NonNullable<StoryProject["theme"]> = {
   mode: "adv",
   fontFamily: "system-ui, sans-serif",
@@ -119,6 +121,7 @@ export function ProductionPanel({
         </p>
       </Card>
       <Card title="变量声明与初始值">
+        <VariableDeclarations project={project} onChange={onChange} />
         <p>
           初始值只在新周目设置；读档、跳转和回退不会重新初始化。好感度与调查进度使用普通变量。
         </p>
@@ -273,12 +276,31 @@ export function ProductionPanel({
                   <summary>执行轨迹与变量变化</summary>
                   <pre>{JSON.stringify(result.trace, null, 2)}</pre>
                 </details>
+                <details>
+                  <summary>条件真假覆盖（按实际求值记录）</summary>
+                  <p>
+                    未求值与只出现一种结果均不代表错误；短路组合可能不执行后续子条件。
+                  </p>
+                  <ul>
+                    {result.coverage.conditions.map((c) => (
+                      <li key={c.path}>
+                        <code>{c.path}</code>：
+                        {!c.outcomes.length
+                          ? "未求值"
+                          : c.outcomes
+                              .map((value) => (value ? "满足" : "不满足"))
+                              .join("、")}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               </article>
             ))}
             <p>{report.note}</p>
           </>
         )}
       </Card>
+      <GalleryEditor project={project} onChange={onChange} />
       {(error || authoring.error) && (
         <p role="alert">{error || authoring.error}</p>
       )}

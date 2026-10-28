@@ -453,6 +453,25 @@ export function validateProject(input: unknown): ValidationIssue[] {
         path: `sequences.${i}.${issue.path}`,
         message: issue.message,
       });
+  for (const sequence of p.sequences ?? [])
+    for (const track of sequence.tracks) {
+      if (track.characterId) {
+        const character = p.characters.find((c) => c.id === track.characterId);
+        if (track.kind !== "character" || !character)
+          issues.push({
+            path: `sequences.${sequence.id}.${track.id}.characterId`,
+            message: "人物轨道引用不存在的人物或类型不符",
+          });
+        else if (
+          track.expression &&
+          !Object.hasOwn(character.expressions ?? {}, track.expression)
+        )
+          issues.push({
+            path: `sequences.${sequence.id}.${track.id}.expression`,
+            message: "人物轨道表情不存在",
+          });
+      }
+    }
   for (const n of p.nodes) {
     sequenceRef(n.enterSequence, `${n.id}.enterSequence`);
     sequenceRef(n.exitSequence, `${n.id}.exitSequence`);

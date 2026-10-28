@@ -5,6 +5,7 @@ import {
 import { requireModernProfile, requireModernProject } from "../engine/support";
 import { explainBranches, explainNext } from "../engine/investigation";
 import React, { useEffect, useRef, useState } from "react";
+import { RouteRecorder } from "../engine/routeRecorder";
 import { createRoot } from "react-dom/client";
 const send = (data) => parent.postMessage(data, location.origin);
 // Preview sessions never write the player's real saves, notes, or audio settings.
@@ -22,6 +23,7 @@ Object.defineProperty(window, "localStorage", {
   },
 });
 let project,
+  recorder,
   profile,
   root,
   store,
@@ -130,6 +132,9 @@ window.addEventListener("message", async (e) => {
       profile = "modern";
       project = previewProject(d.project);
       memory.clear();
+      recorder?.cancel();
+      recorder = null;
+      send({ type: "studio:recording", active: false });
       store?.destroy();
       store = null;
       root?.unmount();
@@ -185,6 +190,21 @@ window.addEventListener("message", async (e) => {
     }
     if (d.type === "studio:variable") {
       if (store) store.setVariable(d.key, d.value);
+    }
+    if (d.type === "studio:record" && store) {
+      if (d.start) {
+        recorder?.cancel();
+        recorder = new RouteRecorder(store);
+        send({ type: "studio:recording", active: true });
+      } else if (recorder) {
+        const stopped = recorder;
+        recorder = null;
+        send({ type: "studio:recording", active: false });
+        send({
+          type: "studio:recorded",
+          test: stopped.stop(d.name || "预览录制路线"),
+        });
+      }
     }
     if (d.type === "studio:explain" && store?.runtime.node)
       send({

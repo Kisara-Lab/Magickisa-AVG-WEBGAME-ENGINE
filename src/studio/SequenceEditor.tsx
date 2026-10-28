@@ -4,6 +4,7 @@ import {
   sequenceSchema,
   sequenceTrackSchema,
   sequenceIssues,
+  sampleSequence,
   type SequenceTrack,
 } from "../engine/sequence";
 import { SequenceStage } from "../engine/SequenceStage";
@@ -15,6 +16,7 @@ import { mediaUrl, type Profile } from "./model";
 import "./production.css";
 import { SequenceTimeline } from "./SequenceTimeline";
 import { SequenceKeyframes } from "./SequenceKeyframes";
+import { SequencePreset } from "./SequencePreset";
 
 export function SequenceEditor({
   project,
@@ -27,6 +29,8 @@ export function SequenceEditor({
 }) {
   const [id, setId] = useState(project.sequences?.[0]?.id ?? "");
   const [trackId, setTrackId] = useState("");
+  const [locked, setLocked] = useState<string[]>([]);
+  const [solo, setSolo] = useState("");
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
     [zoom, setZoom] = useState(40);
@@ -34,6 +38,12 @@ export function SequenceEditor({
     [keys, setKeys] = useState("");
   const [drag, setDrag] = useState<{ x: number; y: number; id: string }>();
   const stage = useRef<HTMLDivElement>(null);
+  const stageGesture = useRef<{
+    x: number;
+    y: number;
+    startX: number;
+    startY: number;
+  }>();
   const sequence = project.sequences?.find((s) => s.id === id);
   const track = sequence?.tracks.find((t) => t.id === trackId);
   const select = (id: string) => {
@@ -46,7 +56,7 @@ export function SequenceEditor({
       sequences: project.sequences!.map((s) => (s.id === id ? next : s)),
     });
   const changeTrack = (next: SequenceTrack) => {
-    if (sequence)
+    if (sequence && !locked.includes(next.id))
       change({
         ...sequence,
         tracks: sequence.tracks.map((t) => (t.id === next.id ? next : t)),
@@ -127,6 +137,8 @@ export function SequenceEditor({
             setTrackId("");
             setTime(0);
             setPlaying(false);
+            setSolo("");
+            setLocked([]);
           }}
         >
           <option value="">选择演出</option>
@@ -155,6 +167,24 @@ export function SequenceEditor({
           新增演出
         </button>
       </div>
+      <Fold title="复用演出预设" summary="复制、导出与检查导入">
+        <SequencePreset
+          project={project}
+          sequence={sequence}
+          onAdd={(next) => {
+            onChange({
+              ...project,
+              sequences: [...(project.sequences ?? []), next],
+            });
+            setId(next.id);
+            setTrackId("");
+            setTime(0);
+            setPlaying(false);
+            setSolo("");
+            setLocked([]);
+          }}
+        />
+      </Fold>
       {sequence && (
         <>
           <div className="st-fields">
@@ -197,6 +227,7 @@ export function SequenceEditor({
             onPointerDown={(e) => {
               if (
                 !track ||
+                locked.includes(track.id) ||
                 !["character", "background", "text", "camera"].includes(
                   track.kind,
                 )
@@ -205,19 +236,40 @@ export function SequenceEditor({
               e.currentTarget.setPointerCapture(e.pointerId);
               setPlaying(false);
               const rect = e.currentTarget.getBoundingClientRect();
+              const sampled = sampleSequence(sequence, time).find(
+                (sample) => sample.track.id === track.id,
+              )?.properties;
+              const x =
+                sampled?.x ??
+                (["background", "camera"].includes(track.kind) ? 0 : 50);
+              const y =
+                sampled?.y ??
+                (["background", "camera"].includes(track.kind) ? 0 : 50);
+              stageGesture.current = {
+                x,
+                y,
+                startX: e.clientX,
+                startY: e.clientY,
+              };
               setDrag({
                 id: track.id,
-                x: ((e.clientX - rect.left) / rect.width) * 100,
-                y: ((e.clientY - rect.top) / rect.height) * 100,
+                x,
+                y,
               });
             }}
             onPointerMove={(e) => {
-              if (!drag) return;
+              if (!drag || !stageGesture.current) return;
               const rect = e.currentTarget.getBoundingClientRect();
+              const gesture = stageGesture.current;
               setDrag({
                 ...drag,
-                x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
-                y: Math.round(((e.clientY - rect.top) / rect.height) * 100),
+                x: Math.round(
+                  gesture.x + ((e.clientX - gesture.startX) / rect.width) * 100,
+                ),
+                y: Math.round(
+                  gesture.y +
+                    ((e.clientY - gesture.startY) / rect.height) * 100,
+                ),
               });
             }}
             onPointerUp={() => {
@@ -230,7 +282,14 @@ export function SequenceEditor({
           >
             <SequenceStage
               project={project}
-              sequence={display!}
+              sequence={
+                solo
+                  ? {
+                      ...display!,
+                      tracks: display!.tracks.filter((t) => t.id === solo),
+                    }
+                  : display!
+              }
               time={time}
               playing={playing}
               onFailure={setError}
@@ -301,6 +360,7 @@ export function SequenceEditor({
               select(id);
             }}
             onChange={changeTrack}
+            locked={locked}
           />
           <button
             onClick={() => {
@@ -323,171 +383,273 @@ export function SequenceEditor({
               title="当前轨道检查器"
               summary={`${track.kind} · ${track.id}`}
             >
-              <div className="st-fields">
-                <Field
-                  label="轨道类型"
-                  value={track.kind}
-                  options={[
-                    "background",
-                    "character",
-                    "camera",
-                    "text",
-                    "bgm",
-                    "sound",
-                    "voice",
-                    "video",
-                  ].map((value) => ({ value, label: value }))}
-                  onChange={(kind) =>
-                    changeTrack({
-                      ...track,
-                      kind: kind as SequenceTrack["kind"],
-                    })
+              <div className="st-inline">
+                <Check
+                  label="锁定当前轨道（本次编辑）"
+                  value={locked.includes(track.id)}
+                  onChange={(value) =>
+                    setLocked(
+                      value
+                        ? [...locked, track.id]
+                        : locked.filter((id) => id !== track.id),
+                    )
                   }
                 />
-                <Field
-                  label="舞台目标标识"
-                  value={track.target}
-                  onChange={(target) => changeTrack({ ...track, target })}
-                />
-                <Field
-                  label="素材 ID 或路径"
-                  value={track.asset ?? ""}
-                  onChange={(asset) =>
-                    changeTrack({ ...track, asset: asset || undefined })
-                  }
-                />
-                {track.kind !== "camera" && track.kind !== "text" && (
-                  <PickAsset
-                    kind={
-                      track.kind === "video"
-                        ? "video"
-                        : ["bgm", "sound", "voice"].includes(track.kind)
-                          ? "audio"
-                          : "image"
-                    }
-                    label="选择轨道素材"
-                    onPick={(asset) => changeTrack({ ...track, asset })}
-                  />
-                )}
-                <Field
-                  label="叠字或字幕"
-                  value={track.text ?? ""}
-                  onChange={(text) => changeTrack({ ...track, text })}
-                />
-                {(
-                  [
-                    ["start", "开始时间"],
-                    ["duration", "片段长度"],
-                    ["offset", "素材起点"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <input
-                      type="number"
-                      min={key === "duration" ? 0.01 : 0}
-                      step="0.01"
-                      value={track[key]}
-                      onChange={(e) => {
-                        const n = Number(e.target.value);
-                        if (
-                          Number.isFinite(n) &&
-                          n >= (key === "duration" ? 0.01 : 0)
-                        )
-                          changeTrack({ ...track, [key]: n });
-                      }}
-                    />
-                  </label>
-                ))}
-                <label>
-                  轨道音量
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={track.volume}
-                    onChange={(e) =>
-                      changeTrack({ ...track, volume: Number(e.target.value) })
-                    }
-                  />
-                </label>
                 <Check
-                  label="循环素材"
-                  value={track.loop}
-                  onChange={(loop) => changeTrack({ ...track, loop })}
-                />
-                <Check
-                  label="禁用此轨道"
-                  value={track.muted}
-                  onChange={(muted) => changeTrack({ ...track, muted })}
+                  label="独奏预览（不影响发行）"
+                  value={solo === track.id}
+                  onChange={(value) => setSolo(value ? track.id : "")}
                 />
               </div>
-              <button
-                onClick={() => {
-                  const copy = {
-                    ...structuredClone(track),
-                    id: randomId(),
-                    target: `${track.target}-副本`,
-                  };
-                  change({ ...sequence, tracks: [...sequence.tracks, copy] });
-                  select(copy.id);
-                }}
-              >
-                复制轨道
-              </button>
-              <button
-                onClick={() => {
-                  change({
-                    ...sequence,
-                    tracks: sequence.tracks.filter((t) => t.id !== track.id),
-                  });
-                  select("");
-                }}
-              >
-                删除当前轨道
-              </button>
-              <button
-                onClick={() =>
-                  setKeys(JSON.stringify(track.properties, null, 2))
-                }
-              >
-                编辑精确关键帧
-              </button>
-              <SequenceKeyframes
-                key={track.id}
-                track={track}
-                time={time}
-                onChange={changeTrack}
-              />
-              {keys && (
-                <>
-                  <textarea
-                    aria-label="轨道关键帧 JSON"
-                    value={keys}
-                    onChange={(e) => setKeys(e.target.value)}
+              <fieldset disabled={locked.includes(track.id)}>
+                <legend>轨道属性与操作</legend>
+                <div className="st-fields">
+                  <Field
+                    label="轨道类型"
+                    value={track.kind}
+                    options={[
+                      "background",
+                      "character",
+                      "camera",
+                      "text",
+                      "bgm",
+                      "sound",
+                      "voice",
+                      "video",
+                    ].map((value) => ({ value, label: value }))}
+                    onChange={(kind) =>
+                      changeTrack({
+                        ...track,
+                        kind: kind as SequenceTrack["kind"],
+                      })
+                    }
                   />
-                  <button
-                    onClick={() => {
-                      try {
+                  <Field
+                    label="舞台目标标识"
+                    value={track.target}
+                    onChange={(target) => changeTrack({ ...track, target })}
+                  />
+                  {track.kind === "character" && (
+                    <>
+                      <Field
+                        label="轨道人物"
+                        value={track.characterId ?? ""}
+                        options={[
+                          { value: "", label: "直接使用图片素材" },
+                          ...project.characters.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                          })),
+                        ]}
+                        onChange={(characterId) =>
+                          changeTrack({
+                            ...track,
+                            characterId: characterId || undefined,
+                            expression: undefined,
+                          })
+                        }
+                      />
+                      {track.characterId && (
+                        <Field
+                          label="轨道人物表情"
+                          value={track.expression ?? ""}
+                          options={[
+                            { value: "", label: "默认立绘" },
+                            ...Object.keys(
+                              project.characters.find(
+                                (c) => c.id === track.characterId,
+                              )?.expressions ?? {},
+                            ).map((value) => ({ value, label: value })),
+                          ]}
+                          onChange={(expression) =>
+                            changeTrack({
+                              ...track,
+                              expression: expression || undefined,
+                            })
+                          }
+                        />
+                      )}
+                    </>
+                  )}
+                  <Field
+                    label="轨道层级"
+                    type="number"
+                    min={-100}
+                    max={100}
+                    step={1}
+                    value={track.zIndex}
+                    onChange={(value) => {
+                      const zIndex = Number(value);
+                      if (Number.isInteger(zIndex) && Math.abs(zIndex) <= 100)
+                        changeTrack({ ...track, zIndex });
+                    }}
+                  />
+                  <Field
+                    label="素材 ID 或路径"
+                    value={track.asset ?? ""}
+                    onChange={(asset) =>
+                      changeTrack({ ...track, asset: asset || undefined })
+                    }
+                  />
+                  {track.kind !== "camera" && track.kind !== "text" && (
+                    <PickAsset
+                      kind={
+                        track.kind === "video"
+                          ? "video"
+                          : ["bgm", "sound", "voice"].includes(track.kind)
+                            ? "audio"
+                            : "image"
+                      }
+                      label="选择轨道素材"
+                      onPick={(asset) => changeTrack({ ...track, asset })}
+                    />
+                  )}
+                  <Field
+                    label="叠字或字幕"
+                    value={track.text ?? ""}
+                    onChange={(text) => changeTrack({ ...track, text })}
+                  />
+                  {(
+                    [
+                      ["start", "开始时间"],
+                      ["duration", "片段长度"],
+                      ["offset", "素材起点"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        type="number"
+                        min={key === "duration" ? 0.01 : 0}
+                        step="0.01"
+                        value={track[key]}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (
+                            Number.isFinite(n) &&
+                            n >= (key === "duration" ? 0.01 : 0)
+                          )
+                            changeTrack({ ...track, [key]: n });
+                        }}
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    轨道音量
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={track.volume}
+                      onChange={(e) =>
                         changeTrack({
                           ...track,
-                          properties:
-                            sequenceTrackSchema.shape.properties.parse(
-                              JSON.parse(keys),
-                            ),
-                        });
-                        setKeys("");
-                        setError("");
-                      } catch (e) {
-                        setError(String(e));
+                          volume: Number(e.target.value),
+                        })
                       }
-                    }}
-                  >
-                    应用关键帧
-                  </button>
-                </>
-              )}
+                    />
+                  </label>
+                  <Check
+                    label="循环素材"
+                    value={track.loop}
+                    onChange={(loop) => changeTrack({ ...track, loop })}
+                  />
+                  <Check
+                    label="禁用此轨道"
+                    value={track.muted}
+                    onChange={(muted) => changeTrack({ ...track, muted })}
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const copy = {
+                      ...structuredClone(track),
+                      id: randomId(),
+                      target: `${track.target}-副本`,
+                    };
+                    change({ ...sequence, tracks: [...sequence.tracks, copy] });
+                    select(copy.id);
+                  }}
+                >
+                  复制轨道
+                </button>
+                <button
+                  onClick={() => {
+                    change({
+                      ...sequence,
+                      tracks: sequence.tracks.filter((t) => t.id !== track.id),
+                    });
+                    select("");
+                    if (solo === track.id) setSolo("");
+                  }}
+                >
+                  删除当前轨道
+                </button>
+                {([-1, 1] as const).map((direction) => {
+                  const index = sequence.tracks.indexOf(track);
+                  return (
+                    <button
+                      key={direction}
+                      disabled={
+                        index + direction < 0 ||
+                        index + direction >= sequence.tracks.length
+                      }
+                      onClick={() => {
+                        const tracks = [...sequence.tracks];
+                        [tracks[index], tracks[index + direction]] = [
+                          tracks[index + direction],
+                          tracks[index],
+                        ];
+                        change({ ...sequence, tracks });
+                      }}
+                    >
+                      {direction < 0 ? "上移轨道" : "下移轨道"}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() =>
+                    setKeys(JSON.stringify(track.properties, null, 2))
+                  }
+                >
+                  编辑精确关键帧
+                </button>
+                <SequenceKeyframes
+                  key={track.id}
+                  track={track}
+                  time={time}
+                  onChange={changeTrack}
+                />
+                {keys && (
+                  <>
+                    <textarea
+                      aria-label="轨道关键帧 JSON"
+                      value={keys}
+                      onChange={(e) => setKeys(e.target.value)}
+                    />
+                    <button
+                      onClick={() => {
+                        try {
+                          changeTrack({
+                            ...track,
+                            properties:
+                              sequenceTrackSchema.shape.properties.parse(
+                                JSON.parse(keys),
+                              ),
+                          });
+                          setKeys("");
+                          setError("");
+                        } catch (e) {
+                          setError(String(e));
+                        }
+                      }}
+                    >
+                      应用关键帧
+                    </button>
+                  </>
+                )}
+              </fieldset>
             </Fold>
           )}
           {problems.map((p, i) => (

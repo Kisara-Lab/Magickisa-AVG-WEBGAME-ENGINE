@@ -7,6 +7,8 @@ import { TargetPicker } from "./TargetPicker";
 import { PickAsset } from "./AssetPicker";
 import { Fold } from "./components";
 import { expressionReferences } from "./discovery";
+import { assetKind } from "../authoring/assetKind";
+import { AssetMaintenance } from "./AssetMaintenance";
 export interface AssetFile {
   url: string;
   bytes: number;
@@ -19,6 +21,8 @@ export function AssetEditor({
   onUpload,
   nodeId,
   notice,
+  dirty,
+  onReload,
 }: {
   project: AuthorProject;
   profile: Profile;
@@ -27,6 +31,8 @@ export function AssetEditor({
   onUpload: (file: File) => Promise<string | undefined>;
   nodeId: string;
   notice: (s: string) => void;
+  dirty: boolean;
+  onReload: () => Promise<void>;
 }) {
   const navigationVersion = useNavigationSignal();
   const [search, setSearch] = useState(""),
@@ -43,6 +49,7 @@ export function AssetEditor({
     }[]
   >([]);
   const [uploading, setUploading] = useState(false);
+  const [metadata, setMetadata] = useState<{ url: string; text: string }>();
   async function importFiles(files: FileList | File[]) {
     if (uploading) return;
     setUploading(true);
@@ -92,15 +99,13 @@ export function AssetEditor({
     setUploading(false);
   }
   const selectedFile = files.find((f) => f.url === selected),
-    audio = /\.(mp3|ogg|wav)$/i.test(selected),
-    image = /\.(png|jpe?g|webp|svg)$/i.test(selected);
+    audio = assetKind(selected) === "audio",
+    image = assetKind(selected) === "image",
+    video = assetKind(selected) === "video";
   const visible = files.filter(
     (f) =>
       (!search || f.url.toLowerCase().includes(search.toLowerCase())) &&
-      (kind === "all" ||
-        (kind === "image" && /\.(png|jpe?g|webp|svg)$/i.test(f.url)) ||
-        (kind === "audio" && /\.(mp3|ogg|wav)$/i.test(f.url)) ||
-        (kind === "lyrics" && /\.lrc$/i.test(f.url))),
+      (kind === "all" || assetKind(f.url) === kind),
   );
   useEffect(() => {
     if (selected && !visible.some((file) => file.url === selected)) {
@@ -235,7 +240,8 @@ export function AssetEditor({
             ["all", "全部素材"],
             ["image", "图片"],
             ["audio", "音乐"],
-            ["lyrics", "歌词"],
+            ["video", "视频"],
+            ["lyrics", "歌词／字幕"],
           ].map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -247,9 +253,45 @@ export function AssetEditor({
         <Card title="选中资源">
           <div className="st-asset-detail">
             {image ? (
-              <img src={mediaUrl(profile, selected)} alt="选中资源预览" />
+              <img
+                key={selected}
+                src={mediaUrl(profile, selected)}
+                alt="选中资源预览"
+                onLoad={(e) =>
+                  setMetadata({
+                    url: selected,
+                    text: `${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight} 像素`,
+                  })
+                }
+              />
             ) : audio ? (
-              <audio controls src={mediaUrl(profile, selected)} />
+              <audio
+                key={selected}
+                controls
+                preload="metadata"
+                src={mediaUrl(profile, selected)}
+                onLoadedMetadata={(e) =>
+                  setMetadata({
+                    url: selected,
+                    text: `时长 ${e.currentTarget.duration.toFixed(2)} 秒`,
+                  })
+                }
+              />
+            ) : video ? (
+              <video
+                key={selected}
+                controls
+                playsInline
+                preload="metadata"
+                style={{ maxWidth: "100%", maxHeight: 320 }}
+                src={mediaUrl(profile, selected)}
+                onLoadedMetadata={(e) =>
+                  setMetadata({
+                    url: selected,
+                    text: `${e.currentTarget.videoWidth} × ${e.currentTarget.videoHeight} 像素 · ${e.currentTarget.duration.toFixed(2)} 秒`,
+                  })
+                }
+              />
             ) : (
               <a
                 href={mediaUrl(profile, selected)}
@@ -262,7 +304,43 @@ export function AssetEditor({
             <div>
               <code>{selected}</code>
               <p>{(selectedFile.bytes / 1024).toFixed(1)} KB</p>
+              {metadata?.url === selected && <p>{metadata.text}</p>}
               <div className="st-action-grid">
+                {(image || audio || video) && (
+                  <button
+                    onClick={() => {
+                      if (project.assets?.some((a) => a.src === selected)) {
+                        notice("此文件已注册通用资源 ID。");
+                        return;
+                      }
+                      const id = uniqueId(
+                        "asset",
+                        [
+                          ...(project.assets ?? []),
+                          ...project.backdrops,
+                          ...project.audio,
+                        ].map((a) => a.id),
+                      );
+                      onChange({
+                        ...project,
+                        assets: [
+                          ...(project.assets ?? []),
+                          {
+                            id,
+                            kind: image ? "image" : audio ? "audio" : "video",
+                            src: selected,
+                            name: selected.split("/").at(-1),
+                          },
+                        ],
+                      });
+                      notice(
+                        `已注册资源 ${id}，可用于台词配音、演出轨道及完整 JSON。`,
+                      );
+                    }}
+                  >
+                    注册通用资源 ID
+                  </button>
+                )}
                 {image && (
                   <>
                     <button onClick={() => assign("scene")}>
@@ -315,6 +393,7 @@ export function AssetEditor({
           </div>
         </Card>
       )}
+      <AssetMaintenance url={selected} dirty={dirty} onReload={onReload} />
       <div className="st-asset-grid">
         {visible.map((f) => (
           <button
@@ -323,11 +402,19 @@ export function AssetEditor({
             className={`st-asset-tile ${selected === f.url ? "selected" : ""}`}
             onClick={() => setSelected(f.url)}
           >
-            {/\.(png|jpe?g|webp|svg)$/i.test(f.url) ? (
+            {assetKind(f.url) === "image" ? (
               <img loading="lazy" src={mediaUrl(profile, f.url)} alt="" />
             ) : (
               <div className="st-file-icon">
-                {/\.lrc$/i.test(f.url) ? "LRC" : "♫"}
+                {
+                  {
+                    image: "图片",
+                    audio: "音频",
+                    video: "视频",
+                    lyrics: "字幕",
+                    other: "文件",
+                  }[assetKind(f.url)]
+                }
               </div>
             )}
             <span>{f.url.split("/").pop()}</span>

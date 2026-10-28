@@ -324,12 +324,20 @@ export function usages(p: AuthorProject): Usage[] {
       field: "资源注册",
     });
   for (const sequence of p.sequences ?? [])
-    for (const track of sequence.tracks)
+    for (const track of sequence.tracks) {
       asset(track.asset, `${sequence.name} · ${track.id}`, "演出轨道素材", {
         section: "presentations",
         items: {},
         field: "素材 ID 或路径",
       });
+      add(
+        "characters",
+        track.characterId,
+        `${sequence.name} · ${track.id}`,
+        "演出轨道人物",
+        { section: "presentations", items: {}, field: "轨道人物" },
+      );
+    }
   for (const entry of p.gallery ?? []) {
     const position: EditorPosition = {
       section: "project",

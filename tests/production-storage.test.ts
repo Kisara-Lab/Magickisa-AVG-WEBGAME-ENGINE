@@ -21,6 +21,89 @@ import {
   writeCreativeFiles,
 } from "../scripts/authoring/creative-backup";
 import { acquireProjectWrite } from "../scripts/project-locks";
+import {
+  inspectAsset,
+  changeAsset,
+  restoreAsset,
+  planAssetRestore,
+  assetBackups,
+} from "../scripts/asset-maintenance";
+
+test("asset replacement and removal check references and bytes, and restore backed-up content", async () => {
+  const ctx = fixture();
+  try {
+    const original = await importAssetStream(
+      ctx,
+      "图片.svg",
+      Readable.from([Buffer.from("<svg>original</svg>")]),
+    );
+    const review = inspectAsset(ctx, original.url);
+    const replacement = await changeAsset(ctx, review, {
+      name: "新版.svg",
+      stream: Readable.from([Buffer.from("<svg>replacement</svg>")]),
+    });
+    assert.equal(assetBackups(ctx).length, 1);
+    await assert.rejects(
+      () => changeAsset(ctx, review),
+      (e: any) => e.status === 409,
+    );
+    const plan = planAssetRestore(ctx, replacement.backupId);
+    await assert.rejects(
+      () =>
+        restoreAsset(
+          ctx,
+          plan.id,
+          plan.revision,
+          plan.sha256,
+          false,
+          "0".repeat(64),
+        ),
+      (e: any) => e.status === 409,
+    );
+    assert.equal(inspectAsset(ctx, original.url).sha256, replacement.sha256);
+    await restoreAsset(
+      ctx,
+      plan.id,
+      plan.revision,
+      plan.sha256,
+      false,
+      plan.backupSha256,
+    );
+    assert.equal(inspectAsset(ctx, original.url).sha256, original.sha256);
+    const snapshot = readSnapshot(ctx);
+    saveProject(
+      ctx,
+      { ...snapshot.project, backdrops: [{ id: "used", src: original.url }] },
+      snapshot.revision,
+    );
+    const referenced = inspectAsset(ctx, original.url);
+    assert(referenced.references.length > 0);
+    await assert.rejects(
+      () => changeAsset(ctx, referenced),
+      (e: any) => e.code === "REFERENCED",
+    );
+    const updated = readSnapshot(ctx);
+    saveProject(ctx, { ...updated.project, backdrops: [] }, updated.revision);
+    const removed = await changeAsset(ctx, inspectAsset(ctx, original.url));
+    assert(!fs.existsSync(path.join(ctx.public, original.url)));
+    const restore = planAssetRestore(ctx, removed.backupId);
+    assert.equal(restore.sha256, null);
+    await restoreAsset(ctx, restore.id, restore.revision, restore.sha256);
+    assert.equal(inspectAsset(ctx, original.url).sha256, original.sha256);
+    const cancel = new AbortController();
+    cancel.abort();
+    await assert.rejects(() =>
+      changeAsset(ctx, inspectAsset(ctx, original.url), {
+        name: "取消.svg",
+        stream: Readable.from([Buffer.from("cancelled")]),
+        signal: cancel.signal,
+      }),
+    );
+    assert.equal(inspectAsset(ctx, original.url).sha256, original.sha256);
+  } finally {
+    fs.rmSync(ctx.directory, { recursive: true, force: true });
+  }
+});
 
 test("creative module restoration detects changed input and recovers interrupted multi-file commits", () => {
   const ctx = fixture();

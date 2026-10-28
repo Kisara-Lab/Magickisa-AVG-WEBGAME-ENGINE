@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { StoryProject } from "./types";
+import type { StoryProject, StoryLine } from "./types";
 import { sequenceVisualState, type Sequence } from "./sequence";
-import { resolveAsset } from "./media";
+import { resolveAsset, resolveScene } from "./media";
+import { CharacterStage, CharacterHost } from "./character";
 
 function SequenceMedia({
   src,
@@ -64,7 +65,12 @@ function SequenceMedia({
     preload: "metadata",
     onError: () => onFailure("媒体无法加载或浏览器不支持该编码。"),
     onLoadedMetadata: () => {
-      if (ref.current) ref.current.currentTime = local;
+      const media = ref.current;
+      if (media)
+        media.currentTime =
+          loop && Number.isFinite(media.duration) && media.duration > 0
+            ? local % media.duration
+            : local;
     },
   };
   return video ? (
@@ -89,6 +95,8 @@ export function SequenceStage({
   voice = 1,
   reduced = false,
   assetUrl = (url: string) => url,
+  backdrop,
+  line,
   onFailure,
 }: {
   project: StoryProject;
@@ -101,35 +109,66 @@ export function SequenceStage({
   voice?: number;
   reduced?: boolean;
   assetUrl?: (url: string) => string;
+  backdrop?: string;
+  line?: StoryLine;
   onFailure: (message: string) => void;
 }) {
   const { samples, camera, visual } = sequenceVisualState(sequence, time);
   const shake = (amount: number | undefined) =>
     reduced ? 0 : (amount ?? 0) * Math.sin(time * 83);
   const speaking = samples.some((s) => s.track.kind === "voice" && s.active);
+  const replacedCharacters = new Set(
+    visual.map((s) => s.track.characterId).filter(Boolean),
+  );
+  const baseLine = line
+    ? {
+        ...line,
+        characterLayers: (
+          line.characterLayers ??
+          (line.characterId ? [{ characterId: line.characterId }] : [])
+        ).filter((layer) => !replacedCharacters.has(layer.characterId)),
+      }
+    : undefined;
   return (
     <div className="sequence-stage" aria-label="演出画面">
       <div
         className="sequence-world"
         style={{
-          transform: reduced
-            ? undefined
-            : `translate(${camera.x ?? 0}%, ${camera.y ?? 0}%) translateX(${shake(camera.shake)}px) scale(${camera.scale ?? 1}) rotate(${camera.rotation ?? 0}deg)`,
+          transform: `translate(${camera.x ?? 0}%, ${camera.y ?? 0}%) translateX(${shake(camera.shake)}px) scale(${camera.scale ?? 1}) rotate(${camera.rotation ?? 0}deg)`,
         }}
       >
+        {backdrop && (
+          <img
+            className="sequence-base"
+            src={assetUrl(backdrop)}
+            alt="场景背景"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+            onError={() => onFailure("场景背景加载失败。 ")}
+          />
+        )}
+        {baseLine && <CharacterStage project={project} line={baseLine} />}
         {visual.map(({ track, properties }) => {
           const style: CSSProperties = {
             position: "absolute",
             left: `${properties.x ?? (track.kind === "background" ? 0 : 50)}%`,
             top: `${properties.y ?? (track.kind === "background" ? 0 : 50)}%`,
             opacity: properties.opacity ?? 1,
-            transform: `translate(${track.kind === "background" ? "0, 0" : "-50%, -50%"}) translateX(${shake(properties.shake)}px) scale(${properties.scale ?? 1}) rotate(${reduced ? 0 : (properties.rotation ?? 0)}deg)`,
+            zIndex: track.zIndex,
+            transform: `translate(${track.kind === "background" ? "0, 0" : "-50%, -50%"}) translateX(${shake(properties.shake)}px) scale(${properties.scale ?? 1}) rotate(${properties.rotation ?? 0}deg)`,
             width:
               track.kind === "background"
                 ? "100%"
                 : track.kind === "text"
                   ? "85%"
-                  : "auto",
+                  : track.characterId
+                    ? "40%"
+                    : "auto",
             height:
               track.kind === "background"
                 ? "100%"
@@ -140,7 +179,19 @@ export function SequenceStage({
             whiteSpace: "pre-wrap",
             textAlign: "center",
           };
-          return track.kind === "text" ? (
+          const character = track.characterId
+            ? project.characters.find((c) => c.id === track.characterId)
+            : undefined;
+          return character ? (
+            <div style={style} key={track.id}>
+              <CharacterHost
+                project={project}
+                character={character}
+                expression={track.expression}
+                text={line?.text}
+              />
+            </div>
+          ) : track.kind === "text" ? (
             <div style={style} key={track.id}>
               {track.text}
             </div>
@@ -160,7 +211,7 @@ export function SequenceStage({
               ["bgm", "sound", "voice", "video"].includes(s.track.kind) &&
               s.active,
           )
-          .map(({ track, local, active }) => (
+          .map(({ track, local, active, properties }) => (
             <SequenceMedia
               key={track.id}
               src={assetUrl(resolveAsset(project, track.asset!))}
@@ -171,6 +222,7 @@ export function SequenceStage({
               volume={
                 master *
                 track.volume *
+                (properties.volume ?? 1) *
                 (track.kind === "bgm"
                   ? bgm * (speaking ? 0.35 : 1)
                   : track.kind === "voice"
@@ -238,6 +290,12 @@ export function SequencePlayer({
         master={volume}
         bgm={bgm}
         voice={voice}
+        backdrop={
+          store.runtime.node?.background
+            ? resolveAsset(store.project, store.runtime.node.background)
+            : resolveScene(store.project, store.runtime.node?.title ?? "")
+        }
+        line={store.runtime.line}
         sound={sound}
         onFailure={setError}
         reduced={matchMedia("(prefers-reduced-motion: reduce)").matches}

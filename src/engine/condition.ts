@@ -41,6 +41,18 @@ export function evaluateCondition(
   v: Variables,
   visited: string[] = [],
   state: ConditionState = {},
+  observe?: (condition: Condition, result: boolean) => void,
+): boolean {
+  const result = evaluateValue(c, v, visited, state, observe);
+  if (c) observe?.(c, result);
+  return result;
+}
+function evaluateValue(
+  c: Condition | undefined,
+  v: Variables,
+  visited: string[],
+  state: ConditionState,
+  observe?: (condition: Condition, result: boolean) => void,
 ): boolean {
   if (!c) return true;
   const custom = conditionHandlers.get(c.type);
@@ -64,11 +76,15 @@ export function evaluateCondition(
         ? !!v[c.key]
         : JSON.stringify(v[c.key]) === JSON.stringify(c.equals);
     case "not":
-      return !evaluateCondition(c.condition, v, visited, state);
+      return !evaluateCondition(c.condition, v, visited, state, observe);
     case "all":
-      return c.conditions.every((x) => evaluateCondition(x, v, visited, state));
+      return c.conditions.every((x) =>
+        evaluateCondition(x, v, visited, state, observe),
+      );
     case "any":
-      return c.conditions.some((x) => evaluateCondition(x, v, visited, state));
+      return c.conditions.some((x) =>
+        evaluateCondition(x, v, visited, state, observe),
+      );
     case "visited":
       return visited.includes(c.nodeId) === (c.value ?? true);
     case "count": {

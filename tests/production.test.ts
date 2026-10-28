@@ -23,6 +23,177 @@ import {
 } from "../src/authoring/batch";
 import { StoryRuntime } from "../src/engine/runtime";
 import { createSave, importSave } from "../src/engine/save";
+import { EngineStore } from "../src/engine/store";
+import { RouteRecorder } from "../src/engine/routeRecorder";
+import { CollectionStore } from "../src/engine/collections";
+import { evaluateCondition } from "../src/engine/condition";
+
+test("runtime node cache observes in-place node replacement and stable array reordering", () => {
+  const project = assertProject(blankProject("modern"));
+  const runtime = new StoryRuntime(project, createSave(project, "test"));
+  const original = project.nodes[0];
+  project.nodes[0] = { ...original, title: "修改后的标题" };
+  assert.equal(runtime.node?.title, "修改后的标题");
+  project.nodes.push({ id: "second", title: "第二场景", lines: [] });
+  assert.equal(runtime.node?.id, original.id);
+  project.nodes.reverse();
+  assert.equal(runtime.node?.id, original.id);
+});
+
+test("condition observations reflect only evaluated short-circuit branches", () => {
+  const first = { type: "flag" as const, key: "first" };
+  const skipped = { type: "flag" as const, key: "skipped" };
+  const root = { type: "all" as const, conditions: [first, skipped] };
+  const observed: unknown[] = [];
+  assert.equal(
+    evaluateCondition(
+      root,
+      { first: false, skipped: true },
+      [],
+      {},
+      (condition, result) => observed.push([condition, result]),
+    ),
+    false,
+  );
+  assert.deepEqual(observed, [
+    [first, false],
+    [root, false],
+  ]);
+});
+
+test("audio envelopes support deterministic crossfades and reject invalid gain", () => {
+  const sequence = sequenceSchema.parse({
+    id: "mix",
+    name: "交叉淡化",
+    duration: 4,
+    tracks: [
+      {
+        id: "a",
+        target: "music-a",
+        kind: "bgm",
+        asset: "/a.ogg",
+        start: 0,
+        duration: 4,
+        properties: {
+          volume: [
+            { at: 0, value: 1 },
+            { at: 4, value: 0 },
+          ],
+        },
+      },
+      {
+        id: "b",
+        target: "music-b",
+        kind: "bgm",
+        asset: "/b.ogg",
+        start: 0,
+        duration: 4,
+        properties: {
+          volume: [
+            { at: 0, value: 0 },
+            { at: 4, value: 1 },
+          ],
+        },
+      },
+    ],
+  });
+  assert.deepEqual(sequenceIssues(sequence), []);
+  assert.deepEqual(
+    sampleSequence(sequence, 2).map((s) => s.properties.volume),
+    [0.5, 0.5],
+  );
+  sequence.tracks[0].properties.volume![0].value = 2;
+  assert(sequenceIssues(sequence).some((i) => i.path.includes("volume")));
+});
+
+test("gallery progress survives new playthroughs, preserves corrupt originals and keeps preview in memory", () => {
+  const p = assertProject(blankProject("modern"));
+  p.gallery = [
+    {
+      id: "cg",
+      title: "真相",
+      asset: "/cg.png",
+      unlock: { type: "flag", key: "solved" },
+    },
+  ];
+  const values = new Map<string, string>();
+  let fail = false;
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      if (fail) throw new Error("quota");
+      values.set(key, value);
+    },
+  };
+  const first = new EngineStore(p, { storage });
+  first.setVariable("solved", true);
+  first.reset();
+  assert.equal(first.save.variables.solved, undefined);
+  assert.deepEqual(first.collections.snapshot.gallery, ["cg"]);
+  const second = new EngineStore(p, { storage });
+  assert.deepEqual(second.collections.snapshot.gallery, ["cg"]);
+  const before = new Map(values);
+  const preview = new EngineStore(p, { storage, persist: false });
+  preview.setVariable("solved", true);
+  assert.deepEqual(values, before);
+  const progress = new CollectionStore("new-project", storage);
+  fail = true;
+  progress.update(p, { ...first.save, variables: { solved: true } });
+  assert.match(progress.error, /尚未保存/);
+  assert.deepEqual(progress.snapshot.gallery, ["cg"]);
+  fail = false;
+  progress.update(p, first.save);
+  assert.equal(progress.error, "");
+  values.set(progress.key, "broken");
+  const broken = new CollectionStore("new-project", storage);
+  broken.update(p, first.save);
+  assert.equal(values.get(progress.key), "broken");
+  assert.match(broken.error, /原数据已保留/);
+});
+
+test("recorded preview actions replay from exact initial state without reapplying entry effects", () => {
+  const p = assertProject(blankProject("modern"));
+  p.nodes[0].onEnter = [{ type: "increment", key: "entered", amount: 1 }];
+  p.nodes[0].lines = [
+    {
+      id: "input",
+      text: "姓名",
+      input: { key: "name", label: "姓名", maxLength: 20 },
+    },
+    { id: "reply", text: "你好" },
+  ];
+  p.nodes[0].choices = [
+    { id: "repeat", label: "重新询问", target: p.startNodeId },
+  ];
+  const store = new EngineStore(p, { persist: false });
+  const recorder = new RouteRecorder(store);
+  store.setVariable("name", "小林");
+  store.advance();
+  store.advance();
+  const recorded = recorder.stop("问询");
+  assert.equal(recorded.initialSave?.variables.entered, 1);
+  assert.equal(
+    runStorySuite(p, { formatVersion: 1, tests: [recorded] }).passed,
+    true,
+  );
+  const invalid = new RouteRecorder(store);
+  store.setVariable("debug", true);
+  assert.throws(() => invalid.stop("invalid"), /调试赋值/);
+  let called = 0;
+  store.subscribeEvents((event) => {
+    event.after.node = "tampered";
+    throw new Error("observer failed");
+  });
+  store.subscribeEvents((event) => {
+    called++;
+    assert.notEqual(event.after.node, "tampered");
+  });
+  store.setVariable("debug", false);
+  assert.equal(called, 1);
+  assert.equal(store.save.nodeId, p.startNodeId);
+  assert.match(store.observerError, /observer failed/);
+  store.destroy();
+});
 import {
   mapProjectResources,
   deploymentResource,

@@ -2,93 +2,120 @@ import { useEffect, useRef, useState } from "react";
 import type { StoryProject, PresentationState } from "./types";
 import { ReleasePresentation } from "./ReleasePresentation";
 import { resolveAsset } from "./media";
+import { SequenceClock, sequenceSchema } from "./sequence";
+
+/** Special visual renderers share the same finite clock as ordinary sequences. */
 export function PresentationHost({
   project,
   presentation,
   onFinish,
   onProgress,
   volume = 1,
+  paused: externalPause = false,
 }: {
   project: StoryProject;
   presentation: PresentationState;
   onFinish: () => void;
   onProgress?: (time: number) => void;
   volume?: number;
+  paused?: boolean;
 }) {
-  const [time, setTime] = useState(presentation.position || 0),
-    [blocked, setBlocked] = useState(false),
-    [paused, setPaused] = useState(false);
-  const audio = useRef<HTMLAudioElement>(null),
-    lastReported = useRef(presentation.position || 0);
   const media =
     presentation.id === "opening"
       ? project.media.opening
       : project.media.ending;
-  const src = media?.audio;
+  const duration =
+    media?.duration ?? (presentation.id === "opening" ? 89 : 198);
+  const [time, setTime] = useState(
+    Math.min(presentation.position || 0, duration),
+  );
+  const [blocked, setBlocked] = useState(false),
+    [paused, setPaused] = useState(false),
+    [retry, setRetry] = useState(0);
+  const audio = useRef<HTMLAudioElement>(null),
+    clock = useRef<SequenceClock>(),
+    finished = useRef(false);
+  const callbacks = useRef({ onFinish, onProgress });
+  callbacks.current = { onFinish, onProgress };
+  const finish = () => {
+    if (!finished.current) {
+      finished.current = true;
+      callbacks.current.onFinish();
+    }
+  };
   useEffect(() => {
-    const a = audio.current;
-    if (a) a.volume = volume;
-  }, [volume]);
+    const initial = Math.min(presentation.position || 0, duration);
+    clock.current = new SequenceClock(
+      sequenceSchema.parse({
+        id: presentation.id,
+        name: presentation.id,
+        duration,
+        tracks: [],
+      }),
+      { time: initial, waiting: null, finished: initial === duration },
+    );
+    finished.current = false;
+    setTime(initial);
+    if (initial === duration) finish();
+  }, [presentation.id, presentation.nodeId, duration]);
+  const stopped = externalPause || paused || blocked;
   useEffect(() => {
-    setPaused(false);
-    setBlocked(false);
-    if (!src) return;
-    const a = audio.current;
-    void a?.play().catch(() => setBlocked(true));
-    return () => {
-      a?.pause();
-    };
-  }, [src, presentation.nodeId]);
-  useEffect(() => {
-    const a = audio.current;
-    if (!a) return;
-    const update = () => {
-      const value = a.currentTime;
-      setTime((t) => Math.max(t, value));
-      if (Math.abs(value - lastReported.current) >= 2) {
-        lastReported.current = value;
-        onProgress?.(value);
-      }
-    };
-    const loaded = () => {
-      if (presentation.position)
-        a.currentTime = Math.min(
-          presentation.position,
-          a.duration || presentation.position,
+    const element = audio.current;
+    if (!element || !media?.audio) return;
+    let alive = true;
+    element.volume = Math.max(0, Math.min(1, volume));
+    const align = () => {
+      if (Number.isFinite(element.duration))
+        element.currentTime = Math.min(
+          clock.current?.cursor.time ?? 0,
+          element.duration,
         );
     };
-    const fail = () => setBlocked(true);
-    a.addEventListener("timeupdate", update);
-    a.addEventListener("loadedmetadata", loaded);
-    a.addEventListener("ended", onFinish);
-    a.addEventListener("error", fail);
-    return () => {
-      a.removeEventListener("timeupdate", update);
-      a.removeEventListener("loadedmetadata", loaded);
-      a.removeEventListener("ended", onFinish);
-      a.removeEventListener("error", fail);
+    const fail = () => {
+      if (alive) setBlocked(true);
     };
-  }, [onFinish, onProgress]);
+    element.addEventListener("loadedmetadata", align);
+    element.addEventListener("error", fail);
+    if (stopped) element.pause();
+    else {
+      align();
+      void element.play().catch(fail);
+    }
+    return () => {
+      alive = false;
+      element.pause();
+      element.removeEventListener("loadedmetadata", align);
+      element.removeEventListener("error", fail);
+    };
+  }, [media?.audio, stopped, volume, retry]);
   useEffect(() => {
-    if (paused) return;
-    let previous = audio.current?.currentTime || 0,
-      lastChange = performance.now();
+    if (stopped) return;
+    let previous = performance.now(),
+      reported = time;
     const timer = setInterval(() => {
-      const current = audio.current?.currentTime || 0;
-      if (current > previous) {
-        previous = current;
-        lastChange = performance.now();
-        setTime((t) => Math.max(t, current));
-      } else if (!src || blocked || performance.now() - lastChange >= 2000) {
-        setTime((t) => t + 0.25);
+      const now = performance.now(),
+        dt = Math.min(0.25, (now - previous) / 1000);
+      previous = now;
+      if (!clock.current || finished.current) return;
+      const done = clock.current.tick(dt),
+        value = clock.current.cursor.time;
+      setTime(value);
+      const element = audio.current;
+      if (
+        element &&
+        !element.paused &&
+        Math.abs(element.currentTime - value) > 0.35 &&
+        value < element.duration
+      )
+        element.currentTime = value;
+      if (value - reported >= 1 || done) {
+        callbacks.current.onProgress?.(value);
+        reported = value;
       }
-    }, 250);
+      if (done) finish();
+    }, 50);
     return () => clearInterval(timer);
-  }, [src, blocked, paused]);
-  useEffect(() => {
-    if (time >= (media?.duration ?? (presentation.id === "opening" ? 89 : 198)))
-      onFinish();
-  }, [time, media?.duration, onFinish]);
+  }, [stopped, presentation.id, presentation.nodeId, duration]);
   return (
     <ReleasePresentation
       project={project}
@@ -96,29 +123,24 @@ export function PresentationHost({
       time={time}
       audioRef={audio}
       resolveAsset={(asset) => resolveAsset(project, asset)}
-      onSkip={onFinish}
+      onSkip={finish}
     >
       <div className="restored-presentation-controls">
         {blocked && (
-          <button
-            onClick={() =>
-              void audio.current
-                ?.play()
-                .then(() => setBlocked(false))
-                .catch(() => setBlocked(true))
-            }
-          >
-            播放音乐
-          </button>
+          <>
+            <p role="alert">演出音频加载失败或播放受阻，时间已暂停。</p>
+            <button
+              onClick={() => {
+                audio.current?.load();
+                setBlocked(false);
+                setRetry((value) => value + 1);
+              }}
+            >
+              重试播放音乐
+            </button>
+          </>
         )}
-        <button
-          onClick={() => {
-            if (paused)
-              void audio.current?.play().catch(() => setBlocked(true));
-            else audio.current?.pause();
-            setPaused(!paused);
-          }}
-        >
+        <button onClick={() => setPaused((value) => !value)}>
           {paused ? "继续演出" : "暂停演出"}
         </button>
       </div>

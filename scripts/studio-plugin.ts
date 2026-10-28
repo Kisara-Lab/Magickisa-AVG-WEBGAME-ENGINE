@@ -1,6 +1,13 @@
 import type { Plugin } from "vite";
 import { importAssetStream } from "./asset-stream";
 import { listBackups, previewBackup, restoreBackup } from "./backups";
+import {
+  inspectAsset,
+  changeAsset,
+  assetBackups,
+  restoreAsset,
+  planAssetRestore,
+} from "./asset-maintenance";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -150,6 +157,28 @@ export function studioPlugin(): Plugin {
             res.end(JSON.stringify(await importAssetStream(ctx, name, req)));
             return;
           }
+          if (req.method === "POST" && url.pathname === "/assets/replace") {
+            const cancel = new AbortController();
+            req.once("aborted", () => cancel.abort());
+            res.once("close", () => {
+              if (!res.writableEnded) cancel.abort();
+            });
+            const request = {
+              url: url.searchParams.get("url") ?? "",
+              revision: url.searchParams.get("revision") ?? "",
+              sha256: url.searchParams.get("sha256") ?? "",
+            };
+            res.end(
+              JSON.stringify(
+                await changeAsset(ctx, request, {
+                  name: url.searchParams.get("name") ?? "",
+                  stream: req,
+                  signal: cancel.signal,
+                }),
+              ),
+            );
+            return;
+          }
           if (
             req.method === "POST" &&
             !["/validate", "/packages/cancel"].includes(url.pathname)
@@ -197,10 +226,19 @@ export function studioPlugin(): Plugin {
               ".jpg": "image/jpeg",
               ".jpeg": "image/jpeg",
               ".webp": "image/webp",
+              ".avif": "image/avif",
+              ".gif": "image/gif",
               ".svg": "image/svg+xml",
               ".mp3": "audio/mpeg",
               ".wav": "audio/wav",
               ".ogg": "audio/ogg",
+              ".m4a": "audio/mp4",
+              ".aac": "audio/aac",
+              ".flac": "audio/flac",
+              ".mp4": "video/mp4",
+              ".webm": "video/webm",
+              ".ogv": "video/ogg",
+              ".vtt": "text/vtt; charset=utf-8",
               ".lrc": "text/plain; charset=utf-8",
               ".json": "application/json",
               ".moc3": "application/octet-stream",
@@ -215,6 +253,7 @@ export function studioPlugin(): Plugin {
               mime[path.extname(file).toLowerCase()],
             );
             res.setHeader("Accept-Ranges", "bytes");
+            res.setHeader("Cache-Control", "no-store");
             const size = fs.statSync(file).size,
               match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || "");
             if (match) {
@@ -289,6 +328,26 @@ export function studioPlugin(): Plugin {
             );
             return;
           }
+          if (req.method === "GET" && url.pathname === "/assets/inspect") {
+            res.end(
+              JSON.stringify(
+                inspectAsset(ctx, url.searchParams.get("url") ?? ""),
+              ),
+            );
+            return;
+          }
+          if (req.method === "GET" && url.pathname === "/assets/history") {
+            res.end(JSON.stringify({ backups: assetBackups(ctx) }));
+            return;
+          }
+          if (req.method === "GET" && url.pathname === "/assets/restore-plan") {
+            res.end(
+              JSON.stringify(
+                planAssetRestore(ctx, url.searchParams.get("id") ?? ""),
+              ),
+            );
+            return;
+          }
           if (req.method === "GET" && url.pathname === "/backups") {
             res.end(JSON.stringify({ backups: listBackups(ctx) }));
             return;
@@ -327,6 +386,32 @@ export function studioPlugin(): Plugin {
               throw new Error("请求超过 12 MB。");
           }
           const data = JSON.parse(body);
+          if (url.pathname === "/assets/remove") {
+            res.end(
+              JSON.stringify(await changeAsset(ctx, data, undefined, true)),
+            );
+            return;
+          }
+          if (url.pathname === "/assets/restore") {
+            if (
+              typeof data.backupSha256 !== "string" ||
+              !/^[a-f0-9]{64}$/.test(data.backupSha256)
+            )
+              throw new Error("恢复方案缺少有效的备份 SHA256");
+            res.end(
+              JSON.stringify(
+                await restoreAsset(
+                  ctx,
+                  data.id,
+                  data.revision,
+                  data.sha256,
+                  true,
+                  data.backupSha256,
+                ),
+              ),
+            );
+            return;
+          }
           if (url.pathname === "/backups/restore") {
             res.end(
               JSON.stringify(

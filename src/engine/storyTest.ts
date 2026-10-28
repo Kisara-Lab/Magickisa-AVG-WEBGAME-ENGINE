@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { assertProject, conditionSchema, valueSchema } from "./schema";
-import { createSave } from "./save";
+import { createSave, importSave, saveSchema } from "./save";
 import { StoryRuntime } from "./runtime";
 import { evaluateCondition, jsonEqual } from "./condition";
-import type { EngineSave, StoryProject } from "./types";
+import type { Condition, EngineSave, StoryProject } from "./types";
 
 const id = z.string().min(1);
 export const storyTestStepSchema = z.discriminatedUnion("action", [
@@ -33,6 +33,7 @@ export const storyTestSchema = z
   .object({
     id,
     name: id,
+    initialSave: saveSchema.optional(),
     initial: z
       .object({
         node: id.optional(),
@@ -46,7 +47,11 @@ export const storyTestSchema = z
       .optional(),
     steps: z.array(storyTestStepSchema).min(1).max(10000),
   })
-  .strict();
+  .strict()
+  .refine(
+    (t) => !(t.initial && t.initialSave),
+    "initial 与 initialSave 不能同时指定",
+  );
 export const storyTestSuiteSchema = z
   .object({
     formatVersion: z.literal(1),
@@ -82,6 +87,7 @@ export interface StoryTestResult {
     lines: string[];
     choices: string[];
     endings: string[];
+    conditions: { path: string; outcomes: boolean[] }[];
   };
 }
 
@@ -91,7 +97,9 @@ export function runStoryTest(
 ): StoryTestResult {
   assertProject(project);
   test = storyTestSchema.parse(test);
-  const initial = createSave(project);
+  const initial = test.initialSave
+    ? importSave(test.initialSave, project)
+    : createSave(project);
   const seed = test.initial;
   if (seed) {
     initial.nodeId = seed.node ?? project.startNodeId;
@@ -123,7 +131,31 @@ export function runStoryTest(
     initial.usedChoices = [...seed.usedChoices];
   }
   // No persistence adapter, browser globals or wall-clock waits are involved.
-  const runtime = new StoryRuntime(project, initial);
+  const conditionPaths = new WeakMap<Condition, string>();
+  const outcomes = new Map<string, Set<boolean>>();
+  const register = (condition: Condition | undefined, path: string) => {
+    if (!condition) return;
+    conditionPaths.set(condition, path);
+    outcomes.set(path, new Set());
+    if (condition.type === "not") register(condition.condition, `${path}/not`);
+    if (condition.type === "all" || condition.type === "any")
+      condition.conditions.forEach((c, i) =>
+        register(c, `${path}/${condition.type}/${i}`),
+      );
+  };
+  for (const node of project.nodes) {
+    register(node.condition, `scene:${node.id}/condition`);
+    for (const line of node.lines)
+      register(line.condition, `line:${line.id}/condition`);
+    for (const choice of node.choices ?? [])
+      register(choice.condition, `choice:${choice.id}/condition`);
+  }
+  for (const material of project.materials)
+    register(material.unlock, `material:${material.id}/unlock`);
+  const runtime = new StoryRuntime(project, initial, (condition, result) => {
+    const path = conditionPaths.get(condition);
+    if (path) outcomes.get(path)!.add(result);
+  });
   const nodes = new Set<string>(),
     lines = new Set<string>(),
     choices = new Set<string>();
@@ -168,9 +200,11 @@ export function runStoryTest(
           const sequence = project.sequences!.find(
             (s) => s.id === runtime.save.sequence!.id,
           )!;
+          const trigger = runtime.save.sequence!.trigger;
           for (
             let i = 0;
             runtime.save.sequence?.id === sequence.id &&
+            runtime.save.sequence?.trigger === trigger &&
             i <= sequence.waits.length + 1;
             i++
           ) {
@@ -260,6 +294,10 @@ export function runStoryTest(
       lines: [...lines],
       choices: [...choices],
       endings: [...runtime.save.completedEndings],
+      conditions: [...outcomes].map(([path, values]) => ({
+        path,
+        outcomes: [...values].sort(),
+      })),
     },
   };
 }
@@ -290,7 +328,13 @@ export function runStorySuite(
           line: null,
         },
         trace: [],
-        coverage: { nodes: [], lines: [], choices: [], endings: [] },
+        coverage: {
+          nodes: [],
+          lines: [],
+          choices: [],
+          endings: [],
+          conditions: [],
+        },
       };
     }
   });

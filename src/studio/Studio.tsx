@@ -96,6 +96,7 @@ import { ProjectDetails } from "./ProjectDetails";
 import { ProductionPanel } from "./ProductionPanel";
 import { SequenceEditor } from "./SequenceEditor";
 import { BackupPanel } from "./BackupPanel";
+import { PreviewRecorder } from "./PreviewRecorder";
 import type { PresentationMode } from "./PresentationEditor";
 import { AssetEditor, CharacterEditor, MaterialEditor } from "./LibraryEditors";
 import type { AssetFile } from "./LibraryEditors";
@@ -1775,6 +1776,11 @@ export function Studio() {
                       onUpload={upload}
                       nodeId={node.id}
                       notice={setNotice}
+                      dirty={dirty || rawDirty}
+                      onReload={async () => {
+                        setFiles((await request(profile, "assets")).files);
+                        setPreview(null);
+                      }}
                     />
                   )}
                   {section === "characters" && (
@@ -2121,6 +2127,11 @@ export function Studio() {
             className={`st-preview-dock ${previewLarge ? "large" : ""}`}
             hidden={!previewVisible}
           >
+            <PreviewRecorder
+              iframe={iframe}
+              authoring={authoring}
+              loaded={!!preview && preview.mode === "scene"}
+            />
             <ResizeHandle
               label="调整预览栏宽度"
               value={layout.right}

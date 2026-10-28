@@ -3,6 +3,13 @@ import { readStudioData } from "../studio-data";
 import { importAssetStream } from "../asset-stream";
 import { listBackups, previewBackup, restoreBackup } from "../backups";
 import {
+  inspectAsset,
+  changeAsset,
+  assetBackups,
+  planAssetRestore,
+  restoreAsset,
+} from "../asset-maintenance";
+import {
   runStorySuite,
   storyTestSuiteSchema,
 } from "../../src/engine/storyTest";
@@ -69,7 +76,16 @@ const commands: Record<string, string[]> = {
   effect: ["add", "update", "remove", "clear"],
   entity: ["list", "show", "add", "update", "remove"],
   media: ["show", "set", "unset"],
-  asset: ["list", "import"],
+  asset: [
+    "list",
+    "import",
+    "inspect",
+    "replace",
+    "remove",
+    "history",
+    "restore-plan",
+    "restore",
+  ],
   script: ["export", "import", "export-markdown", "import-markdown"],
   package: ["export", "import"],
   edit: [],
@@ -219,7 +235,18 @@ function parse(args: string[]) {
     effect: ["scene", "id", "phase", "index", "data", "dry-run", "if-revision"],
     entity: ["collection", "id", "data", "dry-run", "if-revision"],
     media: ["kind", "data", "dry-run", "if-revision"],
-    asset: action === "import" ? ["file", "name"] : [],
+    asset:
+      action === "import"
+        ? ["file", "name"]
+        : action === "inspect"
+          ? ["path", "out"]
+          : action === "restore-plan"
+            ? ["id", "out"]
+            : action === "replace"
+              ? ["file", "data"]
+              : ["restore", "remove"].includes(action ?? "")
+                ? ["file"]
+                : [],
     edit: ["data", "file", "dry-run", "if-revision"],
     script: action?.startsWith("export")
       ? ["out"]
@@ -255,7 +282,11 @@ function parse(args: string[]) {
       if (options[key] !== undefined)
         throw failure(`${group} ${action} does not accept --${key}`);
   }
-  if (options.file && options.data)
+  if (
+    options.file &&
+    options.data &&
+    !(group === "asset" && action === "replace")
+  )
     throw failure("--file 与 --data 只能指定一个");
   return { group, action, options };
 }
@@ -588,6 +619,64 @@ export async function execute(args: string[], signal: AbortSignal) {
     };
   if (group === "asset") {
     if (action === "list") return { files: listAssets(ctx) };
+    if (action === "history") return { backups: assetBackups(ctx) };
+    if (action === "inspect" || action === "restore-plan") {
+      const plan =
+        action === "inspect"
+          ? inspectAsset(ctx, need("path"))
+          : planAssetRestore(ctx, need("id"));
+      if (o.out) writeOutput(need("out"), JSON.stringify(plan, null, 2) + "\n");
+      return plan;
+    }
+    if (["replace", "remove", "restore"].includes(action!)) {
+      const plan = z
+        .object({
+          workspaceId: z.string(),
+          url: z.string(),
+          revision: z.string(),
+          sha256: z.string().nullable(),
+          id: z.string().optional(),
+          backupSha256: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
+        })
+        .parse(
+          await jsonInput(
+            action === "replace" ? need("data") : "@" + need("file"),
+            signal,
+          ),
+        );
+      if (plan.workspaceId !== ctx.id)
+        throw failure("素材操作方案属于另一工作区");
+      if (action === "restore") {
+        if (!plan.backupSha256) throw failure("恢复方案缺少备份 SHA256");
+        return restoreAsset(
+          ctx,
+          plan.id ?? "",
+          plan.revision,
+          plan.sha256,
+          false,
+          plan.backupSha256,
+        );
+      }
+      if (!plan.sha256) throw failure("素材操作方案缺少 SHA256");
+      const stream =
+        action === "replace"
+          ? fs.createReadStream(path.resolve(need("file")))
+          : undefined;
+      try {
+        return await changeAsset(
+          ctx,
+          { ...plan, sha256: plan.sha256 },
+          stream
+            ? { name: path.basename(need("file")), stream, signal }
+            : undefined,
+        );
+      } finally {
+        stream?.destroy();
+      }
+    }
     const file = path.resolve(need("file"));
     return importAssetStream(
       ctx,

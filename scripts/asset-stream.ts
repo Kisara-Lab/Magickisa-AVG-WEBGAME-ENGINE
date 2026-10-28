@@ -21,15 +21,11 @@ export function assetName(name: string) {
     });
   return name;
 }
-export async function importAssetStream(
+export async function receiveAssetStream(
   ctx: ProjectContext,
-  name: string,
   source: Readable,
-  alreadyLocked = false,
   signal?: AbortSignal,
 ) {
-  assetName(name);
-  const release = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
   const staging = contained(
     ctx.directory,
     ".asset-upload-" + crypto.randomUUID(),
@@ -64,6 +60,30 @@ export async function importAssetStream(
         code: "VALIDATION",
         exitCode: 1,
       });
+    signal?.throwIfAborted();
+    return {
+      file: staging,
+      bytes,
+      sha256: hash.digest("hex"),
+      cleanup: () => fs.rmSync(staging, { force: true }),
+    };
+  } catch (error) {
+    fs.rmSync(staging, { force: true });
+    throw error;
+  }
+}
+export async function importAssetStream(
+  ctx: ProjectContext,
+  name: string,
+  source: Readable,
+  alreadyLocked = false,
+  signal?: AbortSignal,
+) {
+  assetName(name);
+  const release = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
+  let staged: Awaited<ReturnType<typeof receiveAssetStream>> | undefined;
+  try {
+    staged = await receiveAssetStream(ctx, source, signal);
     const folder = contained(ctx.public, "assets/imported");
     fs.mkdirSync(folder, { recursive: true });
     const ext = path.extname(name),
@@ -79,14 +99,14 @@ export async function importAssetStream(
     signal?.throwIfAborted();
     // Both paths are in the same workspace filesystem. Linking publishes the
     // complete inode atomically without overwriting or copying a large payload.
-    await fs.promises.link(staging, destination);
+    await fs.promises.link(staged.file, destination);
     return {
       url: `/assets/imported/${unique}`,
-      bytes,
-      sha256: hash.digest("hex"),
+      bytes: staged.bytes,
+      sha256: staged.sha256,
     };
   } finally {
-    fs.rmSync(staging, { force: true });
+    staged?.cleanup();
     release();
   }
 }

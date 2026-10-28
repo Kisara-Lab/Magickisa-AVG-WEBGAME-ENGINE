@@ -29,6 +29,9 @@
 - 选中片段后，左右键移动，Shift＋左右键调整长度；Esc 取消尚未释放的拖动。
 - 检查器提供开始时间、长度、素材偏移、音量、循环和禁用；缩短片段不能悄悄删掉范围外的关键帧。
 - 可视关键帧编辑提供位置、缩放、透明度、旋转、震动和缓动，仍保留完整关键帧 JSON。
+- 音量包络范围为 0–1，与轨道音量及玩家音量相乘。两条使用不同舞台目标标识的音轨可以重叠，一条从 1 降到 0、另一条从 0 升到 1，实现交叉淡化。
+- 锁定轨道后，时间轴、舞台与属性编辑均禁止改动；独奏只影响 Studio 预览，不修改发行配置。两者仅在本次编辑生效。上移／下移调整轨道顺序，开始时间保持不变。
+- “复用演出预设”可以复制、导出 JSON 或检查导入。复制生成新的演出和轨道 ID；预设不携带素材，不自动绑定名称相似的人物。导入摘要列出媒体路径和人物 ID，应用前需核对目标工程中的资源。
 - 选中视觉轨道后在舞台拖动，为播放头位置创建位置关键帧；释放时提交一次修改。
 - 等待点暂停演出，玩家点击继续。允许跳过的序列可直接到达终态；退出演出后保留终态画面，进入下一场景清除。
 
@@ -52,6 +55,18 @@ node scripts/magickisa.mjs schema tests --json
 
 测试使用真实剧情运行时，且不写玩家存档。覆盖报告只代表这些具体路线，不能证明全部条件下均可通行。声音、图像、视频及布局仍需真实浏览器验收。
 
+真实预览旁的“录制路线测试”可从当前内存状态录制操作，停止后检查 JSON，再加入创作测试。录制包含推进、输入、分支选择、资料阅读和演出完成；跳转调试、回退、重置或读档会使本次记录失效，需要重新录制。初始状态快照避免重放时重复执行进入效果，玩家笔记与历史不作为录制输入。
+
+条件覆盖只记录实际求值结果。组合条件短路时，没有求值的子条件仍为未覆盖，不把整棵条件树当作已测试。修改工程或测试后，应重新运行。
+
+## 变量、画廊与扩展
+
+工程页支持声明变量类型与初始值，列表和对象保留 JSON 编辑；变量声明与变量用途注释分开保存。调查逻辑仍由条件与效果完成。
+
+画廊条目使用明确的图片与解锁条件。玩家通过菜单查看“画廊与结局”，未解锁条目隐藏名称与图片；收集记录按作品保留，重新开始故事不清空。Studio 内嵌预览仅使用内存收集记录。存储失败时保留当前会话进度并提供重试，损坏记录不会自动覆盖。
+
+引擎扩展可通过 `EngineStore.subscribeEvents` 观察动作、位置、变量、资料和结局事件；订阅者异常不会中断剧情保存。该接口用于集成与诊断，不是时间轴执行任意脚本的入口。
+
 ## 素材与恢复
 
 Studio 和 CLI 的流式素材导入支持单文件 512 MiB，保留唯一文件名策略。Studio 显示进度并允许取消；取消／失败会清理本次临时上传，不覆盖旧资源。工程包适用于携带全部素材迁移开发。
@@ -69,6 +84,20 @@ node scripts/magickisa.mjs backup restore --workspace WORKSPACE_ID --file restor
 ```
 
 方案绑定工作区与版本。版本已变化或备份文件被改动时，重新检查差异，不自动覆盖。
+
+素材库的“素材检查、替换与恢复”显示文件摘要和已保存引用。原位替换仅接受相同扩展名，影响全部引用位置；仍有引用的素材不能删除。替换、删除前备份原文件，可检查历史后恢复。先处理未保存工程和 JSON，操作后手动更新真实预览。
+
+CLI 的素材操作也采用检查方案，不会在文件变化后强行覆盖：
+
+```sh
+node scripts/magickisa.mjs asset inspect --workspace WORKSPACE_ID --path /assets/imported/image.svg --out asset-plan.json --json
+node scripts/magickisa.mjs asset replace --workspace WORKSPACE_ID --data @asset-plan.json --file new-image.svg --json
+node scripts/magickisa.mjs asset history --workspace WORKSPACE_ID --json
+node scripts/magickisa.mjs asset restore-plan --workspace WORKSPACE_ID --id BACKUP_ID --out asset-restore.json --json
+node scripts/magickisa.mjs asset restore --workspace WORKSPACE_ID --file asset-restore.json --json
+```
+
+检查方案绑定工作区、工程 revision 和当前文件 SHA256，恢复还核对备份 SHA256。`--out` 不覆盖已有方案，请使用新文件名。素材历史备份与工程元数据备份分别管理；携带完整资源迁移仍使用工程包。
 
 ## 子目录发行
 

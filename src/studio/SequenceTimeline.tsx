@@ -8,12 +8,14 @@ export function SequenceTimeline({
   selected,
   onSelect,
   onChange,
+  locked = [],
 }: {
   sequence: Sequence;
   zoom: number;
   selected: string;
   onSelect: (id: string) => void;
   onChange: (track: SequenceTrack) => void;
+  locked?: string[];
 }) {
   const [snap, setSnap] = useState(true);
   const [preview, setPreview] = useState<SequenceTrack>();
@@ -58,7 +60,7 @@ export function SequenceTimeline({
                   }}
                   onClick={() => onSelect(track.id)}
                   onPointerDown={(e) => {
-                    if (e.button !== 0) return;
+                    if (e.button !== 0 || locked.includes(original.id)) return;
                     onSelect(original.id);
                     e.currentTarget.setPointerCapture(e.pointerId);
                     gesture.current = {
@@ -121,6 +123,7 @@ export function SequenceTimeline({
                   onPointerCancel={cancel}
                   onLostPointerCapture={cancel}
                   onKeyDown={(e) => {
+                    if (locked.includes(original.id)) return;
                     if (e.key === "Escape") {
                       cancel();
                       return;
@@ -154,6 +157,7 @@ export function SequenceTimeline({
                   }}
                 >
                   {track.kind} · {track.target} {track.muted ? "（禁用）" : ""}
+                  {locked.includes(track.id) ? "（锁定）" : ""}
                   <span
                     data-resize="true"
                     aria-hidden="true"

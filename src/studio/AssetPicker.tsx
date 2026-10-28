@@ -4,6 +4,7 @@ import type { AssetFile } from "./LibraryEditors";
 import type { Profile, AuthorProject } from "./model";
 import { mediaUrl, uniqueId } from "./model";
 import { Modal } from "./components";
+import { assetKind } from "../authoring/assetKind";
 type Kind = "image" | "audio" | "lyrics" | "video";
 interface Pick {
   kind: Kind;
@@ -43,14 +44,7 @@ export function AssetPickerProvider({
     [query, setQuery] = useState(""),
     [selected, setSelected] = useState("");
   const matches = (f: AssetFile) =>
-    (pick?.kind === "image"
-      ? /\.(png|jpe?g|webp|svg|gif|avif)$/i
-      : pick?.kind === "audio"
-        ? /\.(mp3|ogg|wav|m4a|aac|flac)$/i
-        : pick?.kind === "video"
-          ? /\.(mp4|webm|ogv)$/i
-          : /\.(lrc|vtt)$/i
-    ).test(f.url.split(/[?#]/)[0]) &&
+    assetKind(f.url) === pick?.kind &&
     f.url.toLowerCase().includes(query.toLowerCase());
   return (
     <PickerContext.Provider

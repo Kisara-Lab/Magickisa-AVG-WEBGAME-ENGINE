@@ -71,6 +71,12 @@ export function EngineViewport({
             sequence={terminal}
             time={terminal.duration}
             playing={false}
+            backdrop={
+              node?.background
+                ? resolveAsset(project, node.background)
+                : resolveScene(project, node?.title ?? "")
+            }
+            line={line}
             onFailure={(message) => setStageError({ id: terminal.id, message })}
           />
         </div>

@@ -1,6 +1,7 @@
 import { PlayerGate } from "./PlayerGate";
 import { useVoice } from "./useVoice";
 import { SequencePlayer } from "../engine/SequenceStage";
+import { GalleryPanel } from "./GalleryPanel";
 import {
   mapProjectResources,
   deploymentResource,
@@ -673,6 +674,7 @@ export function GameSession({
     chapters: "章节目录",
     notes: "旅者笔记",
     music: "音乐鉴赏",
+    gallery: "画廊与结局",
     clue: "证据",
     encyclopedia: "百科全书",
     newspaper: "报刊",
@@ -711,6 +713,7 @@ export function GameSession({
                 "newspaper",
                 "notes",
                 "music",
+                "gallery",
                 "settings",
               ].map((id) => (
                 <button key={id} onClick={() => open(id)}>
@@ -766,6 +769,8 @@ export function GameSession({
                 </button>
               )}
             </nav>
+          ) : panel === "gallery" ? (
+            <GalleryPanel store={store} />
           ) : panel === "settings" ? (
             <>
               <ReadingSettings
@@ -1105,6 +1110,7 @@ export function GameSession({
           key={`${save.presentation.id}:${save.presentation.nodeId}`}
           project={project}
           presentation={save.presentation}
+          paused={!!panel || !!confirmation || !pageActive}
           onProgress={(time) => store.setPresentationPosition(time)}
           volume={save.audio.muted ? 0 : save.audio.volume}
           onFinish={() => invoke(() => store.finishPresentation())}

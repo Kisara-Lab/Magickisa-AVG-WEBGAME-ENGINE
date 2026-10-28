@@ -8,6 +8,7 @@ const properties = {
   opacity: "透明度",
   rotation: "旋转 (°)",
   shake: "震动强度",
+  volume: "音量包络 (0–1)",
 } as const;
 export function SequenceKeyframes({
   track,
@@ -32,10 +33,10 @@ export function SequenceKeyframes({
       )
         throw new Error("关键帧必须位于片段内，且时间不能重复。");
       if (
-        property === "opacity" &&
+        ["opacity", "volume"].includes(property) &&
         sorted.some((k) => k.value < 0 || k.value > 1)
       )
-        throw new Error("透明度必须为 0–1。");
+        throw new Error("透明度和音量必须为 0–1。");
       if (
         ["scale", "shake"].includes(property) &&
         sorted.some((k) => k.value < 0)

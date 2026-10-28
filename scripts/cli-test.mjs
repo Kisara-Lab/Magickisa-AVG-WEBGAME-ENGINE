@@ -54,6 +54,57 @@ try {
   const duplicateAsset = await call(["asset", "import", "--file", image]);
   assert.notEqual(asset.url, duplicateAsset.url);
   assert.equal((await call(["asset", "list"])).files.length, 2);
+  // Maintenance plans bind both the workspace revision and actual file bytes.
+  const assetPlan = path.join(temporary, "素材 检查.json");
+  const beforeAsset = await call([
+    "asset",
+    "inspect",
+    "--path",
+    duplicateAsset.url,
+    "--out",
+    assetPlan,
+  ]);
+  const replacement = path.join(temporary, "替换.svg");
+  fs.writeFileSync(
+    replacement,
+    '<svg xmlns="http://www.w3.org/2000/svg"><title>更新</title></svg>',
+  );
+  const replaced = await call([
+    "asset",
+    "replace",
+    "--data",
+    "@" + assetPlan,
+    "--file",
+    replacement,
+  ]);
+  assert.notEqual(replaced.sha256, beforeAsset.sha256);
+  await call(["asset", "remove", "--file", assetPlan], undefined, 3);
+  const restorePlan = path.join(temporary, "素材 恢复.json");
+  await call([
+    "asset",
+    "restore-plan",
+    "--id",
+    replaced.backupId,
+    "--out",
+    restorePlan,
+  ]);
+  await call(["asset", "restore", "--file", restorePlan]);
+  assert.equal(
+    (await call(["asset", "inspect", "--path", duplicateAsset.url])).sha256,
+    beforeAsset.sha256,
+  );
+  assert.equal((await call(["asset", "history"])).backups.length, 2);
+  const deletePlan = path.join(temporary, "素材 删除.json");
+  await call([
+    "asset",
+    "inspect",
+    "--path",
+    duplicateAsset.url,
+    "--out",
+    deletePlan,
+  ]);
+  await call(["asset", "remove", "--file", deletePlan]);
+  assert.equal((await call(["asset", "list"])).files.length, 1);
   const transaction = {
     operations: [
       { op: "scene.link", id: "scene-001", value: "gate" },
@@ -132,15 +183,22 @@ try {
   };
   const txnFile = path.join(temporary, "批量 剧本.json");
   fs.writeFileSync(txnFile, JSON.stringify(transaction));
+  const backupsBeforeEdit = fs.readdirSync(path.join(directory, "backups"));
   const dry = await call(["edit", "--file", txnFile, "--dry-run"]);
   assert.equal(dry.changed, true);
   assert.deepEqual(fs.readFileSync(projectFile), original);
-  assert.equal(fs.existsSync(path.join(directory, "backups")), false);
+  assert.deepEqual(
+    fs.readdirSync(path.join(directory, "backups")),
+    backupsBeforeEdit,
+  );
   const saved = await call(
     ["edit", "--data", "-"],
     JSON.stringify(transaction),
   );
-  assert.equal(fs.readdirSync(path.join(directory, "backups")).length, 1);
+  assert.equal(
+    fs.readdirSync(path.join(directory, "backups")).length,
+    backupsBeforeEdit.length + 1,
+  );
   assert.ok(saved.backup);
   assert.notEqual(saved.revision, fresh.revision);
   assert.equal(

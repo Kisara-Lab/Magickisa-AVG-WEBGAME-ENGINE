@@ -334,7 +334,10 @@ export async function investigationBrowser(browser, origin) {
       id: "n" + i,
       title: "调查节点 " + i,
       chapter: "第" + (i % 8) + "章",
-      lines: [{ id: "l" + i, text: "调查记录" }],
+      lines: Array.from({ length: 20 }, (_, j) => ({
+        id: `l${i}-${j}`,
+        text: `调查记录 ${i} / ${j}：长篇叙事编辑性能检查。`,
+      })),
       choices: Array.from({ length: 5 }, (_, j) => ({
         id: `c${i}-${j}`,
         label: "线索 " + j,
@@ -364,7 +367,7 @@ export async function investigationBrowser(browser, origin) {
       "large graph selection/filter/edit exceeded 20s",
     );
     console.log(
-      `Large graph 1000/5000 browser render/filter/edit: ${Math.round(performance.now() - start)}ms`,
+      `Large graph 1000 nodes/20000 lines/5000 edges browser render/filter/edit: ${Math.round(performance.now() - start)}ms`,
     );
     assert.deepEqual(errors, []);
     console.log(

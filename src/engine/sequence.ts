@@ -32,6 +32,8 @@ export const sequenceTrackSchema = z
     asset: z.string().min(1).optional(),
     text: z.string().optional(),
     expression: z.string().optional(),
+    characterId: z.string().min(1).optional(),
+    zIndex: z.number().int().min(-100).max(100).default(0),
     offset: z.number().finite().nonnegative().default(0),
     loop: z.boolean().default(false),
     volume: z.number().min(0).max(1).default(1),
@@ -44,6 +46,7 @@ export const sequenceTrackSchema = z
         opacity: z.array(keyframeSchema).optional(),
         rotation: z.array(keyframeSchema).optional(),
         shake: z.array(keyframeSchema).optional(),
+        volume: z.array(keyframeSchema).optional(),
       })
       .strict()
       .default({}),
@@ -84,7 +87,11 @@ export function sequenceIssues(sequence: Sequence): SequenceIssue[] {
     ids.add(track.id);
     if (track.start + track.duration > sequence.duration)
       add(`${prefix}.duration`, "片段超出演出长度");
-    if (!["camera", "text"].includes(track.kind) && !track.asset)
+    if (
+      !["camera", "text"].includes(track.kind) &&
+      !track.asset &&
+      !(track.kind === "character" && track.characterId)
+    )
       add(`${prefix}.asset`, "此轨道需要素材引用");
     if (track.kind === "text" && !track.text)
       add(`${prefix}.text`, "字幕不能为空");
@@ -95,10 +102,13 @@ export function sequenceIssues(sequence: Sequence): SequenceIssue[] {
             `${prefix}.properties.${property}.${j}`,
             "关键帧时间必须严格递增并位于片段内",
           );
-        if (property === "opacity" && (key.value < 0 || key.value > 1))
+        if (
+          ["opacity", "volume"].includes(property) &&
+          (key.value < 0 || key.value > 1)
+        )
           add(
             `${prefix}.properties.${property}.${j}.value`,
-            "透明度必须在 0–1 之间",
+            "透明度和音量必须在 0–1 之间",
           );
         if (["scale", "shake"].includes(property) && key.value < 0)
           add(
