@@ -1,5 +1,28 @@
+import { PlayerGate } from "./PlayerGate";
+import { SaveRecovery } from "./SaveRecovery";
+import { PlayerDialog } from "./PlayerDialog";
+import {
+  PlayerSlots,
+  memoryStorage,
+  saveSummary,
+  type PlayerStorage,
+} from "./persistence";
+import {
+  defaultPreferences,
+  readPreferences,
+  preferenceKey,
+  graphemes,
+  type PlayerPreferences,
+} from "./preferences";
+import { ReadingSettings } from "./ReadingSettings";
+import { SavePanel, downloadText } from "./SavePanel";
+import { MaterialReader } from "./MaterialReader";
+import { explainNext } from "../engine/investigation";
+import "./player.css";
 import {
   useCallback,
+  useMemo,
+  type CSSProperties,
   useEffect,
   useRef,
   useState,
@@ -7,7 +30,7 @@ import {
 } from "react";
 import { EngineStore } from "../engine/store";
 import { slotKey } from "../engine/save";
-import { hasPlayerProgress, backupAndClearSlot } from "../engine/recovery.js";
+import { hasPlayerProgress } from "../engine/recovery.js";
 import { assertProject } from "../engine/schema";
 import { selectContext, selectUnlockedMaterials } from "../engine/selectors";
 import { resolveAsset } from "../engine/media";
@@ -57,11 +80,17 @@ export function GameApp() {
       {error}
     </div>
   ) : project ? (
-    <LoadSession
-      project={project}
-      fresh={fresh}
-      onFresh={() => setFresh(true)}
-    />
+    <PlayerGate id={project.id}>
+      {(storage, release, temporary) => (
+        <LoadSession
+          project={project}
+          fresh={fresh || temporary}
+          storage={storage}
+          onRelease={release}
+          onFresh={() => setFresh(true)}
+        />
+      )}
+    </PlayerGate>
   ) : (
     <div className="loading">Loading MAGICKISA...</div>
   );
@@ -70,57 +99,51 @@ function LoadSession({
   project,
   fresh,
   onFresh,
+  storage,
+  onRelease,
 }: {
   project: StoryProject;
   fresh: boolean;
   onFresh: () => void;
+  storage: PlayerStorage;
+  onRelease: () => void;
 }) {
+  const sessionStorage = useMemo(
+    () => (fresh ? memoryStorage() : storage),
+    [fresh, storage],
+  );
   const [result, setResult] = useState<{ store?: EngineStore; error?: string }>(
     {},
   );
   useEffect(() => {
     try {
-      const store = new EngineStore(project, fresh ? { persist: false } : {});
+      const store = new EngineStore(
+        project,
+        fresh ? { persist: false } : { storage: sessionStorage },
+      );
       setResult({ store });
       return () => store.destroy();
     } catch (e) {
       setResult({ error: String(e) });
     }
-  }, [project, fresh]);
+  }, [project, fresh, sessionStorage]);
   return result.error ? (
-    <div className="recovery-error" role="alert">
-      <h1>存档需要处理</h1>
-      <p>{result.error}</p>
-      <p>
-        原存档保持原样。临时新周目仅在内存中运行，导入存档后也不会自动保存；请在刷新前导出进度。需要恢复自动保存时，先备份原存档并建立可保存新周目，再导入有效存档。
-      </p>
-      <button onClick={onFresh}>打开临时新周目（不保存）</button>
-      <button
-        onClick={() => {
-          if (
-            !window.confirm(
-              "将保留原始自动存档副本，并为当前工程创建可自动保存的新周目。继续？",
-            )
-          )
-            return;
-          try {
-            backupAndClearSlot(localStorage, slotKey(project.id));
-            location.reload();
-          } catch (e) {
-            setResult({
-              error:
-                e instanceof DOMException && e.name === "QuotaExceededError"
-                  ? "浏览器存储空间不足，无法备份，原存档未删除。请释放存储空间后重试；不要直接清除本站点数据。"
-                  : `恢复失败，原存档未删除：${String(e)}`,
-            });
-          }
-        }}
-      >
-        备份原存档并建立可保存新周目
-      </button>
-    </div>
+    <SaveRecovery
+      project={project}
+      storage={storage}
+      error={result.error}
+      onTemporary={onFresh}
+      onRecover={(save) => {
+        new PlayerSlots(project, storage).write("auto", save);
+        setResult({ store: new EngineStore(project, { storage }) });
+      }}
+    />
   ) : result.store ? (
-    <GameSession store={result.store} />
+    <GameSession
+      store={result.store}
+      storage={sessionStorage}
+      onRelease={onRelease}
+    />
   ) : (
     <div className="loading">正在读取存档……</div>
   );
@@ -128,9 +151,13 @@ function LoadSession({
 export function GameSession({
   store,
   embedded = false,
+  storage,
+  onRelease,
 }: {
   store: EngineStore;
   embedded?: boolean;
+  storage?: PlayerStorage;
+  onRelease?: () => void;
 }) {
   const save = useSyncExternalStore(store.subscribe, store.getSnapshot),
     project = store.project;
@@ -143,10 +170,84 @@ export function GameSession({
     [error, setError] = useState(""),
     [blocked, setBlocked] = useState(false),
     [search, setSearch] = useState("");
-  const [showMusicLabel, setShowMusicLabel] = useState(
-    () => localStorage.getItem("magickisa:music-label") !== "off",
+  const slotStorage = useMemo(
+    () =>
+      embedded || store.temporary
+        ? memoryStorage()
+        : (storage ?? memoryStorage()),
+    [storage, embedded, store.temporary],
   );
+  const slots = useMemo(
+    () => new PlayerSlots(project, slotStorage),
+    [project, slotStorage],
+  );
+  useEffect(() => {
+    if (embedded || store.temporary)
+      slotStorage.setItem(slotKey(project.id), JSON.stringify(save));
+  }, [embedded, store.temporary, slotStorage, project.id, save]);
+  const initialPreferences = useMemo(() => {
+    try {
+      return {
+        value: readPreferences(slotStorage, project.id, store.save.audio),
+        error: "",
+      };
+    } catch {
+      return {
+        value: defaultPreferences,
+        error: "无法读取浏览器偏好，本次使用默认设置。",
+      };
+    }
+  }, [slotStorage, project.id]);
+  const [preferences, setPreferences] = useState<PlayerPreferences>(
+    initialPreferences.value,
+  );
+  const [preferenceError, setPreferenceError] = useState(
+    initialPreferences.error,
+  );
+  const [played, setPlayed] = useState(embedded);
+  const hadStoredProgress = useMemo(
+    () => !store.temporary && !!slots.read("auto").save,
+    [store, slots],
+  );
+  const resumable = played || (hadStoredProgress && hasPlayerProgress(save));
+  useEffect(() => {
+    const audio = initialPreferences.value;
+    store.setAudio(audio.volume, audio.muted, false);
+  }, [store, initialPreferences]);
   const [notice, setNotice] = useState("");
+  const [noticeId, setNoticeId] = useState("");
+  const [selectedMaterial, setSelectedMaterial] = useState<string>();
+  const [confirmation, setConfirmation] = useState<{
+    message: string;
+    action: () => void;
+  }>();
+  const confirm = (message: string, action: () => void) =>
+    setConfirmation({ message, action });
+  const historyScroll = useRef(0);
+  const [historySearch, setHistorySearch] = useState("");
+  const [reduced, setReduced] = useState(
+    () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    const q = matchMedia("(prefers-reduced-motion: reduce)");
+    const f = () => setReduced(q.matches);
+    q.addEventListener("change", f);
+    return () => q.removeEventListener("change", f);
+  }, []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 4200);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const updatePreferences = (next: PlayerPreferences) => {
+    setPreferences(next);
+    try {
+      slotStorage.setItem(preferenceKey(project.id), JSON.stringify(next));
+      setPreferenceError("");
+    } catch {
+      setPreferenceError("阅读设置仅在本次生效，浏览器偏好未保存。");
+    }
+  };
   const previousMaterials = useRef(save.unlockedMaterials);
   useEffect(() => {
     const added = save.unlockedMaterials.filter(
@@ -154,6 +255,7 @@ export function GameSession({
     );
     previousMaterials.current = save.unlockedMaterials;
     if (!added.length) return;
+    setNoticeId(added.at(-1) ?? "");
     const category = project.materials.find(
       (m) => m.id === added.at(-1),
     )?.category;
@@ -176,8 +278,62 @@ export function GameSession({
       setError(e instanceof Error ? e.message : String(e));
     }
   };
+  const text = (line?.text ?? "")
+    .replace(/\*\*/g, "")
+    .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
+      String(save.variables[key] ?? ""),
+    );
+  const segments = useMemo(() => graphemes(text), [text]);
+  const revealKey = `${save.nodeId}:${line?.id}:${text}`;
+  const [reveal, setReveal] = useState({ key: "", count: 0 });
+  const typed = !reduced && preferences.characterDelay > 0 && !fast;
+  const count = typed
+    ? reveal.key === revealKey
+      ? reveal.count
+      : 0
+    : segments.length;
+  const revealing = count < segments.length;
+  useEffect(() => {
+    if (!typed || !line) return;
+    setReveal({ key: revealKey, count: 0 });
+    const timer = setInterval(
+      () =>
+        setReveal((old) => {
+          const count = Math.min(
+            segments.length,
+            old.key === revealKey ? old.count + 1 : 1,
+          );
+          if (count >= segments.length) clearInterval(timer);
+          return { key: revealKey, count };
+        }),
+      preferences.characterDelay,
+    );
+    return () => clearInterval(timer);
+  }, [revealKey, typed, preferences.characterDelay]);
+  const next = useMemo(
+    () => (node ? explainNext(project, node, save) : undefined),
+    [project, node, save],
+  );
+  const canAdvance = !!line || !save.completed || !!next?.allowed;
+  const statusText = line?.input
+    ? "等待输入"
+    : line
+      ? "阅读中"
+      : choices.length
+        ? "请选择下一步"
+        : node?.ending
+          ? "本段旅程已结束。"
+          : next?.allowed
+            ? "点击或按 Space 继续"
+            : "当前没有可用出口，可查看资料、历史或返回标题。";
   const advance = () => {
-    if (!panel && started && !splash && !save.presentation)
+    if (panel || confirmation || !started || splash || save.presentation)
+      return;
+    if (revealing) {
+      setReveal({ key: revealKey, count: segments.length });
+      return;
+    }
+    if (canAdvance)
       invoke(() => {
         store.advance();
         if (
@@ -187,6 +343,19 @@ export function GameSession({
           store.advance();
       });
   };
+  const stopPlayback = () => {
+    setAuto(false);
+    setFast(false);
+  };
+  useEffect(() => {
+    const stop = () => stopPlayback();
+    window.addEventListener("blur", stop);
+    document.addEventListener("visibilitychange", stop);
+    return () => {
+      window.removeEventListener("blur", stop);
+      document.removeEventListener("visibilitychange", stop);
+    };
+  }, []);
   useEffect(() => {
     window.__MAGICKISA_ENGINE__ = store;
     if (import.meta.env.DEV)
@@ -211,20 +380,34 @@ export function GameSession({
   }, [store]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input,textarea,select,button"))
+      if (
+        e.repeat ||
+        e.isComposing ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.metaKey ||
+        e.shiftKey ||
+        (e.target as HTMLElement).closest(
+          "input,textarea,select,button,[contenteditable=true]",
+        )
+      )
         return;
       if (e.code === "Escape") {
         setPanel(null);
         return;
       }
-      if (panel || save.presentation || !started || splash) return;
+      if (panel || confirmation || save.presentation || !started || splash)
+        return;
       if (e.code === "Space" || e.code === "ArrowRight") {
         e.preventDefault();
         advance();
       }
       if (e.code === "ArrowLeft") {
         e.preventDefault();
-        invoke(() => store.rollback());
+        confirm(
+          "回退会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
+          () => invoke(() => store.rollback()),
+        );
       }
     };
     window.addEventListener("keydown", handler);
@@ -232,34 +415,43 @@ export function GameSession({
   });
   useEffect(() => {
     if (!auto && !fast) return;
-    const timer = setInterval(
-      () => {
-        if (
-          !panel &&
-          started &&
-          !splash &&
-          !save.presentation &&
-          !choices.length &&
-          !line?.input &&
-          (!fast || !line || save.readLineIds.includes(line.id))
-        )
-          invoke(() => store.advance());
-      },
-      fast ? 180 : 2600,
+    if (
+      panel ||
+      confirmation ||
+      !started ||
+      splash ||
+      save.presentation ||
+      choices.length ||
+      line?.input ||
+      !canAdvance
+    ) {
+      stopPlayback();
+      return;
+    }
+    if (fast && line && !save.readLineIds.includes(line.id)) {
+      setFast(false);
+      setNotice("已到达未读文本，快进已停止");
+      return;
+    }
+    if (revealing) return;
+    const timer = setTimeout(
+      () => invoke(() => store.advance()),
+      fast ? 180 : preferences.autoDelay * 1000,
     );
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [
     auto,
     fast,
     panel,
+    confirmation,
     started,
     splash,
-    save.presentation,
-    save.nodeId,
-    save.lineIndex,
+    save,
     choices.length,
     line?.input,
-    store,
+    revealing,
+    preferences.autoDelay,
+    canAdvance,
   ]);
   const playback = resolvePlayback(
     project,
@@ -328,10 +520,14 @@ export function GameSession({
       .at(-1)
       ?.replace(/\.mp3$/, "");
   useEffect(() => {
-    if (!started) return;
+    if (!started || !preferences.wheel) return;
+    let last = 0;
     const handle = (e: WheelEvent) => {
+      if (Date.now() - last < 300 || Math.abs(e.deltaY) < 20) return;
+      last = Date.now();
       if (
         panel ||
+        confirmation ||
         splash ||
         save.presentation ||
         (e.target as HTMLElement).closest("input,textarea,select,.choice-list")
@@ -339,7 +535,7 @@ export function GameSession({
         return;
       e.preventDefault();
       if (e.deltaY > 0) advance();
-      else if (e.deltaY < 0) setPanel("history");
+      else if (e.deltaY < 0) open("history");
     };
     const stage = document.querySelector(".stage");
     stage?.addEventListener("wheel", handle as EventListener, {
@@ -348,54 +544,416 @@ export function GameSession({
     return () => stage?.removeEventListener("wheel", handle as EventListener);
   });
   const open = (id: string) => {
+    stopPlayback();
     setPanel(id);
-    if (id !== "history" && id !== "chapters")
-      for (const m of materials.filter(
-        (m) => materialCategory(m.category) === (id === "notes" ? "note" : id),
-      ))
-        invoke(() => store.markRead(m.id));
+    setSelectedMaterial(undefined);
+  };
+  const markRead = useCallback(
+    (id: string) => {
+      try {
+        store.markRead(id);
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [store],
+  );
+  const load = (input: unknown) => {
+    const saved = slots.write("auto", input);
+    store.restore(saved);
+    setPlayed(true);
+    stopPlayback();
+    setPanel(null);
+    setStarted(true);
+    setNotice("存档已读取");
+  };
+  const restart = () => {
+    const action = () =>
+      invoke(() => {
+        const fresh = new EngineStore(project, { persist: false });
+        fresh.runtime.save.readLineIds = [...store.save.readLineIds];
+        fresh.setAudio(preferences.volume, preferences.muted, false);
+        // Prepare and persist before replacing live progress; quota errors leave it intact.
+        const saved = slots.write("auto", fresh.save);
+        store.restore(saved);
+        setPlayed(true);
+        stopPlayback();
+        setPanel(null);
+        setSplash(true);
+        setStarted(true);
+      });
+    if (resumable)
+      confirm(
+        "重新开始将替换当前自动进度，先保留最近恢复副本。手动槽保持不变。继续？",
+        action,
+      );
+    else action();
   };
   function exportSave() {
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(save, null, 2)], { type: "application/json" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${project.id}-save.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(JSON.stringify(save, null, 2), `${project.id}-save.json`);
   }
+  const css = {
+    "--player-font": `${preferences.fontSize}px`,
+    "--player-leading": preferences.lineHeight,
+    "--player-opacity": preferences.opacity,
+  } as CSSProperties;
+  const names: Record<string, string> = {
+    menu: "游戏菜单",
+    saves: "存读档",
+    settings: "阅读与演出设置",
+    history: "历史回看",
+    chapters: "章节目录",
+    notes: "旅者笔记",
+    music: "音乐鉴赏",
+    clue: "证据",
+    encyclopedia: "百科全书",
+    newspaper: "报刊",
+  };
+  const showMaterials = (category: string) => (
+    <MaterialReader
+      key={category}
+      entries={materials.filter(
+        (m) => materialCategory(m.category) === category,
+      )}
+      read={save.readMaterials}
+      selected={selectedMaterial}
+      markRead={markRead}
+    />
+  );
+  const overlays = (
+    <>
+      {preferenceError && (
+        <p className="player-status" role="alert">
+          {preferenceError}
+        </p>
+      )}
+      {panel && (
+        <PlayerDialog
+          title={names[panel] || panel}
+          onClose={() => setPanel(null)}
+        >
+          {panel === "menu" ? (
+            <nav className="player-menu">
+              {[
+                "saves",
+                "history",
+                "chapters",
+                "clue",
+                "encyclopedia",
+                "newspaper",
+                "notes",
+                "music",
+                "settings",
+              ].map((id) => (
+                <button key={id} onClick={() => open(id)}>
+                  {names[id]}
+                  {["clue", "encyclopedia", "newspaper", "notes"].includes(
+                    id,
+                  ) && unread(id)
+                    ? " · 未读"
+                    : ""}
+                </button>
+              ))}
+              <button onClick={exportSave}>导出当前进度</button>
+              <button
+                onClick={() => {
+                  if (
+                    !document.fullscreenEnabled &&
+                    !document.fullscreenElement
+                  ) {
+                    setError("此浏览器不支持全屏，可使用浏览器菜单调整显示。");
+                    return;
+                  }
+                  void (
+                    document.fullscreenElement
+                      ? document.exitFullscreen()
+                      : document.documentElement.requestFullscreen()
+                  ).catch(() =>
+                    setError("无法进入全屏，请使用浏览器菜单调整显示。"),
+                  );
+                }}
+              >
+                全屏
+              </button>
+              <button
+                onClick={() => {
+                  setStarted(false);
+                  setPanel(null);
+                  stopPlayback();
+                }}
+              >
+                返回标题
+              </button>
+              <button onClick={restart}>重新开始</button>
+              {onRelease && (
+                <button
+                  onClick={() =>
+                    confirm(
+                      "释放后当前页面停止游玩，其他页面可以重新接管最新进度。继续？",
+                      onRelease,
+                    )
+                  }
+                >
+                  释放存档写权限
+                </button>
+              )}
+            </nav>
+          ) : panel === "settings" ? (
+            <>
+              <ReadingSettings
+                value={preferences}
+                onChange={updatePreferences}
+              />
+              <label>
+                主音量
+                <input
+                  aria-label="主音量"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={save.audio.volume}
+                  onChange={(e) =>
+                    invoke(() => {
+                      const volume = Number(e.target.value);
+                      updatePreferences({
+                        ...preferences,
+                        volume,
+                        muted: save.audio.muted,
+                      });
+                      store.setAudio(
+                        volume,
+                        save.audio.muted,
+                        started || resumable,
+                      );
+                    })
+                  }
+                />
+              </label>
+              <button
+                onClick={() =>
+                  invoke(() => {
+                    const muted = !save.audio.muted;
+                    updatePreferences({
+                      ...preferences,
+                      volume: save.audio.volume,
+                      muted,
+                    });
+                    store.setAudio(
+                      save.audio.volume,
+                      muted,
+                      started || resumable,
+                    );
+                  })
+                }
+              >
+                {save.audio.muted ? "恢复声音" : "静音"}
+              </button>
+            </>
+          ) : panel === "saves" ? (
+            <>
+              <p>
+                {embedded || store.temporary
+                  ? "当前使用临时内存槽位，刷新后丢失，请导出进度。"
+                  : "存档保存在此浏览器，不会自动上传。"}
+              </p>
+              <SavePanel
+                project={project}
+                slots={slots}
+                current={save}
+                confirm={confirm}
+                onLoad={load}
+                notify={setNotice}
+              />
+            </>
+          ) : panel === "history" ? (
+            <>
+              <label>
+                搜索历史
+                <input
+                  aria-label="搜索历史"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                />
+              </label>
+              <div
+                className="player-history"
+                ref={(el) => {
+                  if (el) el.scrollTop = historyScroll.current;
+                }}
+                onScroll={(e) => {
+                  historyScroll.current = e.currentTarget.scrollTop;
+                }}
+              >
+                {save.history
+                  .filter(
+                    (h) =>
+                      h.text &&
+                      `${h.speaker} ${h.text}`.includes(historySearch),
+                  )
+                  .map((h) => (
+                    <article key={h.id}>
+                      <strong>{h.speaker}</strong>
+                      <small>{h.section}</small>
+                      <p>{h.text}</p>
+                      <button
+                        onClick={() =>
+                          confirm(
+                            "回到此处会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
+                            () => {
+                              invoke(() =>
+                                store.rollback(
+                                  save.history.findIndex((x) => x.id === h.id),
+                                ),
+                              );
+                              setPanel(null);
+                            },
+                          )
+                        }
+                      >
+                        回到这里
+                      </button>
+                    </article>
+                  ))}
+                {!save.history.some(
+                  (h) =>
+                    h.text && `${h.speaker} ${h.text}`.includes(historySearch),
+                ) && <p>暂无匹配的历史。</p>}
+              </div>
+            </>
+          ) : panel === "chapters" ? (
+            <>
+              <input
+                aria-label="搜索章节"
+                placeholder="搜索已读章节"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <div className="chapter-grid">
+                {project.nodes
+                  .filter(
+                    (n) =>
+                      n.playable !== false &&
+                      save.visitedNodes.includes(n.id) &&
+                      n.title.includes(search),
+                  )
+                  .map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() =>
+                        confirm(
+                          "跳转将改变当前剧情位置并保存自动进度。继续？",
+                          () => {
+                            invoke(() => store.jump(n.id));
+                            setPanel(null);
+                          },
+                        )
+                      }
+                    >
+                      {n.title}
+                    </button>
+                  ))}
+              </div>
+            </>
+          ) : panel === "notes" ? (
+            <>
+              <label>
+                旅者自由笔记
+                <textarea
+                  aria-label="旅者自由笔记"
+                  value={save.playerNotes}
+                  onChange={(e) =>
+                    invoke(() => store.setPlayerNotes(e.target.value))
+                  }
+                />
+              </label>
+              <h3>剧情笔记</h3>
+              {save.notes.map((n, i) => (
+                <p key={i}>{n}</p>
+              ))}
+              {showMaterials("note")}
+            </>
+          ) : panel === "music" ? (
+            <div className="material-list">
+              {(project.media.musicGallery || [])
+                .filter(
+                  (t) =>
+                    !t.unlockNode || save.visitedNodes.includes(t.unlockNode),
+                )
+                .map((t) => (
+                  <article key={t.id}>
+                    <h3>{t.title}</h3>
+                    <GalleryAudio
+                      src={t.src}
+                      audio={save.audio}
+                      volume={
+                        project.audio.find((a) => a.src === t.src)?.volume
+                      }
+                    />
+                  </article>
+                ))}
+            </div>
+          ) : (
+            showMaterials(panel)
+          )}
+        </PlayerDialog>
+      )}
+      {confirmation && (
+        <PlayerDialog
+          title="确认操作"
+          onClose={() => setConfirmation(undefined)}
+        >
+          <p>{confirmation.message}</p>
+          <button autoFocus onClick={() => setConfirmation(undefined)}>
+            取消
+          </button>
+          <button
+            onClick={() => {
+              const action = confirmation.action;
+              setConfirmation(undefined);
+              action();
+            }}
+          >
+            确认继续
+          </button>
+        </PlayerDialog>
+      )}
+    </>
+  );
   if (!started)
     return (
-      <TitleScreenHost
-        project={project}
-        audioBlocked={blocked}
-        onStart={() =>
-          invoke(() => {
-            if (
-              hasPlayerProgress(save) &&
-              !window.confirm(
-                "重新开始会覆盖当前自动存档。请先导出存档以保留进度，确认继续？",
-              )
-            )
-              return;
-            store.reset();
-            setSplash(true);
-            setStarted(true);
-          })
-        }
-        onContinue={() => setStarted(true)}
-        onEnableAudio={() => window.dispatchEvent(new Event("pointerdown"))}
-      >
-        {import.meta.env.DEV && (
-          <a href="/engine.html">
-            {project.ui?.labels?.development || "开发预览"}
-          </a>
+      <div className="player-root" style={css}>
+        <TitleScreenHost
+          project={project}
+          audioBlocked={blocked}
+          onStart={restart}
+          onContinue={() => setStarted(true)}
+          canContinue={resumable}
+          continueSummary={
+            resumable
+              ? `${saveSummary(project, save)} · ${new Date(save.savedAt).toLocaleString()}`
+              : "暂无可继续的进度，请开始游戏或读取存档。"
+          }
+          onLoad={() => open("saves")}
+          onSettings={() => open("settings")}
+          onEnableAudio={() => window.dispatchEvent(new Event("pointerdown"))}
+        >
+          {import.meta.env.DEV && (
+            <a href="/engine.html">
+              {project.ui?.labels?.development || "开发预览"}
+            </a>
+          )}
+        </TitleScreenHost>
+        {overlays}
+        {error && (
+          <p role="alert" className="player-status">
+            {error}
+          </p>
         )}
-      </TitleScreenHost>
+      </div>
     );
   return (
-    <div className="app">
+    <div className="app player-root" style={css}>
       {(store.temporary || store.persistenceError) && !embedded && (
         <div className="recovery-error" role="alert">
           <p>
@@ -413,16 +971,34 @@ export function GameSession({
       {notice && !save.presentation && node?.presentation !== "dedication" && (
         <div className="unlock-notice" role="status">
           {notice}
+          <button
+            onClick={() => {
+              const item = materials.find((m) => m.id === noticeId);
+              if (item) {
+                open(
+                  materialCategory(item.category) === "note"
+                    ? "notes"
+                    : materialCategory(item.category),
+                );
+                setSelectedMaterial(item.id);
+              }
+            }}
+          >
+            查看
+          </button>
         </div>
       )}
-      {showMusicLabel && musicTitle && !save.presentation && !splash && (
-        <div className="music-now-playing">
-          <span>
-            <small>NOW PLAYING</small>
-            {musicTitle}
-          </span>
-        </div>
-      )}
+      {preferences.musicLabel &&
+        musicTitle &&
+        !save.presentation &&
+        !splash && (
+          <div className="music-now-playing">
+            <span>
+              <small>NOW PLAYING</small>
+              {musicTitle}
+            </span>
+          </div>
+        )}
       {splash && <EngineSplash project={project} onReady={ready} />}
       {!splash &&
         !save.presentation &&
@@ -466,37 +1042,11 @@ export function GameSession({
           onFinish={() => invoke(() => store.finishPresentation())}
         />
       )}
-      <header className="topbar">
+      <header className="topbar player-topbar">
         <div className="brand">{project.title}</div>
-        <div className="top-actions">
-          <button title="演出设置" onClick={() => open("settings")}>
-            设置
-          </button>
+        <nav aria-label="游戏操作" className="player-actions">
           <button
-            title="全屏"
-            onClick={() =>
-              invoke(() => {
-                const request = document.fullscreenElement
-                  ? document.exitFullscreen()
-                  : document.documentElement.requestFullscreen();
-                void request.catch((e) => setError(String(e)));
-              })
-            }
-          >
-            全屏
-          </button>
-          <button
-            title="返回标题"
-            onClick={() => {
-              setStarted(false);
-              setAuto(false);
-              setFast(false);
-            }}
-          >
-            标题
-          </button>
-          <button
-            title="自动播放"
+            aria-pressed={auto}
             onClick={() => {
               setAuto(!auto);
               setFast(false);
@@ -505,7 +1055,7 @@ export function GameSession({
             自动{auto ? " ●" : ""}
           </button>
           <button
-            title="快进已读"
+            aria-pressed={fast}
             onClick={() => {
               setFast(!fast);
               setAuto(false);
@@ -513,99 +1063,10 @@ export function GameSession({
           >
             快进
           </button>
-          <button title="历史回看" onClick={() => open("history")}>
-            历史
-          </button>
-          <button
-            className={unread("encyclopedia") ? "has-unread" : ""}
-            title="百科全书"
-            onClick={() => open("encyclopedia")}
-          >
-            百科
-          </button>
-          <button
-            className={unread("newspaper") ? "has-unread" : ""}
-            title="新闻报纸"
-            onClick={() => open("newspaper")}
-          >
-            新闻
-          </button>
-          <button title="证据板" onClick={() => open("clue")}>
-            证据
-          </button>
-          <button
-            className={unread("notes") ? "has-unread" : ""}
-            title="旅者笔记"
-            onClick={() => open("notes")}
-          >
-            笔记
-          </button>
-          <button title="章节目录" onClick={() => open("chapters")}>
-            章节
-          </button>
-          <button title="音乐鉴赏" onClick={() => open("music")}>
-            音乐
-          </button>
-          <button title="导出存档" onClick={exportSave}>
-            导出
-          </button>
-          <label className="import-label" title="导入存档">
-            导入
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file)
-                  try {
-                    const raw = await file.text();
-                    localStorage.setItem(
-                      `magickisa-import-backup:${Date.now()}`,
-                      raw,
-                    );
-                    invoke(() => store.restore(JSON.parse(raw)));
-                  } catch (err) {
-                    setError(String(err));
-                  }
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <button
-            title="静音切换"
-            onClick={() =>
-              invoke(() => store.setAudio(save.audio.volume, !save.audio.muted))
-            }
-          >
-            {save.audio.muted ? "恢复声音" : "静音"}
-          </button>
-          <input
-            aria-label="主音量"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={save.audio.volume}
-            onChange={(e) =>
-              invoke(() =>
-                store.setAudio(Number(e.target.value), save.audio.muted),
-              )
-            }
-          />
-          <button
-            title="重新开始"
-            onClick={() => {
-              if (
-                window.confirm(
-                  "重新开始会覆盖当前自动存档，请先导出存档。确认继续？",
-                )
-              )
-                invoke(() => store.reset());
-            }}
-          >
-            重开
-          </button>
-        </div>
+          <button onClick={() => open("history")}>历史</button>
+          <button onClick={() => open("saves")}>存读档</button>
+          <button onClick={() => open("menu")}>菜单</button>
+        </nav>
       </header>
       {error && (
         <div className="runtime-error" role="alert">
@@ -618,17 +1079,22 @@ export function GameSession({
           点击画面开启音乐；无法播放时仍可继续游戏。
         </small>
       )}
-      <div className="progressbar">
+      <div className="progressbar player-location">
         <span>{node?.chapter}</span>
-        <i
-          style={{
-            width: `${Math.min(100, (save.visitedNodes.length / project.nodes.filter((n) => n.playable !== false).length) * 100)}%`,
-          }}
-        />
+        <span>{node?.title}</span>
+        <span role="status">
+          {store.temporary
+            ? "临时周目 · 不自动保存"
+            : store.persistenceError
+              ? "自动保存失败"
+              : "进度自动保存"}
+        </span>
       </div>
       <main className="avg-shell">
         <EngineViewport
           context={selectContext(project, save, choices)}
+          visibleText={segments.slice(0, count).join("")}
+          statusText={statusText}
           onAdvance={advance}
           onChoose={(id) => invoke(() => store.choose(id))}
           onInput={(key, text) => invoke(() => store.setVariable(key, text))}
@@ -637,18 +1103,23 @@ export function GameSession({
           <button
             title="上一句"
             disabled={!save.history.length || !!save.presentation}
-            onClick={() => invoke(() => store.rollback())}
+            onClick={() =>
+              confirm(
+                "回退会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
+                () => invoke(() => store.rollback()),
+              )
+            }
           >
             ‹ 上一句
           </button>
-          <span>
-            {store.runtime.done
-              ? "节点结束"
-              : `${save.lineIndex + 1} / ${node?.lines.length}`}
-          </span>
+          <span role="status">{revealing ? "点击补全文字" : statusText}</span>
           <button
             title="下一句"
-            disabled={!!save.presentation}
+            disabled={
+              !!save.presentation ||
+              (!canAdvance && !revealing) ||
+              !!choices.length
+            }
             onClick={advance}
           >
             继续 ›
@@ -664,191 +1135,7 @@ export function GameSession({
           />
         </section>
       </main>
-      {panel && (
-        <div className="drawer-backdrop" onClick={() => setPanel(null)}>
-          <aside
-            className={
-              panel === "history"
-                ? "material-panel backlog-shell"
-                : "material-panel"
-            }
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="drawer-head">
-              <strong>
-                {{
-                  history: "历史回看",
-                  chapters: "章节目录",
-                  notes: "旅者笔记",
-                  music: "音乐鉴赏",
-                  clue: "证据板",
-                  encyclopedia: "百科全书",
-                  newspaper: "报刊",
-                  settings: "演出设置",
-                }[panel] || panel}
-              </strong>
-              <button title="关闭面板" onClick={() => setPanel(null)}>
-                ×
-              </button>
-            </div>
-            {panel === "settings" ? (
-              <section className="restored-settings">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={auto}
-                    onChange={(e) => {
-                      setAuto(e.target.checked);
-                      if (e.target.checked) setFast(false);
-                    }}
-                  />
-                  自动播放
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={fast}
-                    onChange={(e) => {
-                      setFast(e.target.checked);
-                      if (e.target.checked) setAuto(false);
-                    }}
-                  />
-                  快进已读文本
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={showMusicLabel}
-                    onChange={(e) => {
-                      setShowMusicLabel(e.target.checked);
-                      localStorage.setItem(
-                        "magickisa:music-label",
-                        e.target.checked ? "on" : "off",
-                      );
-                    }}
-                  />
-                  显示当前音乐名
-                </label>
-                <p>
-                  快捷键：Space / 右方向键继续，左方向键回退，Esc 关闭面板。
-                </p>
-              </section>
-            ) : panel === "history" ? (
-              <div className="backlog-scroll">
-                {save.history
-                  .filter((h) => h.text)
-                  .map((h) => (
-                    <article key={h.id}>
-                      <b>{h.speaker}</b>
-                      <small>{h.section}</small>
-                      <p>{h.text}</p>
-                      <button
-                        className="restore-button"
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              "回到此处会截断之后的剧情回退记录；玩家笔记和已获得的收藏保留。确认继续？",
-                            )
-                          )
-                            return;
-                          invoke(() =>
-                            store.rollback(
-                              save.history.findIndex((x) => x.id === h.id),
-                            ),
-                          );
-                          setPanel(null);
-                        }}
-                      >
-                        回到这里
-                      </button>
-                    </article>
-                  ))}
-              </div>
-            ) : panel === "chapters" ? (
-              <>
-                <input
-                  aria-label="搜索章节"
-                  placeholder="搜索已读章节"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <div className="chapter-grid">
-                  {project.nodes
-                    .filter(
-                      (n) =>
-                        n.playable !== false &&
-                        save.visitedNodes.includes(n.id) &&
-                        n.title.includes(search),
-                    )
-                    .map((n) => (
-                      <button
-                        key={n.id}
-                        onClick={() => {
-                          invoke(() => store.jump(n.id));
-                          setPanel(null);
-                        }}
-                      >
-                        {n.title}
-                      </button>
-                    ))}
-                </div>
-              </>
-            ) : panel === "notes" ? (
-              <div className="notes-modal">
-                <textarea
-                  aria-label="旅者自由笔记"
-                  value={save.playerNotes}
-                  onChange={(e) =>
-                    invoke(() => store.setPlayerNotes(e.target.value))
-                  }
-                />
-                {save.notes.map((n, i) => (
-                  <p key={i}>{n}</p>
-                ))}
-                {materials
-                  .filter((m) => materialCategory(m.category) === "note")
-                  .map((m) => (
-                    <article key={m.id}>
-                      <h3>{m.title}</h3>
-                      <p>{m.body}</p>
-                    </article>
-                  ))}
-              </div>
-            ) : panel === "music" ? (
-              <div className="material-list">
-                {(project.media.musicGallery || [])
-                  .filter(
-                    (t) =>
-                      !t.unlockNode || save.visitedNodes.includes(t.unlockNode),
-                  )
-                  .map((t) => (
-                    <article key={t.id}>
-                      <h3>{t.title}</h3>
-                      <GalleryAudio
-                        src={t.src}
-                        audio={save.audio}
-                        volume={
-                          project.audio.find((a) => a.src === t.src)?.volume
-                        }
-                      />
-                    </article>
-                  ))}
-              </div>
-            ) : (
-              <div className="material-list">
-                {materials
-                  .filter((m) => materialCategory(m.category) === panel)
-                  .map((m) => (
-                    <article key={m.id}>
-                      <h3>{m.title}</h3>
-                      <p className="prewrap">{m.body}</p>
-                    </article>
-                  ))}
-              </div>
-            )}
-          </aside>
-        </div>
-      )}
+      {overlays}
     </div>
   );
 }

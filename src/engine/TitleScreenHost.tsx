@@ -8,6 +8,10 @@ export function TitleScreenHost({
   onContinue,
   onEnableAudio,
   children,
+  canContinue = true,
+  continueSummary,
+  onLoad,
+  onSettings,
 }: {
   project: StoryProject;
   audioBlocked: boolean;
@@ -15,13 +19,21 @@ export function TitleScreenHost({
   onContinue: () => void;
   onEnableAudio: () => void;
   children?: ReactNode;
+  canContinue?: boolean;
+  continueSummary?: string;
+  onLoad?: () => void;
+  onSettings?: () => void;
 }) {
   const t = project.titleScreen,
     labels = project.ui?.labels || {};
   return (
     <div className="title-screen">
       <img
-        src={t.backdrop ? resolveAsset(project, t.backdrop) : resolveScene(project, "")}
+        src={
+          t.backdrop
+            ? resolveAsset(project, t.backdrop)
+            : resolveScene(project, "")
+        }
         alt={`${project.title} title backdrop`}
       />
       <div className="title-shade" />
@@ -33,17 +45,30 @@ export function TitleScreenHost({
           <button data-action="new-game" onClick={onStart}>
             {labels.newGame || "开始游戏"}
           </button>
-          <button onClick={onContinue}>{labels.continue || "继续游戏"}</button>
+          <button disabled={!canContinue} onClick={onContinue}>
+            {labels.continue || "继续游戏"}
+          </button>
+          {onLoad && <button onClick={onLoad}>读取存档</button>}
+          {onSettings && <button onClick={onSettings}>设置</button>}
           {t.galleryUrl && (
             <a href={t.galleryUrl}>{labels.gallery || "素材画廊"}</a>
           )}
           {t.aboutUrl && <a href={t.aboutUrl}>{labels.about || "作品介绍"}</a>}
           {children}
         </div>
-        <button className="audio-enable" onClick={onEnableAudio}>
+        {continueSummary && (
+          <p className="continue-summary">{continueSummary}</p>
+        )}
+        <button
+          className="audio-enable"
+          disabled={!t.music}
+          onClick={onEnableAudio}
+        >
           {audioBlocked ? "开启首页音乐" : `♫ ${t.musicLabel || "首页音乐"}`}
         </button>
-        <small className="title-note">点击进入 · 音乐循环播放</small>
+        <small className="title-note">
+          {t.music ? "点击进入 · 音乐循环播放" : "准备好后，开始你的故事。"}
+        </small>
       </div>
       <footer className="title-footer">
         <nav aria-label="相关作品">
