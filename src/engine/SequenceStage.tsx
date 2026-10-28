@@ -256,8 +256,13 @@ export function SequencePlayer({
   onSave: () => void;
 }) {
   const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   const cursor = store.save.sequence;
   const sequence = store.project.sequences?.find((s) => s.id === cursor?.id);
+  useEffect(() => {
+    setError("");
+    setRetry(0);
+  }, [cursor?.id, cursor?.trigger]);
   useEffect(() => {
     if (!cursor || paused || error || cursor.waiting !== null) return;
     let previous = performance.now(),
@@ -283,6 +288,7 @@ export function SequencePlayer({
   return (
     <section className="sequence-player">
       <SequenceStage
+        key={`${cursor.trigger}:${retry}`}
         project={store.project}
         sequence={sequence}
         time={cursor.time}
@@ -317,7 +323,14 @@ export function SequencePlayer({
         {error && (
           <div role="alert">
             {error}
-            <button onClick={() => setError("")}>重试媒体</button>
+            <button
+              onClick={() => {
+                setRetry((n) => n + 1);
+                setError("");
+              }}
+            >
+              重试媒体
+            </button>
           </div>
         )}
       </div>

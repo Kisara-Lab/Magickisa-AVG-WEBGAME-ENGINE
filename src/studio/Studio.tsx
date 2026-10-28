@@ -96,6 +96,7 @@ import { ProjectDetails } from "./ProjectDetails";
 import { ProductionPanel } from "./ProductionPanel";
 import { SequenceEditor } from "./SequenceEditor";
 import { BackupPanel } from "./BackupPanel";
+import { VariableRename } from "./VariableRename";
 import { PreviewRecorder } from "./PreviewRecorder";
 import type { PresentationMode } from "./PresentationEditor";
 import { AssetEditor, CharacterEditor, MaterialEditor } from "./LibraryEditors";
@@ -1795,6 +1796,10 @@ export function Studio() {
                         dirty={dirty || authoring.dirty}
                         onRestored={() => location.reload()}
                       />
+                      <VariableRename
+                        dirty={dirty || authoring.dirty}
+                        onApplied={() => location.reload()}
+                      />
                       <ProductionPanel
                         project={project}
                         onChange={edit}
@@ -2128,6 +2133,7 @@ export function Studio() {
             hidden={!previewVisible}
           >
             <PreviewRecorder
+              key={scope}
               iframe={iframe}
               authoring={authoring}
               loaded={!!preview && preview.mode === "scene"}

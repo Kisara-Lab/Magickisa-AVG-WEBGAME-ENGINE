@@ -59,6 +59,7 @@ export async function productionBrowser(browser, origin) {
     assert.equal((await api("assets/history")).backups.length, 2);
     const initial = await api("project");
     const project = initial.project;
+    project.variables = { clue: { type: "boolean", initial: false } };
     project.sequences = [
       {
         id: "test",
@@ -81,6 +82,23 @@ export async function productionBrowser(browser, origin) {
     ];
     await api("project", { project, revision: initial.revision });
     await page.goto(`${origin}/engine.html?profile=modern&workspaceId=${id}`);
+    await page.getByRole("button", { name: "工程", exact: true }).click();
+    await page.locator("summary").filter({ hasText: "协调重命名变量" }).click();
+    await page.getByLabel("原变量名", { exact: true }).fill("clue");
+    await page.getByLabel("新变量名", { exact: true }).fill("evidence");
+    await page
+      .getByRole("button", { name: "检查变量重命名", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "备份并重命名变量", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => !document.querySelector('[role="dialog"]'),
+    );
+    assert.equal(
+      (await api("project")).project.variables.evidence.initial,
+      false,
+    );
     await page.getByRole("button", { name: "演出", exact: true }).click();
     await page.getByRole("heading", { name: "多轨演出与舞台" }).waitFor();
     const clip = page.locator(".production-track button").first();
@@ -135,6 +153,10 @@ export async function productionBrowser(browser, origin) {
       await page.getByRole("button", { name: /^删除关键帧/ }).count(),
       2,
     );
+    if (process.env.MAGICKISA_SCREENSHOTS) {
+      await page.locator(".production-timeline").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: "docs/images/production-timeline.png" });
+    }
     await page.locator("summary").filter({ hasText: "复用演出预设" }).click();
     await page
       .getByRole("button", { name: "复制为独立演出", exact: true })
@@ -182,12 +204,24 @@ export async function productionBrowser(browser, origin) {
       .getByRole("button", { name: "运行全部剧情测试", exact: true })
       .click();
     await page.getByText("全部测试通过", { exact: true }).waitFor();
+    if (process.env.MAGICKISA_SCREENSHOTS) {
+      await page
+        .getByText("全部测试通过", { exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({ path: "docs/images/production-tests.png" });
+    }
     await page.setViewportSize({ width: 390, height: 844 });
     assert(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 2,
       ),
     );
+    if (process.env.MAGICKISA_SCREENSHOTS) {
+      await page
+        .getByText("全部测试通过", { exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({ path: "docs/images/production-mobile.png" });
+    }
     assert.deepEqual(errors, []);
     console.log(
       "PASS production browser: timeline keyboard/drag, one-step undo, visual keyframes, mobile overflow",

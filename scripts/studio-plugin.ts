@@ -1,4 +1,8 @@
 import type { Plugin } from "vite";
+import {
+  planVariableRename,
+  applyVariableRename,
+} from "./variable-maintenance";
 import { importAssetStream } from "./asset-stream";
 import { listBackups, previewBackup, restoreBackup } from "./backups";
 import {
@@ -283,6 +287,21 @@ export function studioPlugin(): Plugin {
             res.end(JSON.stringify(readStudioData(ctx)));
             return;
           }
+          if (
+            req.method === "GET" &&
+            url.pathname === "/variables/rename-plan"
+          ) {
+            res.end(
+              JSON.stringify(
+                planVariableRename(
+                  ctx,
+                  url.searchParams.get("from") ?? "",
+                  url.searchParams.get("to") ?? "",
+                ),
+              ),
+            );
+            return;
+          }
           if (req.method === "GET" && url.pathname === "/project") {
             markOpened(ctx);
             const { project, revision: currentRevision } = readSnapshot(ctx);
@@ -386,6 +405,20 @@ export function studioPlugin(): Plugin {
               throw new Error("请求超过 12 MB。");
           }
           const data = JSON.parse(body);
+          if (url.pathname === "/variables/rename") {
+            if (
+              ![
+                "from",
+                "to",
+                "workspaceId",
+                "revision",
+                "studioRevision",
+              ].every((field) => typeof data[field] === "string")
+            )
+              throw new Error("变量重命名方案不完整");
+            res.end(JSON.stringify(applyVariableRename(ctx, data, true)));
+            return;
+          }
           if (url.pathname === "/assets/remove") {
             res.end(
               JSON.stringify(await changeAsset(ctx, data, undefined, true)),

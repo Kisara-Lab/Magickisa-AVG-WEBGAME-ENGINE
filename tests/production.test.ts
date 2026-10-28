@@ -28,6 +28,27 @@ import { RouteRecorder } from "../src/engine/routeRecorder";
 import { CollectionStore } from "../src/engine/collections";
 import { evaluateCondition } from "../src/engine/condition";
 
+test("nested extension edits preserve event snapshots and chronological delivery", () => {
+  const store = new EngineStore(assertProject(blankProject("modern")), {
+    persist: false,
+  });
+  const seen: string[][] = [];
+  let nested = false;
+  store.subscribe(() => {
+    if (!nested) {
+      nested = true;
+      store.setVariable("second", 2);
+    }
+  });
+  store.subscribeEvents((event) => {
+    seen.push(Object.keys(event.variables));
+    if (event.variables.first) store.setVariable("third", 3);
+  });
+  store.setVariable("first", 1);
+  assert.deepEqual(seen, [["first"], ["second"], ["third"]]);
+  assert.deepEqual(store.save.variables, { first: 1, second: 2, third: 3 });
+});
+
 test("runtime node cache observes in-place node replacement and stable array reordering", () => {
   const project = assertProject(blankProject("modern"));
   const runtime = new StoryRuntime(project, createSave(project, "test"));

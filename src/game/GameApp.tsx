@@ -1180,7 +1180,7 @@ export function GameSession({
         {save.sequence && (
           <SequencePlayer
             store={store}
-            paused={!!panel || !!confirmation || !pageActive}
+            paused={splash || !!panel || !!confirmation || !pageActive}
             volume={save.audio.muted ? 0 : save.audio.volume}
             bgm={preferences.bgmVolume}
             sound={preferences.soundVolume}

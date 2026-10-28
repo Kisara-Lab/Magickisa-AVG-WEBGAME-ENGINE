@@ -65,6 +65,20 @@ export async function playerBrowser(browser, origin) {
     characters: [],
     backdrops: [],
     audio: [],
+    gallery: [
+      {
+        id: "letter-cg",
+        title: "信件画面",
+        asset: "/test-gallery.svg",
+        unlock: { type: "material", id: "letter", state: "read" },
+      },
+      {
+        id: "hidden-cg",
+        title: "不得泄露的画面名称",
+        asset: "/hidden-gallery.svg",
+        unlock: { type: "flag", key: "secret" },
+      },
+    ],
     resources: { assetsBase: "/assets", sceneRules: [] },
     media: {},
     titleScreen: {
@@ -81,6 +95,12 @@ export async function playerBrowser(browser, origin) {
     r.fulfill({ json: project }),
   );
   const page = await context.newPage();
+  await context.route("**/test-gallery.svg", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240"><rect width="400" height="240" fill="gold"/></svg>',
+    }),
+  );
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const button = (name) => page.getByRole("button", { name, exact: true });
@@ -152,6 +172,25 @@ export async function playerBrowser(browser, origin) {
           id: "letter",
           state: "read",
         }),
+      ),
+      true,
+    );
+    await close();
+    await menu("画廊与结局");
+    await button("信件画面").click();
+    await page.getByRole("img", { name: "信件画面", exact: true }).waitFor();
+    assert.equal(
+      await page.getByText("不得泄露的画面名称", { exact: true }).count(),
+      0,
+    );
+    assert.equal(await button("尚未解锁").isDisabled(), true);
+    assert.equal(
+      await page.evaluate(() =>
+        JSON.parse(
+          localStorage.getItem(
+            "magickisa-avg:collections:v1:generated-player-test",
+          ),
+        ).gallery.includes("letter-cg"),
       ),
       true,
     );
@@ -502,6 +541,110 @@ export async function playerBrowser(browser, origin) {
     );
   } finally {
     await fallback.close();
+  }
+  const nvlContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    reducedMotion: "reduce",
+  });
+  const nvlProject = structuredClone(project);
+  nvlProject.id = "generated-nvl-test";
+  nvlProject.sequences = [
+    {
+      id: "intro",
+      name: "可恢复演出",
+      duration: 3,
+      skippable: true,
+      waits: [1],
+      tracks: [
+        {
+          id: "background",
+          kind: "background",
+          target: "background",
+          asset: "/sequence-image.svg",
+          start: 0,
+          duration: 3,
+          properties: {},
+        },
+      ],
+    },
+  ];
+  nvlProject.nodes = [
+    {
+      id: "hall",
+      title: "长篇阅读",
+      readingMode: "nvl",
+      enterSequence: "intro",
+      onEnter: [{ type: "increment", key: "entries", amount: 1 }],
+      ending: "read",
+      lines: [
+        { id: "nvl-1", text: "第一段：" + "长篇正文阅读检查。".repeat(100) },
+        { id: "nvl-2", text: "第二段应出现在可见区域。" },
+        { id: "nvl-3", text: "新页，不保留上一页段落。", pageBreak: true },
+      ],
+    },
+  ];
+  await nvlContext.route("**/content/engine-story.json", (route) =>
+    route.fulfill({ json: nvlProject }),
+  );
+  const nvlPage = await nvlContext.newPage();
+  let imageRequests = 0;
+  await nvlContext.route("**/sequence-image.svg", (route) => {
+    imageRequests++;
+    return route.fulfill(
+      imageRequests === 1
+        ? { status: 404, body: "missing" }
+        : {
+            contentType: "image/svg+xml",
+            body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240"><rect width="400" height="240" fill="#27192e"/></svg>',
+          },
+    );
+  });
+  try {
+    await nvlPage.goto(origin);
+    await nvlPage
+      .getByRole("button", { name: "开始游戏", exact: true })
+      .click();
+    await nvlPage.locator(".engine-splash").waitFor({ state: "hidden" });
+    await nvlPage
+      .getByRole("button", { name: "重试媒体", exact: true })
+      .waitFor();
+    await nvlPage
+      .getByRole("button", { name: "重试媒体", exact: true })
+      .click();
+    await nvlPage
+      .getByRole("button", { name: "继续演出", exact: true })
+      .waitFor();
+    assert(imageRequests >= 2, "retry must reload media");
+    await nvlPage
+      .getByRole("button", { name: "跳过演出", exact: true })
+      .click();
+    await nvlPage.locator(".sequence-terminal").waitFor();
+    assert.equal(
+      await nvlPage.evaluate(
+        () => window.__MAGICKISA_ENGINE__.save.variables.entries,
+      ),
+      1,
+    );
+    await nvlPage.getByRole("button", { name: "继续 ›", exact: true }).click();
+    assert.equal(await nvlPage.locator(".nvl-previous").count(), 1);
+    assert(
+      await nvlPage.evaluate(() => {
+        const box = document
+            .querySelector(".dialogue-box")
+            .getBoundingClientRect(),
+          text = document.querySelector(".line-in").getBoundingClientRect();
+        return text.top >= box.top && text.top < box.bottom;
+      }),
+    );
+    await nvlPage.getByRole("button", { name: "继续 ›", exact: true }).click();
+    assert.equal(await nvlPage.locator(".nvl-previous").count(), 0);
+    assert(
+      await nvlPage
+        .getByText("新页，不保留上一页段落。", { exact: true })
+        .isVisible(),
+    );
+  } finally {
+    await nvlContext.close();
   }
   console.log(
     "Player browser: saves, reading, clues, keyboard, ownership, recovery and responsive layouts passed.",

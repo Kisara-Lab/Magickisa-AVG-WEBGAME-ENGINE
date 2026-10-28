@@ -177,8 +177,7 @@ export function VariableDeclarations({
         </p>
       )}
       <p>
-        更改类型会重置该声明的初始值；已有玩家存档不受影响。删除或重命名需连同条件、效果及测试一起审查，可使用高级
-        JSON 或 Agent 事务。
+        更改类型会重置该声明的初始值；已有玩家存档不受影响。重命名请使用工程页的“协调重命名变量”，一起审查条件、效果及测试。
       </p>
       {error && <p role="alert">{error}</p>}
     </section>

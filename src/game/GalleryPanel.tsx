@@ -3,6 +3,8 @@ import type { EngineStore } from "../engine/store";
 import { resolveAsset } from "../engine/media";
 export function GalleryPanel({ store }: { store: EngineStore }) {
   const [selected, setSelected] = useState("");
+  const [imageError, setImageError] = useState(false),
+    [retry, setRetry] = useState(0);
   const progress = store.collections.snapshot;
   const entries = store.project.gallery ?? [];
   const entry = entries.find(
@@ -20,7 +22,10 @@ export function GalleryPanel({ store }: { store: EngineStore }) {
           <button
             key={g.id}
             disabled={!progress.gallery.includes(g.id)}
-            onClick={() => setSelected(g.id)}
+            onClick={() => {
+              setSelected(g.id);
+              setImageError(false);
+            }}
           >
             {progress.gallery.includes(g.id) ? g.title : "尚未解锁"}
           </button>
@@ -30,6 +35,8 @@ export function GalleryPanel({ store }: { store: EngineStore }) {
       {entry && (
         <figure>
           <img
+            key={`${entry.id}:${retry}`}
+            onError={() => setImageError(true)}
             style={{
               maxWidth: "100%",
               maxHeight: "60dvh",
@@ -39,6 +46,19 @@ export function GalleryPanel({ store }: { store: EngineStore }) {
             alt={entry.title}
           />
           <figcaption>{entry.title}</figcaption>
+          {imageError && (
+            <p role="alert">
+              图片无法加载。
+              <button
+                onClick={() => {
+                  setImageError(false);
+                  setRetry((n) => n + 1);
+                }}
+              >
+                重试画廊图片
+              </button>
+            </p>
+          )}
         </figure>
       )}
       <h3>已达成结局</h3>

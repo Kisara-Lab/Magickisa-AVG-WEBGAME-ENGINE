@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { EngineRendererContext } from "./types";
 import { resolveAsset, resolveScene } from "./media";
 import { CharacterStage } from "./character";
@@ -31,6 +31,15 @@ export function EngineViewport({
     (s) => s.id === save.terminalSequence,
   );
   const nvl = (node?.readingMode ?? project.theme?.mode) === "nvl";
+  const dialogueBox = useRef<HTMLDivElement>(null),
+    currentText = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const box = dialogueBox.current,
+      text = currentText.current;
+    if (nvl && box && text)
+      box.scrollTop +=
+        text.getBoundingClientRect().top - box.getBoundingClientRect().top - 20;
+  }, [nvl, node?.id, line?.id]);
   const previous =
     nvl && node
       ? node.lines.slice(0, line ? context.lineIndex : node.lines.length)
@@ -86,7 +95,7 @@ export function EngineViewport({
         <span>{node?.chapter || project.title}</span>
         <strong>{node?.title.replace(/^【|】$/g, "")}</strong>
       </div>
-      <div className="dialogue-box">
+      <div className="dialogue-box" ref={dialogueBox}>
         {terminal && stageError?.id === terminal.id && (
           <p role="alert">{stageError.message}</p>
         )}
@@ -116,7 +125,7 @@ export function EngineViewport({
               ))}
           {line ? (
             <>
-              <span className="line-in">
+              <span className="line-in" ref={currentText}>
                 {visibleText ??
                   line.text
                     .replace(/\*\*/g, "")

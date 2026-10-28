@@ -1,6 +1,6 @@
 # 调查剧情与复杂流程工作台
 
-适用版本：**2.0.0-dev.3**。面向单人侦探调查、非线性地点探索和剧本杀式文字叙事。保持现代工程 `schemaVersion: 2`、存档字段和稳定 ID；没有多人联网、主持人系统、玩家举证界面或路线重放。
+适用版本：**2.0.0-dev.5**。面向单人侦探调查、非线性地点探索和剧本杀式文字叙事。现代工程与存档使用 `schemaVersion: 3`，保留稳定内容 ID；没有多人联网、主持人系统或玩家举证界面。开发者可录制并运行声明式路线测试，详见[创作工作流](CREATOR-WORKFLOW.md)。
 
 ## 画布与关系编辑
 
@@ -28,24 +28,31 @@
 在「资料」页定义线索，用现有 `unlockMaterial` / `markRead` 效果及解锁规则表达调查进度，不增加任务模型。
 
 ```json
-{"type":"material","id":"key","state":"read","value":true}
+{ "type": "material", "id": "key", "state": "read", "value": true }
 ```
 
 `state` 为 `unlocked` 或 `read`；省略 `value` 等于 `true`，`false` 要求未达到该状态。读取现有存档集合，不自动改变它们。
 
 ```json
-{"type":"contains","key":"suspects","value":{"id":"gardener","cleared":false}}
+{
+  "type": "contains",
+  "key": "suspects",
+  "value": { "id": "gardener", "cleared": false }
+}
 ```
 
 列表中存在该 JSON 值时成立。对象键顺序无关，数组顺序有关，数字与字符串不相等；非列表变量不满足。
 
 ```json
 {
-  "type":"all",
-  "conditions":[
-    {"type":"material","id":"key","state":"read"},
-    {"type":"contains","key":"suspects","value":"gardener"},
-    {"type":"not","condition":{"type":"visited","nodeId":"ending-innocent"}}
+  "type": "all",
+  "conditions": [
+    { "type": "material", "id": "key", "state": "read" },
+    { "type": "contains", "key": "suspects", "value": "gardener" },
+    {
+      "type": "not",
+      "condition": { "type": "visited", "nodeId": "ending-innocent" }
+    }
   ]
 }
 ```
@@ -73,12 +80,12 @@
 
 ## 保存与协作
 
-| 数据 | 位置 | 保存规则 |
-| --- | --- | --- |
-| 游戏工程 | `project.json` | 原 revision、备份、草稿与保存流程 |
-| 布局／变量说明／测试预设 | `authoring/studio.json` | 格式 1、独立 SHA256 revision，「保存创作资料」 |
-| 缩放／筛选 | 浏览器工作区偏好 | localStorage，失败提示本会话仍可用 |
-| Agent 结构稿／基线 | `authoring/` 原文件 | 原同步协议，不覆盖 Studio 创作资料 |
+| 数据                               | 位置                    | 保存规则                                       |
+| ---------------------------------- | ----------------------- | ---------------------------------------------- |
+| 游戏工程                           | `project.json`          | 原 revision、备份、草稿与保存流程              |
+| 布局／变量说明／测试预设／路线测试 | `authoring/studio.json` | 格式 2、独立 SHA256 revision，「保存创作资料」 |
+| 缩放／筛选                         | 浏览器工作区偏好        | localStorage，失败提示本会话仍可用             |
+| Agent 结构稿／基线                 | `authoring/` 原文件     | 原同步协议，不覆盖 Studio 创作资料             |
 
 创作资料使用共享工程写锁。另一标签页写入后返回 409，保留本地输入，可先导出本地创作资料，再重新读取和合并。切换工程或关闭页面时提示未保存资料；与工程保存状态分别显示。
 

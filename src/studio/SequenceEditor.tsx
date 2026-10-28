@@ -31,6 +31,7 @@ export function SequenceEditor({
   const [trackId, setTrackId] = useState("");
   const [locked, setLocked] = useState<string[]>([]);
   const [solo, setSolo] = useState("");
+  const [removeId, setRemoveId] = useState("");
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
     [zoom, setZoom] = useState(40);
@@ -46,6 +47,19 @@ export function SequenceEditor({
   }>();
   const sequence = project.sequences?.find((s) => s.id === id);
   const track = sequence?.tracks.find((t) => t.id === trackId);
+  const sequenceUsers = sequence
+    ? project.nodes.flatMap((node) => [
+        ...(node.enterSequence === sequence.id
+          ? [`${node.title} · 进入演出`]
+          : []),
+        ...(node.exitSequence === sequence.id
+          ? [`${node.title} · 离开演出`]
+          : []),
+        ...node.lines
+          .filter((line) => line.sequence === sequence.id)
+          .map((line) => `${node.title} · 台词 ${line.id}`),
+      ])
+    : [];
   const select = (id: string) => {
     setTrackId(id);
     setKeys("");
@@ -187,6 +201,53 @@ export function SequenceEditor({
       </Fold>
       {sequence && (
         <>
+          <Fold
+            title="演出引用与删除"
+            summary={`${sequenceUsers.length} 处使用`}
+          >
+            {sequenceUsers.length ? (
+              <ul>
+                {sequenceUsers.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>当前已应用工程没有引用此演出。</p>
+            )}
+            <button
+              disabled={sequenceUsers.length > 0}
+              onClick={() => setRemoveId(sequence.id)}
+            >
+              检查删除此演出
+            </button>
+            {removeId === sequence.id && (
+              <div role="group" aria-label="删除演出确认">
+                <p>
+                  删除“{sequence.name}
+                  ”及其全部轨道？可通过工程撤销恢复，素材文件保留。
+                </p>
+                <button
+                  disabled={sequenceUsers.length > 0}
+                  onClick={() => {
+                    onChange({
+                      ...project,
+                      sequences: project.sequences!.filter(
+                        (s) => s.id !== sequence.id,
+                      ),
+                    });
+                    setId("");
+                    setTrackId("");
+                    setPlaying(false);
+                    setRemoveId("");
+                    setSolo("");
+                  }}
+                >
+                  确认删除未引用演出
+                </button>
+                <button onClick={() => setRemoveId("")}>取消删除演出</button>
+              </div>
+            )}
+          </Fold>
           <div className="st-fields">
             <Field
               label="演出名称"

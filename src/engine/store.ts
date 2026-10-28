@@ -15,6 +15,9 @@ export class EngineStore {
   readonly runtime: StoryRuntime;
   private listeners = new Set<() => void>();
   private eventListeners = new Set<(event: EngineEvent) => void>();
+  private eventQueue: EngineEvent[] = [];
+  private notifying = 0;
+  private dispatching = false;
   observerError = "";
   private current: EngineSave;
   private storage?: StorageAdapter;
@@ -77,15 +80,30 @@ export class EngineStore {
         this.persistenceError = `进度未保存：${String(e)}。请导出存档，释放存储空间后重试。`;
       }
     }
-    this.listeners.forEach((l) => l());
     if (changed) {
-      const event = transitionEvent(before, this.current, action);
-      // Independent copies protect both the engine and subsequent observers.
-      for (const observer of [...this.eventListeners]) {
+      this.eventQueue.push(transitionEvent(before, this.current, action));
+    }
+    this.notifying++;
+    try {
+      this.listeners.forEach((l) => l());
+    } finally {
+      this.notifying--;
+      if (!this.notifying && !this.dispatching) {
+        this.dispatching = true;
         try {
-          observer(structuredClone(event));
-        } catch (error) {
-          this.observerError = String(error);
+          while (this.eventQueue.length) {
+            const event = this.eventQueue.shift()!;
+            // Snapshot events before any callback; nested edits enqueue later events.
+            for (const observer of [...this.eventListeners]) {
+              try {
+                observer(structuredClone(event));
+              } catch (error) {
+                this.observerError = String(error);
+              }
+            }
+          }
+        } finally {
+          this.dispatching = false;
         }
       }
     }
@@ -183,5 +201,6 @@ export class EngineStore {
   destroy() {
     this.listeners.clear();
     this.eventListeners.clear();
+    this.eventQueue = [];
   }
 }

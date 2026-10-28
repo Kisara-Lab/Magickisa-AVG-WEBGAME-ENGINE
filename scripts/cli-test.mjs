@@ -201,6 +201,24 @@ try {
   );
   assert.ok(saved.backup);
   assert.notEqual(saved.revision, fresh.revision);
+  const renameFile = path.join(temporary, "变量 重命名.json");
+  await call([
+    "variable",
+    "rename-plan",
+    "--from",
+    "arrived",
+    "--to",
+    "arrivedRenamed",
+    "--out",
+    renameFile,
+  ]);
+  await call(["variable", "rename", "--file", renameFile]);
+  await call(["variable", "rename", "--file", renameFile], undefined, 3);
+  assert.equal(
+    (await call(["choice", "show", "--scene", "gate", "--id", "go"])).effects[0]
+      .key,
+    "arrivedRenamed",
+  );
   assert.equal(
     (await call(["project", "show"])).project.media.ending.lines[0].zh,
     "终",

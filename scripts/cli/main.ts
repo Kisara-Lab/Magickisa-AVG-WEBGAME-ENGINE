@@ -60,9 +60,14 @@ import {
 import { ProjectPackages } from "../project-packages";
 import { exportMarkdown, importMarkdown } from "../content";
 import * as authoring from "../authoring/service";
+import {
+  planVariableRename,
+  applyVariableRename,
+} from "../variable-maintenance";
 import { readJson, home } from "../authoring/storage";
 
 const commands: Record<string, string[]> = {
+  variable: ["rename-plan", "rename"],
   backup: ["list", "preview", "restore"],
   test: ["list", "run"],
   agent: ["init", "context"],
@@ -117,6 +122,8 @@ const booleanOptions = new Set([
   "include-sources",
 ]);
 const valueOptions = new Set([
+  "from",
+  "to",
   "base",
   "workspace",
   "name",
@@ -186,6 +193,7 @@ function parse(args: string[]) {
   }
   const shared = ["json", "help", "workspace"];
   const allowed: Record<string, string[]> = {
+    variable: action === "rename-plan" ? ["from", "to", "out"] : ["file"],
     agent: action === "context" ? ["scene", "query", "limit", "offset"] : [],
     source: action === "add" ? ["file", "id"] : [],
     sync:
@@ -617,6 +625,23 @@ export async function execute(args: string[], signal: AbortSignal) {
         (r) => (!o.id || r.target === o.id) && (!o.kind || r.kind === o.kind),
       ),
     };
+  if (group === "variable") {
+    if (action === "rename-plan") {
+      const plan = planVariableRename(ctx, need("from"), need("to"));
+      if (o.out) writeOutput(need("out"), JSON.stringify(plan, null, 2) + "\n");
+      return plan;
+    }
+    const plan = z
+      .object({
+        workspaceId: z.string(),
+        from: z.string(),
+        to: z.string(),
+        revision: z.string(),
+        studioRevision: z.string(),
+      })
+      .parse(await jsonInput("@" + need("file"), signal));
+    return applyVariableRename(ctx, { ...plan, changes: [] });
+  }
   if (group === "asset") {
     if (action === "list") return { files: listAssets(ctx) };
     if (action === "history") return { backups: assetBackups(ctx) };

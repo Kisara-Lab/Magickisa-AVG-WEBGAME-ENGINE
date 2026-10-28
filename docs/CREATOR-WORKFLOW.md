@@ -37,6 +37,10 @@
 
 时间轴只控制画面和媒体，不执行 JS／TS、变量效果或剧情跳转。剧情逻辑仍放在场景和分支中。台词配音与同句演出语音轨道不能重复占用。演出期间普通场景 BGM 和台词配音暂停。
 
+![时间轴、锁定与独奏预览](images/production-timeline.png)
+
+“演出引用与删除”列出当前工程使用位置；有引用时先修改场景／台词绑定。删除演出保留素材文件，可用工程撤销恢复。OP／ED 采用相同有限时钟，献词保留手动翻页，不新增自动页时长。
+
 Studio 的舞台预览使用当前工作区素材。图片、音频和视频选择器可以回填路径；浏览器不支持某种编码时会提示加载失败。视频和音频格式的扩展名不代表所有浏览器均支持其内部编码。
 
 ## 资料与路线验收
@@ -59,9 +63,25 @@ node scripts/magickisa.mjs schema tests --json
 
 条件覆盖只记录实际求值结果。组合条件短路时，没有求值的子条件仍为未覆盖，不把整棵条件树当作已测试。修改工程或测试后，应重新运行。
 
+![录制后的路线测试报告](images/production-tests.png)
+
+<details>
+<summary>查看手机测试面板</summary>
+
+![手机创作面板](images/production-mobile.png)
+
+</details>
+
 ## 变量、画廊与扩展
 
 工程页支持声明变量类型与初始值，列表和对象保留 JSON 编辑；变量声明与变量用途注释分开保存。调查逻辑仍由条件与效果完成。
+
+“协调重命名变量”先展示明确引用位置，确认后一次备份并协调保存工程和创作资料。覆盖声明、条件、效果、玩家输入、台词双花括号插值、测试预设、录制初始状态及断言；目标名已有引用时拒绝合并。原始剧本、Agent 结构稿与同步基线不自动改写，后续同步需检查差异。玩家旧存档也不改写，已发行作品请评估内容版本。恢复旧名称可使用同一操作或备份恢复。
+
+```sh
+node scripts/magickisa.mjs variable rename-plan --workspace WORKSPACE_ID --from clue --to evidence --out rename-plan.json --json
+node scripts/magickisa.mjs variable rename --workspace WORKSPACE_ID --file rename-plan.json --json
+```
 
 画廊条目使用明确的图片与解锁条件。玩家通过菜单查看“画廊与结局”，未解锁条目隐藏名称与图片；收集记录按作品保留，重新开始故事不清空。Studio 内嵌预览仅使用内存收集记录。存储失败时保留当前会话进度并提供重试，损坏记录不会自动覆盖。
 

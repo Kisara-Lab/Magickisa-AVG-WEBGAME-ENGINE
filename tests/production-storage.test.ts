@@ -22,12 +22,81 @@ import {
 } from "../scripts/authoring/creative-backup";
 import { acquireProjectWrite } from "../scripts/project-locks";
 import {
+  planVariableRename,
+  applyVariableRename,
+} from "../scripts/variable-maintenance";
+import {
   inspectAsset,
   changeAsset,
   restoreAsset,
   planAssetRestore,
   assetBackups,
 } from "../scripts/asset-maintenance";
+
+test("variable rename coordinates project and authoring with one backup and rejects stale plans", () => {
+  const ctx = fixture();
+  try {
+    const snapshot = readSnapshot(ctx),
+      p = snapshot.project;
+    p.variables = { clue: { type: "boolean", initial: false } };
+    p.nodes[0].lines[0].text = "clue 原文 {{clue}}";
+    p.nodes[0].onEnter = [{ type: "set", key: "clue", value: true }];
+    saveProject(ctx, p, snapshot.revision);
+    const studio = readStudioData(ctx);
+    studio.data.variables.clue = {
+      label: "线索",
+      type: "boolean",
+      description: "clue 原文不替换",
+    };
+    studio.data.tests = [
+      {
+        id: "test",
+        name: "检查",
+        initial: {
+          variables: { clue: false },
+          visited: [],
+          unlocked: [],
+          read: [],
+          usedChoices: [],
+        },
+        steps: [
+          {
+            action: "assert",
+            variables: { clue: true },
+            condition: { type: "flag", key: "clue" },
+          },
+        ],
+      },
+    ];
+    saveStudioData(ctx, studio.data, studio.revision);
+    const plan = planVariableRename(ctx, "clue", "evidence");
+    const backups = listBackups(ctx).length;
+    applyVariableRename(ctx, plan);
+    assert.equal(listBackups(ctx).length, backups + 1);
+    const after = readSnapshot(ctx).project;
+    assert.equal(after.nodes[0].lines[0].text, "clue 原文 {{evidence}}");
+    assert.equal(after.variables?.clue, undefined);
+    assert.equal(after.variables?.evidence.initial, false);
+    assert.equal(
+      readStudioData(ctx).data.variables.evidence.description,
+      "clue 原文不替换",
+    );
+    assert.deepEqual(readStudioData(ctx).data.tests[0].steps[0], {
+      action: "assert",
+      variables: { evidence: true },
+      condition: { type: "flag", key: "evidence" },
+    });
+    assert.throws(
+      () => applyVariableRename(ctx, plan),
+      (e: any) => e.status === 409,
+    );
+    const before = fs.readFileSync(ctx.projectFile);
+    assert.throws(() => planVariableRename(ctx, "evidence", "constructor"));
+    assert.deepEqual(fs.readFileSync(ctx.projectFile), before);
+  } finally {
+    fs.rmSync(ctx.directory, { recursive: true, force: true });
+  }
+});
 
 test("asset replacement and removal check references and bytes, and restore backed-up content", async () => {
   const ctx = fixture();

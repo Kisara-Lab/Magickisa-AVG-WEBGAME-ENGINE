@@ -15,6 +15,9 @@ export function PreviewRecorder({
     [recorded, setRecorded] = useState<StoryTest>(),
     [error, setError] = useState("");
   useEffect(() => {
+    if (!loaded) setActive(false);
+  }, [loaded]);
+  useEffect(() => {
     const receive = (e: MessageEvent) => {
       if (
         e.origin !== location.origin ||
