@@ -794,7 +794,8 @@ export async function execute(args: string[], signal: AbortSignal) {
       if (!stdinWasFlowing) process.stdin.pause();
       // Node 22 on Windows retains a referenced pipe handle even after pause().
       // A stopped Studio command never reads further input; release that pipe.
-      if (!process.stdin.isTTY) process.stdin.destroy();
+      if (!process.stdin.isTTY && process.platform === "win32")
+        process.stdin.destroy();
     }
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
