@@ -55,6 +55,8 @@ export const moduleSchema = z
         resources: true,
         titleScreen: true,
         ui: true,
+        theme: true,
+        variables: true,
       })
       .partial()
       .strict()
@@ -96,6 +98,9 @@ export const moduleSchema = z
       .array(shape.audio.element.partial().extend({ id: ref }).strict())
       .optional(),
     media: shape.media.partial().strict().optional(),
+    assets: shape.assets,
+    sequences: shape.sequences,
+    gallery: shape.gallery,
   })
   .strict();
 export const resolutionsSchema = z

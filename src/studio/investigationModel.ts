@@ -2,6 +2,7 @@ import { z } from "zod";
 import { valueSchema } from "../engine/schema";
 import type { StoryProject } from "../engine/types";
 import { createSave } from "../engine/save";
+import { storyTestSchema } from "../engine/storyTest";
 export const presetSchema = z
   .object({
     id: z.string().min(1),
@@ -17,7 +18,8 @@ export const presetSchema = z
   .strict();
 export const studioDataSchema = z
   .object({
-    formatVersion: z.literal(1),
+    formatVersion: z.literal(2),
+    tests: z.array(storyTestSchema).default([]),
     positions: z.record(
       z.string(),
       z.object({ x: z.number().finite(), y: z.number().finite() }).strict(),
@@ -50,7 +52,8 @@ export const studioDataSchema = z
 export type StudioData = z.infer<typeof studioDataSchema>;
 export type TestPreset = z.infer<typeof presetSchema>;
 export const emptyStudioData = (): StudioData => ({
-  formatVersion: 1,
+  formatVersion: 2,
+  tests: [],
   positions: {},
   variables: {},
   presets: [],
@@ -93,5 +96,9 @@ export function presetSave(project: StoryProject, preset: TestPreset) {
     entered: preset.phase === "completed",
     completed: preset.phase === "completed",
   });
+  const node = project.nodes.find((n) => n.id === preset.nodeId)!;
+  save.lineId =
+    preset.phase === "completed" ? null : (node.lines[0]?.id ?? null);
+  save.phase = save.lineId === null ? "exits" : "line";
   return save;
 }

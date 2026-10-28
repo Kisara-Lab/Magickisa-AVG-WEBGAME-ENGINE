@@ -5,14 +5,16 @@ import { Modal } from "./components";
 export const workspaceId = () =>
   new URLSearchParams(location.search).get("workspaceId") || "";
 export function studioUrl(profile: Profile, route: string) {
-  return `/__studio/${route}?${new URLSearchParams({
-    profile,
-    ...(workspaceId()
-      ? {
-          workspaceId: workspaceId(),
-        }
-      : {}),
-  })}`;
+  return `/__studio/${route}${route.includes("?") ? "&" : "?"}${new URLSearchParams(
+    {
+      profile,
+      ...(workspaceId()
+        ? {
+            workspaceId: workspaceId(),
+          }
+        : {}),
+    },
+  )}`;
 }
 export async function studioRequest(
   profile: Profile,

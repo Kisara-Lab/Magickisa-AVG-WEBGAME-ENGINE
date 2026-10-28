@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { creativeSnapshot } from "./authoring/creative-backup";
 import path from "node:path";
 import crypto from "node:crypto";
 import { contained, atomicJson, type ProjectContext } from "./workspaces";
@@ -67,6 +68,10 @@ export function saveStudioData(
         "studio-data-" + Date.now() + "-" + crypto.randomUUID(),
       );
       fs.mkdirSync(backup, { recursive: true });
+      atomicJson(
+        path.join(backup, "creative-files.json"),
+        creativeSnapshot(ctx),
+      );
       if (fs.existsSync(studioDataFile(ctx)))
         fs.copyFileSync(studioDataFile(ctx), path.join(backup, "studio.json"));
       atomicJson(path.join(backup, "authoring-files.json"), {

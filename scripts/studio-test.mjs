@@ -8,8 +8,8 @@ import { chromium } from "playwright";
 import { editorRegression } from "./editor-regression.mjs";
 import { cliBrowserRegression } from "./cli-browser-test.mjs";
 import { investigationBrowser } from "./investigation-browser.mjs";
+import { productionBrowser } from "./production-browser.mjs";
 import {
-  legacyModernPackage,
   modernBoundaryRegression,
   rejectLegacyPackages,
 } from "./modern-boundary-test.mjs";
@@ -53,6 +53,7 @@ try {
   await editorRegression(browser, origin);
   await cliBrowserRegression(browser, origin);
   await investigationBrowser(browser, origin);
+  await productionBrowser(browser, origin);
   await modernBoundaryRegression(origin, page);
   const api = async (profile, route, body, id) => {
     const response = await fetch(
@@ -249,7 +250,7 @@ try {
         headers: {
           "Content-Type": "application/zip",
         },
-        body: await legacyModernPackage(zip),
+        body: zip,
       },
     );
     assert.ok(upload.ok);

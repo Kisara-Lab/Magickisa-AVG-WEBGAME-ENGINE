@@ -1,4 +1,8 @@
 import fs from "node:fs";
+import {
+  creativeSnapshot,
+  type CreativeFiles,
+} from "./authoring/creative-backup";
 import path from "node:path";
 import crypto from "node:crypto";
 import {
@@ -326,6 +330,7 @@ export function saveProject(
   alreadyLocked = false,
   syncState?: SyncState,
   studioUpdate?: { data: unknown; revision: string },
+  creative?: CreativeFiles,
 ) {
   const unlock = alreadyLocked ? () => {} : acquireProjectWrite(ctx);
   try {
@@ -340,7 +345,8 @@ export function saveProject(
         code: "REVISION_CONFLICT",
         exitCode: 3,
       });
-    const coordinatedState = syncState ?? (studio ? readState(ctx) : undefined);
+    const coordinatedState =
+      syncState ?? (studio || creative ? readState(ctx) : undefined);
     const { project, issues } = checkedProject(ctx, input);
     const original = fs.readFileSync(ctx.projectFile);
     if (digest(original) !== expected) assertRevision(ctx, expected);
@@ -351,7 +357,8 @@ export function saveProject(
       studio &&
       !projectChanged &&
       JSON.stringify(readStudioData(ctx).data) === JSON.stringify(studio) &&
-      !syncState
+      !syncState &&
+      !creative
     )
       return {
         revision: revision(ctx.profile, ctx),
@@ -359,7 +366,7 @@ export function saveProject(
         backup: null,
         studio: readStudioData(ctx),
       };
-    if (syncState && !studio && !projectChanged) {
+    if (syncState && !studio && !projectChanged && !creative) {
       beginCommit(ctx, project, syncState);
       try {
         finishCommit(ctx, syncState);
@@ -374,6 +381,7 @@ export function saveProject(
       `studio-modern-${Date.now()}-${crypto.randomUUID()}`,
     );
     fs.mkdirSync(backup, { recursive: true });
+    atomicJson(path.join(backup, "creative-files.json"), creativeSnapshot(ctx));
     fs.writeFileSync(path.join(backup, "project.json"), original);
     if (fs.existsSync(studioDataFile(ctx)))
       fs.copyFileSync(studioDataFile(ctx), path.join(backup, "studio.json"));
@@ -382,11 +390,13 @@ export function saveProject(
         stateFile(ctx),
         path.join(backup, "authoring-state.json"),
       );
-    if (coordinatedState) beginCommit(ctx, project, coordinatedState, studio);
+    if (coordinatedState)
+      beginCommit(ctx, project, coordinatedState, studio, creative);
     try {
       atomicJson(ctx.projectFile, project);
       buildContent(project, ctx.public, ctx.id.startsWith("builtin-"));
-      if (coordinatedState) finishCommit(ctx, coordinatedState, studio);
+      if (coordinatedState)
+        finishCommit(ctx, coordinatedState, studio, creative);
     } catch (error) {
       if (coordinatedState) {
         recoverCommit(ctx);
@@ -466,7 +476,10 @@ export function startBuild(
   expected: string,
   onLog?: (text: string) => void,
   signal?: AbortSignal,
+  base = "/",
 ): BuildJob {
+  if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/.test(base))
+    throw new Error("发行 base 必须是 / 或 /games/my-game/ 形式的路径");
   const unlock = acquireBuild();
   try {
     assertRevision(ctx, expected);
@@ -491,6 +504,7 @@ export function startBuild(
           NODE_ENV: "production",
           MAGICKISA_BUILD_EDITOR: "0",
           MAGICKISA_WORKSPACE: ctx.id,
+          MAGICKISA_BUILD_BASE: base,
         },
       },
     );

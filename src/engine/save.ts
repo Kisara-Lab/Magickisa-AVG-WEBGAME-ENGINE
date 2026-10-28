@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { valueSchema } from "./schema";
 import { contentLayout } from "./contentLayout.js";
+import { SequenceClock } from "./sequence";
 import type {
   EngineSave,
   SaveState,
@@ -10,6 +11,20 @@ import type {
 const strings = z.array(z.string());
 export const stateSchema = z.object({
   nodeId: z.string(),
+  lineId: z.string().nullable(),
+  phase: z.enum(["line", "exits"]),
+  sequence: z
+    .object({
+      id: z.string(),
+      trigger: z.string(),
+      time: z.number().finite().nonnegative(),
+      waiting: z.number().finite().nonnegative().nullable(),
+      finished: z.boolean(),
+    })
+    .nullable()
+    .default(null),
+  sequenceTokens: strings.default([]),
+  terminalSequence: z.string().nullable().default(null),
   lineIndex: z.number().int().nonnegative(),
   variables: z.record(z.string(), valueSchema),
   visitedNodes: strings,
@@ -38,7 +53,7 @@ export const stateSchema = z.object({
 export const saveSchema = stateSchema.extend({
   contentLayout: z.string().optional(),
   readLineIds: strings.default([]),
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(3),
   projectId: z.string(),
   contentVersion: z.string(),
   slotId: z.string(),
@@ -56,18 +71,29 @@ export const saveSchema = stateSchema.extend({
     .max(500),
 });
 export const slotKey = (projectId: string, slotId = "auto") =>
-  `magickisa-avg:v2:${projectId}:${slotId}`;
+  `magickisa-avg:v3:${projectId}:${slotId}`;
 export function createSave(project: StoryProject, slotId = "auto"): EngineSave {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     contentLayout: contentLayout(project),
     projectId: project.id,
     contentVersion: project.version,
     slotId,
     savedAt: new Date().toISOString(),
     nodeId: project.startNodeId,
+    lineId:
+      project.nodes.find((n) => n.id === project.startNodeId)?.lines[0]?.id ??
+      null,
+    phase: project.nodes.find((n) => n.id === project.startNodeId)?.lines.length
+      ? "line"
+      : "exits",
     lineIndex: 0,
-    variables: {},
+    variables: Object.fromEntries(
+      Object.entries(project.variables ?? {}).map(([key, value]) => [
+        key,
+        structuredClone(value.initial),
+      ]),
+    ),
     visitedNodes: [project.startNodeId],
     history: [],
     readLineIds: [],
@@ -81,6 +107,8 @@ export function createSave(project: StoryProject, slotId = "auto"): EngineSave {
     completedEndings: [],
     seenPresentations: [],
     presentation: null,
+    sequence: null,
+    sequenceTokens: [],
     audio: { volume: 1, muted: false },
   };
 }
@@ -100,10 +128,43 @@ export function snapshot(save: EngineSave): SaveState {
   return { ...structuredClone(state), playerNotes: "" };
 }
 function validPosition(state: SaveState, p: StoryProject): void {
+  if (state.sequence) {
+    const sequence = p.sequences?.find((s) => s.id === state.sequence!.id);
+    if (!sequence) throw new Error("存档演出已不存在");
+    new SequenceClock(sequence, state.sequence);
+  }
   const node = p.nodes.find((n) => n.id === state.nodeId);
   if (!node) throw new Error(`存档节点已不存在：${state.nodeId}`);
-  if (state.lineIndex > node.lines.length)
-    throw new Error("存档行号超出节点范围。");
+  if (
+    state.terminalSequence &&
+    !p.sequences?.some((s) => s.id === state.terminalSequence)
+  )
+    throw new Error("存档保留的舞台演出已不存在");
+  if (state.sequence) {
+    const { trigger, id } = state.sequence;
+    const bound =
+      trigger === "enter"
+        ? node.enterSequence
+        : trigger === "exit" && state.phase === "exits"
+          ? node.exitSequence
+          : trigger === `line:${state.lineId}`
+            ? node.lines.find((l) => l.id === state.lineId)?.sequence
+            : undefined;
+    if (
+      bound !== id ||
+      state.sequence.finished ||
+      state.sequenceTokens?.includes(trigger)
+    )
+      throw new Error("存档演出触发位置与当前工程不一致");
+  }
+  if (state.phase === "line") {
+    const index = node.lines.findIndex((line) => line.id === state.lineId);
+    if (index < 0) throw new Error(`存档台词已不存在：${state.lineId}`);
+    state.lineIndex = index;
+  } else {
+    if (state.lineId !== null) throw new Error("场景出口位置不能带有台词 ID");
+    state.lineIndex = node.lines.length;
+  }
   if (state.visitedNodes.some((id) => !p.nodes.some((n) => n.id === id)))
     throw new Error("存档包含已删除的节点。");
   if (
@@ -119,16 +180,9 @@ export function importSave(
 ): EngineSave {
   if (typeof input !== "object" || !input) throw new Error("存档格式无效。");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion === 2) {
+  if (raw.schemaVersion === 3) {
     const save = saveSchema.parse(raw);
     if (save.projectId !== p.id) throw new Error("存档属于其他项目。");
-    if (
-      save.contentLayout !== undefined &&
-      save.contentLayout !== contentLayout(p)
-    )
-      throw new Error(
-        "工程台词结构已变化，请使用对应版本游戏读取此存档；作者调整行序后应提升内容版本。",
-      );
     if (save.contentVersion !== p.version)
       throw new Error(
         `存档内容版本 ${save.contentVersion} 与当前 ${p.version} 不同。请使用对应内容版本的游戏读取，或导入当前版本导出的存档；本引擎不自动转换内容版本。`,

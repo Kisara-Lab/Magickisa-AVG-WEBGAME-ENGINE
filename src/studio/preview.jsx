@@ -1,3 +1,7 @@
+import {
+  mapProjectResources,
+  deploymentResource,
+} from "../engine/projectResources";
 import { requireModernProfile, requireModernProject } from "../engine/support";
 import { explainBranches, explainNext } from "../engine/investigation";
 import React, { useEffect, useRef, useState } from "react";
@@ -24,70 +28,14 @@ let project,
   generation = 0;
 const workspaceId = new URLSearchParams(location.search).get("workspaceId");
 const fileUrl = (ref) =>
-  ref?.startsWith("/") &&
-  !ref.startsWith("//") &&
-  !ref.startsWith("/__studio/media/")
-    ? `/__studio/media/${profile}${workspaceId ? "/@" + workspaceId : ""}${ref.split("/").map(encodeURIComponent).join("/")}`
-    : ref;
+  !ref || ref.startsWith("/__studio/media/")
+    ? ref
+    : deploymentResource(
+        ref,
+        `/__studio/media/${profile}${workspaceId ? "/@" + workspaceId : ""}/`,
+      );
 function previewProject(input) {
-  const p = structuredClone(input);
-  p.resources.assetsBase = fileUrl(
-    p.resources.assetsBase || "/assets/generated",
-  );
-  p.resources.sceneRules = p.resources.sceneRules?.map((rule) => ({
-    ...rule,
-    asset: fileUrl(rule.asset),
-  }));
-  p.backdrops = p.backdrops.map((b) => ({
-    ...b,
-    src: fileUrl(b.src),
-  }));
-  p.audio = p.audio.map((a) => ({
-    ...a,
-    src: fileUrl(a.src),
-  }));
-  p.characters = p.characters.map((c) => ({
-    ...c,
-    portrait: fileUrl(c.portrait),
-    ...(c.live2d
-      ? {
-          live2d: {
-            ...c.live2d,
-            model: fileUrl(c.live2d.model),
-          },
-        }
-      : {}),
-    expressions: Object.fromEntries(
-      Object.entries(c.expressions || {}).map(([k, v]) => [k, fileUrl(v)]),
-    ),
-  }));
-  p.titleScreen = {
-    ...p.titleScreen,
-    music: fileUrl(p.titleScreen.music),
-    backdrop: fileUrl(p.titleScreen.backdrop),
-  };
-  if (p.media.opening) {
-    p.media.opening.lyrics = fileUrl(p.media.opening.lyrics);
-    p.media.opening.audio = fileUrl(p.media.opening.audio);
-    p.media.opening.images = p.media.opening.images?.map(fileUrl);
-  }
-  if (p.media.ending) {
-    p.media.ending.lyrics = fileUrl(p.media.ending.lyrics);
-    p.media.ending.audio = fileUrl(p.media.ending.audio);
-    p.media.ending.image = fileUrl(p.media.ending.image);
-  }
-  p.media.chapterMusic = Object.fromEntries(
-    Object.entries(p.media.chapterMusic || {}).map(([k, v]) => [k, fileUrl(v)]),
-  );
-  p.media.musicGallery = p.media.musicGallery?.map((m) => ({
-    ...m,
-    src: fileUrl(m.src),
-  }));
-  p.nodes = p.nodes.map((n) => ({
-    ...n,
-    background: fileUrl(n.background),
-  }));
-  return p;
+  return mapProjectResources(input, fileUrl);
 }
 function Director({ Component, data }) {
   const [time, setTime] = useState(data.time || 0),

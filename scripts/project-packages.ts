@@ -38,7 +38,7 @@ interface FileRecord {
 }
 interface Manifest {
   format: "magickisa-project";
-  version: 1;
+  version: 2;
   studioVersion: string;
   profile: Profile;
   name: string;
@@ -294,7 +294,7 @@ export class ProjectPackages {
         throw new Error("工程解压总量超过 8 GiB");
       const manifest: Manifest = {
         format: "magickisa-project",
-        version: 1,
+        version: 2,
         studioVersion,
         profile: ctx.profile,
         name: ctx.name,
@@ -451,7 +451,7 @@ export class ProjectPackages {
     ) as Manifest;
     if (
       manifest.format !== "magickisa-project" ||
-      manifest.version !== 1 ||
+      manifest.version !== 2 ||
       typeof manifest.studioVersion !== "string" ||
       !manifest.studioVersion.trim()
     )

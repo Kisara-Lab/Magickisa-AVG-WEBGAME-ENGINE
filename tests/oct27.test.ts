@@ -167,7 +167,7 @@ test("storage quota failure stays visible across gameplay and retry can recover"
   assert.equal(store.persistenceError, "");
   assert.ok(written);
 });
-test("new saves detect reordered positional lines in modern mode; old saves remain readable", () => {
+test("version 3 saves follow stable line IDs after reordering and reject deleted lines", () => {
   const p = assertProject(blankProject("modern"));
   p.nodes[0].lines.push({
     id: "second",
@@ -175,9 +175,11 @@ test("new saves detect reordered positional lines in modern mode; old saves rema
   });
   const modern = createSave(p);
   p.nodes[0].lines.reverse();
-  assert.throws(() => importSave(modern, p), /结构/);
-  delete modern.contentLayout;
-  assert.doesNotThrow(() => importSave(modern, p));
+  assert.equal(importSave(modern, p).lineIndex, 1);
+  assert.equal(importSave(modern, p).lineId, modern.lineId);
+  p.nodes[0].lines.pop();
+  assert.throws(() => importSave(modern, p), /台词已不存在/);
+  assert.throws(() => importSave({ ...modern, schemaVersion: 2 }, p), /版本/);
 });
 test("rollback retains player notes, achievements and collected/read materials", () => {
   const p = assertProject(blankProject("modern")),

@@ -1,7 +1,15 @@
 import { requireModernProject } from "../engine/support";
 import {
+  changeRecord,
+  applyPatches,
+  appendHistory,
+  type EditRecord,
+} from "../authoring/history";
+import { jsonEqual } from "../engine/condition";
+import {
   ProjectManager,
   studioRequest,
+  studioUrl,
   workspaceId,
   type WorkspaceItem,
 } from "./ProjectManager";
@@ -85,6 +93,9 @@ import { presetSave, type TestPreset } from "./investigationModel";
 import type { EngineSave } from "../engine/types";
 import { PresentationEditor } from "./PresentationEditor";
 import { ProjectDetails } from "./ProjectDetails";
+import { ProductionPanel } from "./ProductionPanel";
+import { SequenceEditor } from "./SequenceEditor";
+import { BackupPanel } from "./BackupPanel";
 import type { PresentationMode } from "./PresentationEditor";
 import { AssetEditor, CharacterEditor, MaterialEditor } from "./LibraryEditors";
 import type { AssetFile } from "./LibraryEditors";
@@ -139,8 +150,8 @@ export function Studio() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [past, setPast] = useState<AuthorProject[]>([]),
-    [future, setFuture] = useState<AuthorProject[]>([]),
+    [past, setPast] = useState<EditRecord[]>([]),
+    [future, setFuture] = useState<EditRecord[]>([]),
     [files, setFiles] = useState<AssetFile[]>([]),
     [raw, setRaw] = useState(""),
     [rawBase, setRawBase] = useState(""),
@@ -154,6 +165,7 @@ export function Studio() {
     [previewLarge, setPreviewLarge] = useState(false),
     [playing, setPlaying] = useState(false),
     [runtime, setRuntime] = useState<unknown>(null),
+    [buildBase, setBuildBase] = useState("/"),
     [job, setJob] = useState<BuildJob>({
       status: "idle",
       log: "",
@@ -188,6 +200,8 @@ export function Studio() {
   });
   const previewAction = useRef<() => void>(() => {});
   const saving = useRef(false);
+  const activeUpload = useRef<XMLHttpRequest>();
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const frameBox = useRef<HTMLDivElement>(null),
     iframe = useRef<HTMLIFrameElement>(null),
     ready = useRef(false),
@@ -197,7 +211,11 @@ export function Studio() {
   previewRef.current = preview;
   projectRef.current = project;
   const rawDirty = raw !== rawBase;
-  const dirty = !!project && (JSON.stringify(project) !== saved || rawDirty);
+  const savedProject = useMemo(
+    () => (saved ? (JSON.parse(saved) as AuthorProject) : null),
+    [saved],
+  );
+  const dirty = !!project && (!jsonEqual(project, savedProject) || rawDirty);
   const node =
     project?.nodes.find((n) => n.id === selected) || project?.nodes[0];
   const scope =
@@ -652,12 +670,16 @@ export function Studio() {
       (field instanceof HTMLInputElement &&
         !["checkbox", "file", "range"].includes(field.type));
     const now = Date.now();
-    if (
-      !typing ||
-      editGroup.current.field !== field ||
-      now - editGroup.current.at > 800
-    )
-      setPast((history) => [...history, project].slice(-40));
+    const record = changeRecord(project, next);
+    if (!record.forward.length) return;
+    const merge =
+      typing &&
+      editGroup.current.field === field &&
+      now - editGroup.current.at <= 800;
+    const history = appendHistory(past, record, merge);
+    setPast(history.history);
+    if (history.dropped)
+      setNotice("撤销记录达到 200 步或 64 MiB 上限，最早记录已释放。");
     editGroup.current = {
       field: typing ? field : null,
       at: now,
@@ -678,8 +700,9 @@ export function Studio() {
       at: 0,
     };
     if (!past.length || !project) return;
-    setFuture([project, ...future].slice(0, 40));
-    restoreEdit(past[past.length - 1]);
+    const record = past[past.length - 1];
+    setFuture([record, ...future]);
+    restoreEdit(applyPatches(project, record.backward));
     setPast(past.slice(0, -1));
   }
   function redo() {
@@ -688,8 +711,8 @@ export function Studio() {
       at: 0,
     };
     if (!future.length || !project) return;
-    setPast([...past, project].slice(-40));
-    restoreEdit(future[0]);
+    setPast(appendHistory(past, future[0]).history);
+    restoreEdit(applyPatches(project, future[0].forward));
     setFuture(future.slice(1));
   }
   function restoreEdit(next: AuthorProject) {
@@ -909,16 +932,35 @@ export function Studio() {
   async function upload(file: File) {
     setBusy(true);
     try {
-      if (file.size > 8 * 1024 * 1024)
-        throw new Error(
-          "资源导入上限为 8 MB。较大的音频请放入当前工程的素材目录，再填写路径。",
+      if (file.size > 512 * 1024 * 1024)
+        throw new Error("单个资源导入上限为 512 MiB。");
+      const data = await new Promise<{ url: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        activeUpload.current = xhr;
+        setUploadProgress(0);
+        xhr.open(
+          "POST",
+          studioUrl(profile, "assets/upload") +
+            "&name=" +
+            encodeURIComponent(file.name),
         );
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let binary = "";
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      const data = await request(profile, "asset", {
-        name: file.name,
-        base64: btoa(binary),
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable)
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onerror = () => reject(new Error("素材上传网络失败"));
+        xhr.onabort = () => reject(new Error("素材上传已取消"));
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 400) reject(new Error(data.error || "上传失败"));
+            else resolve(data);
+          } catch (e) {
+            reject(e);
+          }
+        };
+        xhr.send(file);
       });
       setNotice(`资源已导入：${data.url}`);
       await refreshAssets();
@@ -927,6 +969,8 @@ export function Studio() {
       setError(String(e));
       throw e;
     } finally {
+      activeUpload.current = undefined;
+      setUploadProgress(null);
       setBusy(false);
     }
   }
@@ -956,6 +1000,12 @@ export function Studio() {
     );
   }
   async function build() {
+    if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/.test(buildBase)) {
+      setError(
+        "发行路径应为 / 或 /games/my-game/，仅使用字母、数字、下划线和短横线。",
+      );
+      return;
+    }
     if (rawDirty) {
       setError("请先应用 JSON 修改，再构建。");
       setSection("json");
@@ -968,6 +1018,7 @@ export function Studio() {
       setJob(
         await request(profile, "build", {
           revision: rev,
+          base: buildBase,
         }),
       );
       setError("");
@@ -1422,6 +1473,14 @@ export function Studio() {
               </div>
             </div>
             <div className="st-feedback">
+              {uploadProgress !== null && (
+                <p role="status">
+                  素材上传 {uploadProgress}%
+                  <button onClick={() => activeUpload.current?.abort()}>
+                    取消素材上传
+                  </button>
+                </p>
+              )}
               {error ? (
                 <div className="st-error" role="alert">
                   <AlertCircle size={17} />
@@ -1645,10 +1704,11 @@ export function Studio() {
                       lineIndex={lineIndex}
                       setLine={setLine}
                       onChange={(next) =>
-                        mutate((p) => {
-                          p.nodes = p.nodes.map((n) =>
+                        edit({
+                          ...project,
+                          nodes: project.nodes.map((n) =>
                             n.id === node.id ? next : n,
-                          );
+                          ),
                         })
                       }
                       onPreview={() => void runPreview()}
@@ -1686,18 +1746,25 @@ export function Studio() {
                     />
                   )}
                   {section === "presentations" && (
-                    <PresentationEditor
-                      project={project}
-                      onChange={edit}
-                      mode={mode}
-                      setMode={(m) => {
-                        setMode(m);
-                        setTime(0);
-                      }}
-                      time={time}
-                      setTime={setTime}
-                      onPreview={(page) => void runPreview(mode, page || 0)}
-                    />
+                    <>
+                      <SequenceEditor
+                        project={project}
+                        onChange={edit}
+                        profile={profile}
+                      />
+                      <PresentationEditor
+                        project={project}
+                        onChange={edit}
+                        mode={mode}
+                        setMode={(m) => {
+                          setMode(m);
+                          setTime(0);
+                        }}
+                        time={time}
+                        setTime={setTime}
+                        onPreview={(page) => void runPreview(mode, page || 0)}
+                      />
+                    </>
                   )}
                   {section === "assets" && (
                     <AssetEditor
@@ -1718,6 +1785,27 @@ export function Studio() {
                   )}
                   {section === "project" && (
                     <>
+                      <BackupPanel
+                        dirty={dirty || authoring.dirty}
+                        onRestored={() => location.reload()}
+                      />
+                      <ProductionPanel
+                        project={project}
+                        onChange={edit}
+                        authoring={authoring}
+                        onLocate={(nodeId, lineId) => {
+                          select(nodeId);
+                          setSection("script");
+                          setLine(
+                            Math.max(
+                              0,
+                              project.nodes
+                                .find((n) => n.id === nodeId)
+                                ?.lines.findIndex((l) => l.id === lineId) ?? 0,
+                            ),
+                          );
+                        }}
+                      />
                       <div className="st-section-title">
                         <div>
                           <span className="st-kicker">PROJECT SETTINGS</span>
@@ -1922,6 +2010,18 @@ export function Studio() {
                         <Package size={34} />
                       </div>
                       <Card title={"现代开发版"}>
+                        <label>
+                          网站部署路径
+                          <input
+                            value={buildBase}
+                            placeholder="/games/my-game/"
+                            onChange={(e) => setBuildBase(e.target.value)}
+                          />
+                        </label>
+                        <p>
+                          站点根目录填写 /；子目录填写完整路径并以 /
+                          结束。构建后将 dist 内容部署到该路径。
+                        </p>
                         <div className="st-release-steps">
                           <span
                             className={

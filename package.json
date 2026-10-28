@@ -1,6 +1,6 @@
 {
   "name": "magickisa-avg-webgame-engine",
-  "version": "2.0.0-dev.4",
+  "version": "2.0.0-dev.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "build:studio": "node scripts/build-studio.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "test:studio": "node scripts/studio-test.mjs",
     "content:build": "tsx scripts/content.ts build",
     "content:validate": "tsx scripts/content.ts validate",

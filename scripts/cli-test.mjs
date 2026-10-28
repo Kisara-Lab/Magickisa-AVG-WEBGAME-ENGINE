@@ -467,7 +467,24 @@ try {
   } finally {
     if (process.platform === "win32" && studio.connected) studio.send("stop");
     else studio.kill("SIGTERM");
-    await studioClosed;
+    let shutdownTimer;
+    try {
+      await Promise.race([
+        studioClosed,
+        new Promise((_, reject) => {
+          shutdownTimer = setTimeout(() => {
+            studio.kill("SIGKILL");
+            reject(
+              new Error(
+                `Studio shutdown timed out. stdout=${studioOutput}\nstderr=${studioLog}`,
+              ),
+            );
+          }, 15000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(shutdownTimer);
+    }
   }
   const stopped = JSON.parse(studioOutput);
   assert.equal(stopped.ok, true);
@@ -545,11 +562,24 @@ try {
     ),
     fs.readFileSync(image, "utf8"),
   );
-  await cli(["build", "--workspace", imported.id]);
+  await cli([
+    "build",
+    "--workspace",
+    imported.id,
+    "--base",
+    "/games/cli-fixture/",
+  ]);
   assert.ok(
     fs.existsSync(
       path.join(root, "workspace-projects", imported.id, "dist/index.html"),
     ),
+  );
+  assert.match(
+    fs.readFileSync(
+      path.join(root, "workspace-projects", imported.id, "dist/index.html"),
+      "utf8",
+    ),
+    /\/games\/cli-fixture\/assets\//,
   );
   console.log(
     "PASS CLI: all command groups, transactions, stable IDs, forward refs, dry-run, failure rollback, revisions, locks/recovery, Unicode files/stdin, package roundtrip and build",

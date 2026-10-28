@@ -66,6 +66,18 @@ export class EngineStore {
     this.runtime.advance();
     return this.commit();
   }
+  tickSequence(seconds: number) {
+    this.runtime.tickSequence(seconds);
+    return this.commit(false);
+  }
+  resumeSequence() {
+    this.runtime.resumeSequence();
+    return this.commit();
+  }
+  skipSequence() {
+    this.runtime.skipSequence();
+    return this.commit();
+  }
   choose(id: string) {
     this.runtime.choose(id);
     return this.commit();

@@ -115,7 +115,7 @@ export function unsupportedWorkspaceCount() {
   let count = 0;
   for (const id of fs.readdirSync(workspaceRoot)) {
     if (
-      id === "default-release" &&
+      ["default-release", "default-modern"].includes(id) &&
       fs.existsSync(path.join(workspaceRoot, id, "project.json"))
     ) {
       count++;
@@ -125,7 +125,13 @@ export function unsupportedWorkspaceCount() {
       const info = JSON.parse(
         fs.readFileSync(path.join(workspaceRoot, id, "workspace.json"), "utf8"),
       );
-      if (info.profile === "release") count++;
+      const file = path.join(workspaceRoot, id, "project.json");
+      if (
+        info.profile === "release" ||
+        (fs.existsSync(file) &&
+          JSON.parse(fs.readFileSync(file, "utf8")).schemaVersion !== 3)
+      )
+        count++;
     } catch {
       /* Other files are not workspace records. */
     }

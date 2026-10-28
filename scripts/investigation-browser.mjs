@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,7 +85,7 @@ export async function investigationBrowser(browser, origin) {
     await api("project", { project, revision: before.revision });
     const initial = await api("studio-data");
     const data = {
-      formatVersion: 1,
+      formatVersion: 2,
       positions: {
         hub: { x: 0, y: 0 },
         room: { x: 500, y: 0 },

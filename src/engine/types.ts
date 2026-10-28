@@ -41,6 +41,9 @@ export interface CharacterLayer {
 export interface StoryLine {
   id: string;
   text: string;
+  voice?: string;
+  sequence?: string;
+  pageBreak?: boolean;
   speaker?: string;
   characterId?: string;
   expression?: string;
@@ -75,6 +78,9 @@ export interface StoryNode {
   sequenceId?: string;
   ending?: string;
   background?: string;
+  readingMode?: "adv" | "nvl";
+  enterSequence?: string;
+  exitSequence?: string;
 }
 export interface MaterialEntry {
   id: string;
@@ -134,10 +140,36 @@ export interface MediaManifest {
   }[];
 }
 export interface StoryProject {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: string;
   title: string;
   version: string;
+  variables?: Record<
+    string,
+    {
+      type: "string" | "number" | "boolean" | "list" | "object";
+      initial: Value;
+      description?: string;
+    }
+  >;
+  assets?: {
+    id: string;
+    kind: "image" | "audio" | "video";
+    src: string;
+    name?: string;
+  }[];
+  sequences?: import("./sequence").Sequence[];
+  theme?: {
+    mode: "adv" | "nvl";
+    fontFamily: string;
+    fontSize: number;
+    textColor: string;
+    accentColor: string;
+    panelColor: string;
+    panelOpacity: number;
+    dialogueWidth: number;
+  };
+  gallery?: { id: string; title: string; asset: string; unlock?: Condition }[];
   startNodeId: string;
   nodes: StoryNode[];
   materials: MaterialEntry[];
@@ -174,6 +206,17 @@ export interface PresentationState {
 }
 export interface SaveState {
   nodeId: string;
+  lineId: string | null;
+  phase: "line" | "exits";
+  sequence?: {
+    id: string;
+    trigger: string;
+    time: number;
+    waiting: number | null;
+    finished: boolean;
+  } | null;
+  sequenceTokens?: string[];
+  terminalSequence?: string | null;
   lineIndex: number;
   variables: Variables;
   visitedNodes: string[];
@@ -199,7 +242,7 @@ export interface Checkpoint extends SaveState {
 export interface EngineSave extends SaveState {
   contentLayout?: string;
   readLineIds: string[];
-  schemaVersion: 2;
+  schemaVersion: 3;
   projectId: string;
   contentVersion: string;
   slotId: string;

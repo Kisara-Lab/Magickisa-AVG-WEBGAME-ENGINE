@@ -184,7 +184,7 @@ export function AssetEditor({
             multiple
             disabled={uploading}
             aria-label="资源文件"
-            accept="image/*,audio/*,.lrc"
+            accept="image/*,audio/*,video/*,.lrc,.vtt"
             onChange={(e) => {
               const input = e.currentTarget,
                 files = input.files;
@@ -208,7 +208,7 @@ export function AssetEditor({
           void importFiles(e.dataTransfer.files);
         }}
       >
-        ✦ 拖入图片、音乐或歌词，也可点击上方导入 · 每个文件最大 8 MB
+        ✦ 拖入图片、音乐、视频或字幕，也可点击上方导入 · 每个文件最大 512 MiB
       </div>
       {!!uploads.length && (
         <div className="st-upload-results" role="status">

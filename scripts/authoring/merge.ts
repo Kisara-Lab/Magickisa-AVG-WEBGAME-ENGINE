@@ -16,6 +16,10 @@ const keyed = new Set([
   "materials",
   "backdrops",
   "audio",
+  "assets",
+  "sequences",
+  "tracks",
+  "gallery",
 ]);
 export function segments(pointer: string) {
   if (!pointer.startsWith("/") || pointer === "/")

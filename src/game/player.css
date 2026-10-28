@@ -350,3 +350,56 @@
     scroll-behavior: auto !important;
   }
 }
+.player-root .dialogue-box {
+  color: var(--work-text, #f5f1e8);
+  background-color: rgb(
+    var(--work-panel-rgb, 18 19 24) / var(--player-opacity, 0.9)
+  );
+  width: var(--work-width, 92%);
+  max-width: 100%;
+  margin-inline: auto;
+}
+.player-root .speaker {
+  color: var(--work-accent, #e0bd77);
+}
+.player-root .dialogue-text {
+  color: var(--work-text, #f5f1e8);
+}
+.player-root .stage-nvl .dialogue-box {
+  position: absolute;
+  inset: 4% 0;
+  max-height: 92%;
+  overflow-y: auto;
+}
+.nvl-previous {
+  margin: 0 0 1em;
+}
+.sequence-terminal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sequence-terminal .sequence-stage {
+  height: 100%;
+  background: transparent;
+}
+.sequence-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #121318;
+  color: #fff;
+}
+.sequence-world {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+}
+.sequence-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}

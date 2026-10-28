@@ -1,10 +1,10 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 export async function playerBrowser(browser, origin) {
   const project = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: "generated-player-test",
     title: "黄昏调查 · 玩家验收",
     version: "1.0.0",
@@ -107,7 +107,7 @@ export async function playerBrowser(browser, origin) {
     await close();
     assert.equal(
       await page.evaluate(() =>
-        localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+        localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
       ),
       null,
     );
@@ -171,7 +171,7 @@ export async function playerBrowser(browser, origin) {
       fullPage: true,
     });
     const automatic = await page.evaluate(() =>
-      localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+      localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
     );
     await page.getByLabel("导入存档", { exact: true }).setInputFiles({
       name: "中文 存档.json",
@@ -190,14 +190,14 @@ export async function playerBrowser(browser, origin) {
     await page.locator(".import-preview").waitFor({ state: "hidden" });
     assert.equal(
       await page.evaluate(() =>
-        localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+        localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
       ),
       automatic,
     );
     assert.ok(
       await page.evaluate(() =>
         localStorage.getItem(
-          "magickisa-avg:v2:generated-player-test:manual-02",
+          "magickisa-avg:v3:generated-player-test:manual-02",
         ),
       ),
     );
@@ -217,7 +217,7 @@ export async function playerBrowser(browser, origin) {
     assert.equal(
       await page.evaluate(() =>
         localStorage.getItem(
-          "magickisa-avg:v2:generated-player-test:manual-12",
+          "magickisa-avg:v3:generated-player-test:manual-12",
         ),
       ),
       null,
@@ -244,7 +244,7 @@ export async function playerBrowser(browser, origin) {
         () =>
           JSON.parse(
             localStorage.getItem(
-              "magickisa-avg:v2:generated-player-test:auto:player-recovery",
+              "magickisa-avg:v3:generated-player-test:auto:player-recovery",
             ),
           ).lineIndex,
       ),
@@ -360,7 +360,7 @@ export async function playerBrowser(browser, origin) {
     // Corrupt automatic slot must not hide good manual slots.
     await page.evaluate(() =>
       localStorage.setItem(
-        "magickisa-avg:v2:generated-player-test:auto",
+        "magickisa-avg:v3:generated-player-test:auto",
         "broken",
       ),
     );
@@ -380,19 +380,19 @@ export async function playerBrowser(browser, origin) {
     assert.equal(
       await page.evaluate(() =>
         localStorage.getItem(
-          "magickisa-avg:v2:generated-player-test:auto:player-recovery",
+          "magickisa-avg:v3:generated-player-test:auto:player-recovery",
         ),
       ),
       "broken",
     );
     await button("继续游戏").click();
     const lastWritten = await page.evaluate(() =>
-      localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+      localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
     );
     await page.evaluate(() => {
       window.originalPlayerSet = Storage.prototype.setItem;
       Storage.prototype.setItem = function (key, value) {
-        if (key === "magickisa-avg:v2:generated-player-test:auto")
+        if (key === "magickisa-avg:v3:generated-player-test:auto")
           throw new DOMException("full", "QuotaExceededError");
         return window.originalPlayerSet.call(this, key, value);
       };
@@ -416,7 +416,7 @@ export async function playerBrowser(browser, origin) {
       .waitFor();
     assert.equal(
       await page.evaluate(() =>
-        localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+        localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
       ),
       lastWritten,
     );
@@ -429,7 +429,7 @@ export async function playerBrowser(browser, origin) {
       await page.evaluate(
         () =>
           JSON.parse(
-            localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+            localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
           ).lineIndex,
       ),
       1,
@@ -496,7 +496,7 @@ export async function playerBrowser(browser, origin) {
     await p.getByRole("button", { name: "继续 ›", exact: true }).click();
     assert.equal(
       await p.evaluate(() =>
-        localStorage.getItem("magickisa-avg:v2:generated-player-test:auto"),
+        localStorage.getItem("magickisa-avg:v3:generated-player-test:auto"),
       ),
       null,
     );

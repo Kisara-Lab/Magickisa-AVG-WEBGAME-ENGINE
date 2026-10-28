@@ -71,7 +71,8 @@ try {
   );
   assert.equal((await call(["agent", "init"])).created.length, 0);
   const studioData = {
-    formatVersion: 1,
+    formatVersion: 2,
+    tests: [],
     positions: { "scene-001": { x: 20, y: 40 } },
     variables: {
       entered: {

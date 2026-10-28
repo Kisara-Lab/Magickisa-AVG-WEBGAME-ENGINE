@@ -1,4 +1,11 @@
 import { analyzeGraph } from "../../src/engine/graph";
+import { readStudioData } from "../studio-data";
+import { importAssetStream } from "../asset-stream";
+import { listBackups, previewBackup, restoreBackup } from "../backups";
+import {
+  runStorySuite,
+  storyTestSuiteSchema,
+} from "../../src/engine/storyTest";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -49,6 +56,8 @@ import * as authoring from "../authoring/service";
 import { readJson, home } from "../authoring/storage";
 
 const commands: Record<string, string[]> = {
+  backup: ["list", "preview", "restore"],
+  test: ["list", "run"],
   agent: ["init", "context"],
   source: ["add", "list", "status"],
   sync: ["plan", "apply", "status", "recover"],
@@ -71,6 +80,7 @@ const commands: Record<string, string[]> = {
   studio: [],
   help: [],
   schema: [
+    "tests",
     "studio",
     "preset",
     "project",
@@ -91,6 +101,7 @@ const booleanOptions = new Set([
   "include-sources",
 ]);
 const valueOptions = new Set([
+  "base",
   "workspace",
   "name",
   "data",
@@ -218,7 +229,9 @@ function parse(args: string[]) {
         ? ["out", "if-revision", "include-sources"]
         : ["file", "name", "if-revision"],
     refs: ["id", "kind"],
-    build: ["if-revision"],
+    test: ["file", "id", "out", "if-revision"],
+    backup: ["file", "id", "out", "if-revision"],
+    build: ["if-revision", "base"],
     studio: ["no-open"],
     doctor: ["recover", "lock", "token"],
   };
@@ -410,13 +423,15 @@ export async function execute(args: string[], signal: AbortSignal) {
     );
   if (group === "schema")
     return z.toJSONSchema(
-      action === "studio"
-        ? studioDataSchema
-        : action === "preset"
-          ? presetSchema
-          : action === "project"
-            ? projectSchema
-            : transactionSchema,
+      action === "tests"
+        ? storyTestSuiteSchema
+        : action === "studio"
+          ? studioDataSchema
+          : action === "preset"
+            ? presetSchema
+            : action === "project"
+              ? projectSchema
+              : transactionSchema,
     );
   if (group === "project" && action === "list")
     return { projects: workspaces() };
@@ -494,6 +509,69 @@ export async function execute(args: string[], signal: AbortSignal) {
   const current = readSnapshot(ctx),
     p = current.project;
   if (group === "project" && action === "show") return current;
+  if (group === "backup") {
+    if (text("if-revision")) assertRevision(ctx, text("if-revision")!);
+    if (action === "list") return { backups: listBackups(ctx) };
+    if (action === "preview") {
+      const preview = {
+        workspaceId: ctx.id,
+        ...previewBackup(ctx, need("id")),
+      };
+      if (o.out)
+        writeOutput(need("out"), JSON.stringify(preview, null, 2) + "\n");
+      return preview;
+    }
+    const file = need("file");
+    const preview = z
+      .object({
+        workspaceId: z.string(),
+        id: z.string(),
+        revision: z.string(),
+        studioRevision: z.string(),
+        creativeRevision: z.string(),
+        syncRevision: z.string(),
+        digest: z.string(),
+      })
+      .parse(await jsonInput(file === "-" ? "-" : "@" + file, signal));
+    if (preview.workspaceId !== ctx.id) throw failure("恢复方案属于另一工作区");
+    if (text("if-revision") && text("if-revision") !== preview.revision)
+      throw failure("--if-revision 与恢复方案不一致");
+    return restoreBackup(
+      ctx,
+      preview.id,
+      preview.revision,
+      preview.studioRevision,
+      preview.digest,
+      false,
+      preview.creativeRevision,
+      preview.syncRevision,
+    );
+  }
+  if (group === "test") {
+    if (text("if-revision")) assertRevision(ctx, text("if-revision")!);
+    const file = text("file");
+    const suite = storyTestSuiteSchema.parse(
+      file
+        ? await jsonInput(file === "-" ? "-" : "@" + file, signal)
+        : { formatVersion: 1, tests: readStudioData(ctx).data.tests },
+    );
+    if (action === "list")
+      return {
+        revision: current.revision,
+        tests: suite.tests.map((t) => ({
+          id: t.id,
+          name: t.name,
+          steps: t.steps.length,
+        })),
+      };
+    const report = {
+      revision: current.revision,
+      ...runStorySuite(p, suite, text("id")),
+    };
+    if (o.out) writeOutput(need("out"), JSON.stringify(report, null, 2) + "\n");
+    if (!report.passed) throw failure("剧情测试失败", "VALIDATION", 1, report);
+    return report;
+  }
   if (group === "validate") {
     const issues = diagnostics(p, "modern", ctx);
     if (issues.some((i) => i.severity === "error"))
@@ -511,10 +589,12 @@ export async function execute(args: string[], signal: AbortSignal) {
   if (group === "asset") {
     if (action === "list") return { files: listAssets(ctx) };
     const file = path.resolve(need("file"));
-    return importAsset(
+    return importAssetStream(
       ctx,
       text("name") ?? path.basename(file),
-      fs.readFileSync(file),
+      fs.createReadStream(file),
+      false,
+      signal,
     );
   }
   if (group === "package") return packageCommand(ctx, action!, o, signal);
@@ -524,6 +604,7 @@ export async function execute(args: string[], signal: AbortSignal) {
       text("if-revision") ?? current.revision,
       (chunk) => process.stderr.write(chunk),
       signal,
+      text("base") ?? "/",
     );
     await job.finished;
     return {
@@ -591,6 +672,8 @@ export async function execute(args: string[], signal: AbortSignal) {
       return { url, stopped: true };
     } finally {
       detachViteShutdown();
+      if (server?.httpServer && "closeIdleConnections" in server.httpServer)
+        server.httpServer.closeIdleConnections();
       await server?.close();
       // Vite resumes piped stdin. Restore its prior state so an open caller pipe
       // does not keep a stopped CLI alive after the final JSON response.
@@ -606,11 +689,19 @@ export async function execute(args: string[], signal: AbortSignal) {
       throw failure("必须通过 --scene 指定存在的场景 ID");
     if (
       group === "entity" &&
-      !["characters", "materials", "backdrops", "audio"].includes(
-        need("collection"),
-      )
+      ![
+        "characters",
+        "materials",
+        "backdrops",
+        "audio",
+        "assets",
+        "sequences",
+        "gallery",
+      ].includes(need("collection"))
     )
-      throw failure("collection 必须是 characters/materials/backdrops/audio");
+      throw failure(
+        "collection 必须是 characters/materials/backdrops/audio/assets/sequences/gallery",
+      );
     if (
       group === "media" &&
       o.kind &&
@@ -625,7 +716,7 @@ export async function execute(args: string[], signal: AbortSignal) {
           : group === "choice"
             ? (selected?.choices ?? [])
             : group === "entity"
-              ? p[need("collection") as "characters"]
+              ? (p[need("collection") as "characters"] ?? [])
               : undefined;
     if (group === "media")
       return o.kind ? (p.media[need("kind") as "opening"] ?? null) : p.media;

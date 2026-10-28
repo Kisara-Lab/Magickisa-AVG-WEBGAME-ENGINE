@@ -1,4 +1,6 @@
 import type { Plugin } from "vite";
+import { importAssetStream } from "./asset-stream";
+import { listBackups, previewBackup, restoreBackup } from "./backups";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -141,6 +143,13 @@ export function studioPlugin(): Plugin {
             res.end(JSON.stringify(await packages.upload(ctx, req)));
             return;
           }
+          if (req.method === "POST" && url.pathname === "/assets/upload") {
+            if (job?.status === "running")
+              throw new Error("正在构建，请完成后再上传");
+            const name = url.searchParams.get("name") ?? "";
+            res.end(JSON.stringify(await importAssetStream(ctx, name, req)));
+            return;
+          }
           if (
             req.method === "POST" &&
             !["/validate", "/packages/cancel"].includes(url.pathname)
@@ -280,6 +289,18 @@ export function studioPlugin(): Plugin {
             );
             return;
           }
+          if (req.method === "GET" && url.pathname === "/backups") {
+            res.end(JSON.stringify({ backups: listBackups(ctx) }));
+            return;
+          }
+          if (req.method === "GET" && url.pathname === "/backups/preview") {
+            res.end(
+              JSON.stringify(
+                previewBackup(ctx, url.searchParams.get("id") ?? ""),
+              ),
+            );
+            return;
+          }
           if (
             req.method !== "POST" ||
             !req.headers["content-type"]?.startsWith("application/json")
@@ -306,6 +327,23 @@ export function studioPlugin(): Plugin {
               throw new Error("请求超过 12 MB。");
           }
           const data = JSON.parse(body);
+          if (url.pathname === "/backups/restore") {
+            res.end(
+              JSON.stringify(
+                restoreBackup(
+                  ctx,
+                  data.id,
+                  data.revision,
+                  data.studioRevision,
+                  data.digest,
+                  true,
+                  data.creativeRevision,
+                  data.syncRevision,
+                ),
+              ),
+            );
+            return;
+          }
           if (url.pathname === "/studio-data") {
             res.end(
               JSON.stringify(
@@ -448,7 +486,13 @@ export function studioPlugin(): Plugin {
             // The shared build service owns the cross-process build lock.
             unlock?.();
             unlock = undefined;
-            const current = startBuild(ctx, data.revision);
+            const current = startBuild(
+              ctx,
+              data.revision,
+              undefined,
+              undefined,
+              data.base ?? "/",
+            );
             job = current;
             res.end(JSON.stringify(current));
             return;

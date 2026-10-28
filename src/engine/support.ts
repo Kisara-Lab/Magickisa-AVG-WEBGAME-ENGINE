@@ -15,9 +15,17 @@ export function requireModernProfile(profile: unknown): "modern" {
 }
 export function requireModernProject(value: unknown): void {
   if (
+    value &&
+    typeof value === "object" &&
+    (value as { schemaVersion?: unknown }).schemaVersion === 2
+  )
+    throw new Error(
+      "此工程使用旧 V2 开发格式 schemaVersion 2；当前要求版本 3。请用原开发版打开或创建新工程，原文件不会修改。",
+    );
+  if (
     !value ||
     typeof value !== "object" ||
-    (value as { schemaVersion?: unknown }).schemaVersion !== 2
+    (value as { schemaVersion?: unknown }).schemaVersion !== 3
   )
     throw new Error(LEGACY_UNSUPPORTED);
 }
