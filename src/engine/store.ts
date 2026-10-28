@@ -48,10 +48,10 @@ export class EngineStore {
       this.listeners.delete(listener);
     };
   };
-  private commit() {
+  private commit(persist = true) {
     this.runtime.save.savedAt = new Date().toISOString();
     this.current = structuredClone(this.runtime.save);
-    if (this.storage) {
+    if (this.storage && persist) {
       try {
         writeSave(this.runtime.save, this.storage);
         this.persistenceError = "";
@@ -93,11 +93,11 @@ export class EngineStore {
     }
     return this.current;
   }
-  setAudio(volume: number, muted: boolean) {
+  setAudio(volume: number, muted: boolean, persist = true) {
     if (!Number.isFinite(volume) || volume < 0 || volume > 1)
       throw new Error("音量必须在 0 到 1 之间");
     this.runtime.save.audio = { ...this.runtime.save.audio, volume, muted };
-    return this.commit();
+    return this.commit(persist);
   }
   setVariable(key: string, value: Value) {
     this.runtime.setVariable(key, value);

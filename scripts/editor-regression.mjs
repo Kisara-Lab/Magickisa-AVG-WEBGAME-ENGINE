@@ -255,11 +255,8 @@ export async function editorRegression(browser, origin) {
       // Global gain (0.4) × registered track gain (0.5) × BGM base (0.65).
       () => Math.abs(window.audioPlayers[0].volume - 0.4 * 0.5 * 0.65) < 1e-6,
     );
-    await root
-      .getByTitle("音乐鉴赏", {
-        exact: true,
-      })
-      .click();
+    await root.getByRole("button", { name: "菜单", exact: true }).click();
+    await root.getByRole("button", { name: "音乐鉴赏", exact: true }).click();
     await page.waitForFunction(() => window.audioPlayers[0].paused);
     await root
       .getByTitle("关闭面板", {

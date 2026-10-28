@@ -8,12 +8,16 @@ export function EngineViewport({
   onChoose,
   onInput,
   children,
+  visibleText,
+  statusText,
 }: {
   context: EngineRendererContext;
   onAdvance: () => void;
   onChoose: (id: string) => void;
   onInput: (key: string, text: string) => void;
   children?: ReactNode;
+  visibleText?: string;
+  statusText?: string;
 }) {
   const { project, node, line, save, choices } = context;
   const input = line?.input;
@@ -49,11 +53,12 @@ export function EngineViewport({
           {line ? (
             <>
               <span className="line-in">
-                {line.text
-                  .replace(/\*\*/g, "")
-                  .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
-                    String(save.variables[key] ?? ""),
-                  )}
+                {visibleText ??
+                  line.text
+                    .replace(/\*\*/g, "")
+                    .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
+                      String(save.variables[key] ?? ""),
+                    )}
               </span>
               {input && (
                 <label
@@ -88,7 +93,8 @@ export function EngineViewport({
             </div>
           ) : (
             <span className="continue-card">
-              {node?.next ? "这一节点暂告一段落。" : "本段旅程已结束。"}
+              {statusText ??
+                (node?.next ? "这一节点暂告一段落。" : "本段旅程已结束。")}
               <small>
                 {node?.next
                   ? "点击或按 Space 继续"

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/main-2.0.0--dev.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/main-2.0.0--dev.4-blue.svg)](CHANGELOG.md)
 
 **MAGICKISA 是一套开源的网页 AVG／视觉小说引擎，附带可视化编辑器 MAGICKISA Studio 和面向终端、AI Agent 的 CLI。** 从连续台词、人物立绘到复杂分支、线索条件和 OP／ED，可以在同一工程中创作、调试并构建为网页游戏。
 
@@ -34,6 +34,7 @@
 | 编排复杂分支，不迷失在跳转里 | 可编辑流程画布、独立分支连线、自环与地点回访、章节／邻域筛选、自动布局、入边与出边追踪 |
 | 制作单人侦探调查与非线性叙事 | 用资料表达线索，组合变量、访问记录、资料解锁／阅读和列表条件，配置一次性选择与多结局 |
 | 调试“为什么这个选项不能选” | 变量与线索工作台、具名测试状态、从指定场景真实预览、分支条件与目标门槛解释 |
+| 让玩家舒适地阅读与保留进度 | 紧凑菜单、字号与逐字设置、自动／已读快进、12 个手动槽、恢复副本与多标签页写入保护 |
 | 让 Codex 等 Agent 帮忙落地剧本 | CLI、JSON 批量事务、工程上下文、差异方案、增量同步和人工修改冲突保护 |
 | 为作品编排开场与片尾 | 引擎标识动画、献词、OP 镜头与定时字幕、双语 ED 与鸣谢编辑 |
 | 换电脑继续开发，再发布给玩家 | 工程与全部素材整体打包、独立导入、备份与版本冲突检查，构建可部署的静态网页 |
@@ -75,7 +76,7 @@ npm run dev
 
 这些入口仍需要预装 Node.js。后续启动复用已安装依赖，锁文件或环境变化时重新安装。同一目录只运行一个 Studio。详见 [启动与故障排查](START-HERE.md)。
 
-> **版本选择：** `main` 当前为 **2.0.0-dev.3**，仅开发现代版，尚未发布 V2 正式 Release。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，其中提供双模式源码与联网启动包；旧兼容档已停止维护，不提供自动转换。详见 [破坏性变更](BREAKING-CHANGES.md)。
+> **版本选择：** `main` 当前为 **2.0.0-dev.4**，仅开发现代版，尚未发布 V2 正式 Release。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，其中提供双模式源码与联网启动包；旧兼容档已停止维护，不提供自动转换。详见 [破坏性变更](BREAKING-CHANGES.md)。
 
 **使用 v1.0legacy？请阅读 [Legacy 专用手册](docs/legacy/README.md)**，涵盖下载安装、双模式创作、剧情逻辑、献词／OP／ED、工程迁移、备份恢复与网页发行。
 
@@ -194,6 +195,7 @@ node scripts/magickisa.mjs build --workspace WORKSPACE_ID --json
 
 | 我想了解…… | 阅读 |
 | --- | --- |
+| 玩家端阅读设置、资料查阅、存读档与多标签页保护 | [玩家使用指南](docs/PLAYER.md) |
 | v1.0legacy 的完整使用方法 | [Legacy 专用手册](docs/legacy/README.md) |
 | 启动脚本、环境要求、安装与连接故障 | [启动说明](START-HERE.md) |
 | 复杂跳转、资料条件、测试预设与画布操作 | [调查工作台手册](docs/INVESTIGATION.md) |
@@ -224,6 +226,7 @@ npm test
 npm run test:cli
 npm run test:authoring
 npx playwright install chromium
+npm run test:player
 npm run test:studio
 npm run notices:check
 npm run build:studio
@@ -237,7 +240,7 @@ npm run build:studio
 - 新增资料／列表条件仍使用 `schemaVersion: 2`，但使用这些条件的作品需要新版引擎；旧版可能拒绝。
 - 没有内置模型调用、MCP、专用剧本语言或无界面剧情模拟；剧情效果需要真实预览验收。
 - 当前不提供 npm 发行包或托管 Studio 服务；静态 `dist-studio/` 不能替代完整本地服务。
-- 备份管理改进见 [#6](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/6)；玩家存档的多标签页协调见 [#63](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/63)，请避免同时游玩同一项目与槽位。
+- 工程备份管理改进见 [#6](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/6)。玩家端现有作品级多标签页写入保护，安全保存需要支持 Web Locks 的浏览器与 HTTPS／本机环境；其他环境可临时游玩并导出进度。
 
 ## 许可与参与
 
