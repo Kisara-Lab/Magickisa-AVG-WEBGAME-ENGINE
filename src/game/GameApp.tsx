@@ -564,9 +564,12 @@ export function GameSession({
   const restart = () => {
     const action = () =>
       invoke(() => {
-        slots.backup();
-        store.reset();
-        store.setAudio(preferences.volume, preferences.muted);
+        const fresh = new EngineStore(project, { persist: false });
+        fresh.runtime.save.readLineIds = [...store.save.readLineIds];
+        fresh.setAudio(preferences.volume, preferences.muted, false);
+        // Prepare and persist before replacing live progress; quota errors leave it intact.
+        const saved = slots.write("auto", fresh.save);
+        store.restore(saved);
         setPlayed(true);
         stopPlayback();
         setPanel(null);
@@ -1094,7 +1097,12 @@ export function GameSession({
           <button
             title="上一句"
             disabled={!save.history.length || !!save.presentation}
-            onClick={() => invoke(() => store.rollback())}
+            onClick={() =>
+              confirm(
+                "回退会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
+                () => invoke(() => store.rollback()),
+              )
+            }
           >
             ‹ 上一句
           </button>

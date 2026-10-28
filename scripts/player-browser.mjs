@@ -397,6 +397,18 @@ export async function playerBrowser(browser, origin) {
         return window.originalPlayerSet.call(this, key, value);
       };
     });
+    const progressBeforeRestart = await snapshot();
+    await menu("重新开始");
+    await page
+      .getByRole("dialog", { name: "确认操作" })
+      .getByRole("button", { name: "确认继续", exact: true })
+      .click();
+    assert.deepEqual(await snapshot(), progressBeforeRestart);
+    await close();
+    await page
+      .locator(".runtime-error")
+      .getByRole("button", { name: "关闭", exact: true })
+      .click();
     await button("继续 ›").click();
     await page
       .locator(".recovery-error")
