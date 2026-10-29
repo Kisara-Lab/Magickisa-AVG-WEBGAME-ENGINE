@@ -167,12 +167,18 @@ export async function investigationBrowser(browser, origin) {
     const target = page.locator(
       '.react-flow__node[data-id="room"] .react-flow__handle[data-handleid="in"]',
     );
-    const a = await source.boundingBox(),
-      b = await target.boundingBox();
-    assert(a && b);
-    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    // Locator hover waits for a stable, unobscured handle. Wait for React Flow
+    // to enter connecting state before releasing on the destination; raw
+    // back-to-back coordinates can outrun that render on a busy CI runner.
+    await source.hover();
+    const a = await source.boundingBox();
+    assert(a);
     await page.mouse.down();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 15 });
+    await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2, {
+      steps: 3,
+    });
+    await page.locator(".react-flow__connection").waitFor();
+    await target.hover();
     await page.mouse.up();
     await page.getByLabel("新分支文案", { exact: true }).fill("图上新增的连接");
     await page.getByRole("button", { name: "应用连接", exact: true }).click();
