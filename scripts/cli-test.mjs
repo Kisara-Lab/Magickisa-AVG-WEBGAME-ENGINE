@@ -545,7 +545,7 @@ try {
     else studio.kill("SIGTERM");
     let shutdownTimer;
     try {
-      await Promise.race([
+      const exitCode = await Promise.race([
         studioClosed,
         new Promise((_, reject) => {
           shutdownTimer = setTimeout(() => {
@@ -558,6 +558,7 @@ try {
           }, 15000);
         }),
       ]);
+      assert.equal(exitCode, 0, "Studio must finish cleanup and exit successfully");
     } finally {
       clearTimeout(shutdownTimer);
     }
