@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sequenceSchema, sequenceIssues } from "./sequence";
 import type { Condition, Effect, StoryProject, Value } from "./types";
 export const valueSchema: z.ZodType<Value> = z.lazy(() =>
   z.union([
@@ -77,6 +78,9 @@ const line = z
   .object({
     id,
     text: z.string(),
+    voice: id.optional(),
+    sequence: id.optional(),
+    pageBreak: z.boolean().optional(),
     speaker: z.string().optional(),
     characterId: id.optional(),
     expression: z.string().optional(),
@@ -117,14 +121,67 @@ const node = z
     sequenceId: z.string().optional(),
     ending: z.string().optional(),
     background: z.string().optional(),
+    readingMode: z.enum(["adv", "nvl"]).optional(),
+    enterSequence: id.optional(),
+    exitSequence: id.optional(),
   })
   .strict();
 export const projectSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     id,
     title: id,
     version: id,
+    variables: z
+      .record(
+        id,
+        z
+          .object({
+            type: z.enum(["string", "number", "boolean", "list", "object"]),
+            initial: valueSchema,
+            description: z.string().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+    assets: z
+      .array(
+        z
+          .object({
+            id,
+            kind: z.enum(["image", "audio", "video"]),
+            src: id,
+            name: z.string().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+    sequences: z.array(sequenceSchema).optional(),
+    theme: z
+      .object({
+        mode: z.enum(["adv", "nvl"]),
+        fontFamily: z.string().min(1).max(200),
+        fontSize: z.number().min(16).max(40),
+        textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        panelColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        panelOpacity: z.number().min(0.75).max(1),
+        dialogueWidth: z.number().min(50).max(100),
+      })
+      .strict()
+      .optional(),
+    gallery: z
+      .array(
+        z
+          .object({
+            id,
+            title: id,
+            asset: id,
+            unlock: conditionSchema.optional(),
+          })
+          .strict(),
+      )
+      .optional(),
     startNodeId: id,
     nodes: z.array(node).min(1),
     materials: z.array(
@@ -359,6 +416,81 @@ export function validateProject(input: unknown): ValidationIssue[] {
     condition(m.unlock, m.id);
   }
   for (const m of p.media.musicGallery || []) ref(m.unlockNode, m.id);
+  duplicate(
+    (p.assets ?? []).map((a) => a.id),
+    "assets",
+  );
+  duplicate(
+    (p.sequences ?? []).map((s) => s.id),
+    "sequences",
+  );
+  duplicate(
+    (p.gallery ?? []).map((g) => g.id),
+    "gallery",
+  );
+  for (const [key, variable] of Object.entries(p.variables ?? {})) {
+    const type = Array.isArray(variable.initial)
+      ? "list"
+      : variable.initial === null
+        ? "null"
+        : typeof variable.initial;
+    if (type !== variable.type)
+      issues.push({
+        path: `variables.${key}.initial`,
+        message: "变量初始值与声明类型不符",
+      });
+    if (["__proto__", "prototype", "constructor"].includes(key))
+      issues.push({ path: `variables.${key}`, message: "禁止原型变量名" });
+  }
+  const sequenceIds = new Set((p.sequences ?? []).map((s) => s.id));
+  const sequenceRef = (id: string | undefined, path: string) => {
+    if (id && !sequenceIds.has(id))
+      issues.push({ path, message: `演出不存在：${id}` });
+  };
+  for (const [i, s] of (p.sequences ?? []).entries())
+    for (const issue of sequenceIssues(s))
+      issues.push({
+        path: `sequences.${i}.${issue.path}`,
+        message: issue.message,
+      });
+  for (const sequence of p.sequences ?? [])
+    for (const track of sequence.tracks) {
+      if (track.characterId) {
+        const character = p.characters.find((c) => c.id === track.characterId);
+        if (track.kind !== "character" || !character)
+          issues.push({
+            path: `sequences.${sequence.id}.${track.id}.characterId`,
+            message: "人物轨道引用不存在的人物或类型不符",
+          });
+        else if (
+          track.expression &&
+          !Object.hasOwn(character.expressions ?? {}, track.expression)
+        )
+          issues.push({
+            path: `sequences.${sequence.id}.${track.id}.expression`,
+            message: "人物轨道表情不存在",
+          });
+      }
+    }
+  for (const n of p.nodes) {
+    sequenceRef(n.enterSequence, `${n.id}.enterSequence`);
+    sequenceRef(n.exitSequence, `${n.id}.exitSequence`);
+    for (const l of n.lines) {
+      sequenceRef(l.sequence, `${l.id}.sequence`);
+      if (
+        l.voice &&
+        p.sequences
+          ?.find((s) => s.id === l.sequence)
+          ?.tracks.some((t) => t.kind === "voice" && !t.muted)
+      )
+        issues.push({
+          path: `${l.id}.voice`,
+          message: "台词配音与演出语音轨道不能同时占用",
+        });
+    }
+  }
+  for (const g of p.gallery ?? [])
+    condition(g.unlock, `gallery.${g.id}.unlock`);
   return issues;
 }
 export function assertProject(input: unknown): StoryProject {

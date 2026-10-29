@@ -1,4 +1,11 @@
 import { PlayerGate } from "./PlayerGate";
+import { useVoice } from "./useVoice";
+import { SequencePlayer } from "../engine/SequenceStage";
+import { GalleryPanel } from "./GalleryPanel";
+import {
+  mapProjectResources,
+  deploymentResource,
+} from "../engine/projectResources";
 import { SaveRecovery } from "./SaveRecovery";
 import { PlayerDialog } from "./PlayerDialog";
 import {
@@ -64,12 +71,20 @@ export function GameApp() {
     [fresh, setFresh] = useState(false);
   useEffect(() => {
     const c = new AbortController();
-    fetch("/content/engine-story.json", { signal: c.signal })
+    fetch(`${import.meta.env.BASE_URL}content/engine-story.json`, {
+      signal: c.signal,
+    })
       .then((r) => {
         if (!r.ok) throw new Error("剧情加载失败");
         return r.json();
       })
-      .then((p) => setProject(assertProject(p)))
+      .then((p) =>
+        setProject(
+          mapProjectResources(assertProject(p), (value) =>
+            deploymentResource(value, import.meta.env.BASE_URL),
+          ),
+        ),
+      )
       .catch((e) => {
         if (e.name !== "AbortError") setError(String(e));
       });
@@ -188,7 +203,17 @@ export function GameSession({
   const initialPreferences = useMemo(() => {
     try {
       return {
-        value: readPreferences(slotStorage, project.id, store.save.audio),
+        value: readPreferences(
+          slotStorage,
+          project.id,
+          store.save.audio,
+          project.theme
+            ? {
+                fontSize: project.theme.fontSize,
+                opacity: project.theme.panelOpacity,
+              }
+            : undefined,
+        ),
         error: "",
       };
     } catch {
@@ -285,6 +310,29 @@ export function GameSession({
     );
   const segments = useMemo(() => graphemes(text), [text]);
   const revealKey = `${save.nodeId}:${line?.id}:${text}`;
+  const [pageActive, setPageActive] = useState(true);
+  useEffect(() => {
+    const pause = () => setPageActive(false);
+    window.addEventListener("blur", pause);
+    document.addEventListener("visibilitychange", pause);
+    return () => {
+      window.removeEventListener("blur", pause);
+      document.removeEventListener("visibilitychange", pause);
+    };
+  }, []);
+  const voice = useVoice(
+    line?.voice ? resolveAsset(project, line.voice) : undefined,
+    `${save.nodeId}:${line?.id}`,
+    save.audio.muted ? 0 : save.audio.volume * preferences.voiceVolume,
+    !!panel ||
+      !!confirmation ||
+      !started ||
+      splash ||
+      !!save.presentation ||
+      !!save.sequence ||
+      !pageActive,
+    fast,
+  );
   const [reveal, setReveal] = useState({ key: "", count: 0 });
   const typed = !reduced && preferences.characterDelay > 0 && !fast;
   const count = typed
@@ -421,6 +469,7 @@ export function GameSession({
       !started ||
       splash ||
       save.presentation ||
+      save.sequence ||
       choices.length ||
       line?.input ||
       !canAdvance
@@ -433,7 +482,7 @@ export function GameSession({
       setNotice("已到达未读文本，快进已停止");
       return;
     }
-    if (revealing) return;
+    if (revealing || voice.pending) return;
     const timer = setTimeout(
       () => invoke(() => store.advance()),
       fast ? 180 : preferences.autoDelay * 1000,
@@ -452,6 +501,7 @@ export function GameSession({
     revealing,
     preferences.autoDelay,
     canAdvance,
+    voice.pending,
   ]);
   const playback = resolvePlayback(
     project,
@@ -464,7 +514,7 @@ export function GameSession({
       ? undefined
       : !started
         ? project.titleScreen.music
-        : save.presentation
+        : save.presentation || save.sequence
           ? undefined
           : playback.src;
   useEffect(() => {
@@ -476,7 +526,7 @@ export function GameSession({
     audio.volume = playbackVolume(
       save.audio,
       started ? playback.volume : 1,
-      0.65,
+      0.65 * preferences.bgmVolume * (voice.playing ? 0.35 : 1),
     );
     void audio
       .play()
@@ -502,9 +552,17 @@ export function GameSession({
       musicRef.current.volume = playbackVolume(
         save.audio,
         started ? playback.volume : 1,
-        0.65,
+        0.65 * preferences.bgmVolume * (voice.playing ? 0.35 : 1),
       );
-  }, [save.audio.muted, save.audio.volume, playback.volume, started, bgm]);
+  }, [
+    save.audio.muted,
+    save.audio.volume,
+    playback.volume,
+    started,
+    bgm,
+    preferences.bgmVolume,
+    voice.playing,
+  ]);
   const materials = selectUnlockedMaterials(project, save);
   const unread = (category: string) =>
     materials.some(
@@ -593,6 +651,17 @@ export function GameSession({
     downloadText(JSON.stringify(save, null, 2), `${project.id}-save.json`);
   }
   const css = {
+    "--work-text": project.theme?.textColor,
+    "--work-accent": project.theme?.accentColor,
+    "--work-panel-rgb": project.theme
+      ? [1, 3, 5]
+          .map((i) => parseInt(project.theme!.panelColor.slice(i, i + 2), 16))
+          .join(" ")
+      : undefined,
+    "--work-width": project.theme
+      ? `${project.theme.dialogueWidth}%`
+      : undefined,
+    fontFamily: project.theme?.fontFamily,
     "--player-font": `${preferences.fontSize}px`,
     "--player-leading": preferences.lineHeight,
     "--player-opacity": preferences.opacity,
@@ -605,6 +674,7 @@ export function GameSession({
     chapters: "章节目录",
     notes: "旅者笔记",
     music: "音乐鉴赏",
+    gallery: "画廊与结局",
     clue: "证据",
     encyclopedia: "百科全书",
     newspaper: "报刊",
@@ -643,6 +713,7 @@ export function GameSession({
                 "newspaper",
                 "notes",
                 "music",
+                "gallery",
                 "settings",
               ].map((id) => (
                 <button key={id} onClick={() => open(id)}>
@@ -698,6 +769,8 @@ export function GameSession({
                 </button>
               )}
             </nav>
+          ) : panel === "gallery" ? (
+            <GalleryPanel store={store} />
           ) : panel === "settings" ? (
             <>
               <ReadingSettings
@@ -1037,6 +1110,7 @@ export function GameSession({
           key={`${save.presentation.id}:${save.presentation.nodeId}`}
           project={project}
           presentation={save.presentation}
+          paused={!!panel || !!confirmation || !pageActive}
           onProgress={(time) => store.setPresentationPosition(time)}
           volume={save.audio.muted ? 0 : save.audio.volume}
           onFinish={() => invoke(() => store.finishPresentation())}
@@ -1079,6 +1153,18 @@ export function GameSession({
           点击画面开启音乐；无法播放时仍可继续游戏。
         </small>
       )}
+      {!pageActive && (
+        <div className="player-status">
+          <button onClick={() => setPageActive(true)}>继续音画播放</button>
+        </div>
+      )}
+      {voice.error && (
+        <div role="alert" className="player-status">
+          {voice.error}
+          <button onClick={voice.retry}>重试配音</button>
+          <button onClick={voice.skip}>跳过配音</button>
+        </div>
+      )}
       <div className="progressbar player-location">
         <span>{node?.chapter}</span>
         <span>{node?.title}</span>
@@ -1091,49 +1177,70 @@ export function GameSession({
         </span>
       </div>
       <main className="avg-shell">
-        <EngineViewport
-          context={selectContext(project, save, choices)}
-          visibleText={segments.slice(0, count).join("")}
-          statusText={statusText}
-          onAdvance={advance}
-          onChoose={(id) => invoke(() => store.choose(id))}
-          onInput={(key, text) => invoke(() => store.setVariable(key, text))}
-        />
-        <footer className="stage-footer">
-          <button
-            title="上一句"
-            disabled={!save.history.length || !!save.presentation}
-            onClick={() =>
-              confirm(
-                "回退会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
-                () => invoke(() => store.rollback()),
-              )
-            }
-          >
-            ‹ 上一句
-          </button>
-          <span role="status">{revealing ? "点击补全文字" : statusText}</span>
-          <button
-            title="下一句"
-            disabled={
-              !!save.presentation ||
-              (!canAdvance && !revealing) ||
-              !!choices.length
-            }
-            onClick={advance}
-          >
-            继续 ›
-          </button>
-        </footer>
-        <section className="notebook-strip">
-          <span>旅者笔记</span>
-          <input
-            aria-label="自由笔记"
-            value={save.playerNotes}
-            placeholder="写下你的推理……"
-            onChange={(e) => invoke(() => store.setPlayerNotes(e.target.value))}
+        {save.sequence && (
+          <SequencePlayer
+            store={store}
+            paused={splash || !!panel || !!confirmation || !pageActive}
+            volume={save.audio.muted ? 0 : save.audio.volume}
+            bgm={preferences.bgmVolume}
+            sound={preferences.soundVolume}
+            voice={preferences.voiceVolume}
+            onSave={() => open("saves")}
           />
-        </section>
+        )}
+        {!save.sequence && (
+          <>
+            <EngineViewport
+              context={selectContext(project, save, choices)}
+              visibleText={segments.slice(0, count).join("")}
+              statusText={statusText}
+              onAdvance={advance}
+              onChoose={(id) => invoke(() => store.choose(id))}
+              onInput={(key, text) =>
+                invoke(() => store.setVariable(key, text))
+              }
+            />
+            <footer className="stage-footer">
+              <button
+                title="上一句"
+                disabled={!save.history.length || !!save.presentation}
+                onClick={() =>
+                  confirm(
+                    "回退会截断之后的剧情历史；玩家笔记与已获得收藏保留。继续？",
+                    () => invoke(() => store.rollback()),
+                  )
+                }
+              >
+                ‹ 上一句
+              </button>
+              <span role="status">
+                {revealing ? "点击补全文字" : statusText}
+              </span>
+              <button
+                title="下一句"
+                disabled={
+                  !!save.presentation ||
+                  (!canAdvance && !revealing) ||
+                  !!choices.length
+                }
+                onClick={advance}
+              >
+                继续 ›
+              </button>
+            </footer>
+            <section className="notebook-strip">
+              <span>旅者笔记</span>
+              <input
+                aria-label="自由笔记"
+                value={save.playerNotes}
+                placeholder="写下你的推理……"
+                onChange={(e) =>
+                  invoke(() => store.setPlayerNotes(e.target.value))
+                }
+              />
+            </section>
+          </>
+        )}
       </main>
       {overlays}
     </div>

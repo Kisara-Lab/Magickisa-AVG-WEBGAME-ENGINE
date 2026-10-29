@@ -1,6 +1,9 @@
 import { StoryRuntime } from "./runtime";
 import { assertProject } from "./schema";
 import { createSave, importSave, readSave, writeSave } from "./save";
+import { transitionEvent, type EngineEvent, type EngineAction } from "./events";
+import { jsonEqual } from "./condition";
+import { CollectionStore } from "./collections";
 import type {
   StoryProject,
   SessionOptions,
@@ -11,10 +14,16 @@ import type {
 export class EngineStore {
   readonly runtime: StoryRuntime;
   private listeners = new Set<() => void>();
+  private eventListeners = new Set<(event: EngineEvent) => void>();
+  private eventQueue: EngineEvent[] = [];
+  private notifying = 0;
+  private dispatching = false;
+  observerError = "";
   private current: EngineSave;
   private storage?: StorageAdapter;
   persistenceError = "";
   readonly temporary: boolean;
+  readonly collections: CollectionStore;
   constructor(
     public project: StoryProject,
     options: SessionOptions = {},
@@ -37,6 +46,8 @@ export class EngineStore {
       initial || createSave(project, slot),
     );
     this.current = structuredClone(this.runtime.save);
+    this.collections = new CollectionStore(project.id, this.storage);
+    this.collections.update(project, this.current, false);
   }
   get save() {
     return this.current;
@@ -48,9 +59,19 @@ export class EngineStore {
       this.listeners.delete(listener);
     };
   };
-  private commit(persist = true) {
+  subscribeEvents = (listener: (event: EngineEvent) => void) => {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
+  };
+  private commit(persist = true, action?: EngineAction) {
+    const before = this.current;
+    const changed =
+      this.eventListeners.size > 0 && !jsonEqual(before, this.runtime.save);
     this.runtime.save.savedAt = new Date().toISOString();
     this.current = structuredClone(this.runtime.save);
+    this.collections.update(this.project, this.current, persist);
     if (this.storage && persist) {
       try {
         writeSave(this.runtime.save, this.storage);
@@ -59,28 +80,73 @@ export class EngineStore {
         this.persistenceError = `进度未保存：${String(e)}。请导出存档，释放存储空间后重试。`;
       }
     }
-    this.listeners.forEach((l) => l());
+    if (changed) {
+      this.eventQueue.push(transitionEvent(before, this.current, action));
+    }
+    this.notifying++;
+    try {
+      this.listeners.forEach((l) => l());
+    } finally {
+      this.notifying--;
+      if (!this.notifying && !this.dispatching) {
+        this.dispatching = true;
+        try {
+          while (this.eventQueue.length) {
+            const event = this.eventQueue.shift()!;
+            // Snapshot events before any callback; nested edits enqueue later events.
+            for (const observer of [...this.eventListeners]) {
+              try {
+                observer(structuredClone(event));
+              } catch (error) {
+                this.observerError = String(error);
+              }
+            }
+          }
+        } finally {
+          this.dispatching = false;
+        }
+      }
+    }
     return this.current;
   }
   advance() {
+    const line = this.runtime.line?.id;
     this.runtime.advance();
+    return this.commit(true, { kind: "advance", line });
+  }
+  tickSequence(seconds: number) {
+    const trigger = this.runtime.save.sequence?.trigger;
+    this.runtime.tickSequence(seconds);
+    return this.commit(
+      false,
+      trigger && trigger !== this.runtime.save.sequence?.trigger
+        ? { kind: "presentation.complete" }
+        : undefined,
+    );
+  }
+  resumeSequence() {
+    this.runtime.resumeSequence();
     return this.commit();
+  }
+  skipSequence() {
+    this.runtime.skipSequence();
+    return this.commit(true, { kind: "presentation.complete" });
   }
   choose(id: string) {
     this.runtime.choose(id);
-    return this.commit();
+    return this.commit(true, { kind: "choose", id });
   }
   jump(id: string, line = 0) {
     this.runtime.jump(id, line);
-    return this.commit();
+    return this.commit(true, { kind: "jump" });
   }
   rollback(index?: number) {
     this.runtime.rollback(index);
-    return this.commit();
+    return this.commit(true, { kind: "rollback" });
   }
   finishPresentation() {
     this.runtime.finishPresentation();
-    return this.commit();
+    return this.commit(true, { kind: "presentation.complete" });
   }
   setPresentationPosition(position: number) {
     if (
@@ -100,8 +166,15 @@ export class EngineStore {
     return this.commit(persist);
   }
   setVariable(key: string, value: Value) {
+    const input =
+      this.runtime.line?.input?.key === key ? this.runtime.line.id : undefined;
     this.runtime.setVariable(key, value);
-    return this.commit();
+    return this.commit(
+      true,
+      input && typeof value === "string"
+        ? { kind: "input", line: input, value }
+        : { kind: "debug-variable" },
+    );
   }
   setPlayerNotes(text: string) {
     this.runtime.setPlayerNotes(text);
@@ -109,11 +182,11 @@ export class EngineStore {
   }
   markRead(id: string) {
     this.runtime.markRead(id);
-    return this.commit();
+    return this.commit(true, { kind: "read", id });
   }
   restore(input: unknown) {
     this.runtime.restore(input);
-    return this.commit();
+    return this.commit(true, { kind: "restore" });
   }
   retrySave() {
     return this.commit();
@@ -123,9 +196,11 @@ export class EngineStore {
     this.runtime.save = createSave(this.project, this.save.slotId);
     this.runtime.save.readLineIds = readLineIds;
     this.runtime.restore(this.runtime.save);
-    return this.commit();
+    return this.commit(true, { kind: "reset" });
   }
   destroy() {
     this.listeners.clear();
+    this.eventListeners.clear();
+    this.eventQueue = [];
   }
 }

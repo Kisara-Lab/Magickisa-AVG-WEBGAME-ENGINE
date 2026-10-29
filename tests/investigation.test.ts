@@ -194,14 +194,17 @@ test("connection index preserves self loops, duplicate destinations, chapter bou
   p.nodes[0].choices = p.nodes[0].choices?.filter((c) => c.target !== "end");
   assert(analyzeGraph(p).issues.some((i) => i.code === "closed-cycle"));
 });
-test("1000 nodes / 5000 relations index and loop-aware layout stay bounded", () => {
+test("1000 nodes / 20000 lines / 5000 relations index and loop-aware layout stay bounded", () => {
   const p = investigation();
   p.startNodeId = "n0";
   p.nodes = Array.from({ length: 1000 }, (_, i) => ({
     id: "n" + i,
     title: "节点 " + i,
     chapter: String(i % 8),
-    lines: [],
+    lines: Array.from({ length: 20 }, (_, j) => ({
+      id: `l${i}-${j}`,
+      text: "调查记录",
+    })),
     choices: Array.from({ length: 5 }, (_, j) => ({
       id: `c${i}-${j}`,
       label: "调查",

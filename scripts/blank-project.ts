@@ -11,7 +11,7 @@ export const repositoryRoot = path.resolve(
 export function blankProject(profile: "modern", title = "未命名工程") {
   requireModernProfile(profile);
   return {
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
     id: crypto.randomUUID(),
     title,
     version: "1.0.0",
@@ -56,7 +56,7 @@ export function defaultDirectory(profile: "modern") {
   const directory = path.join(
     repositoryRoot,
     "workspace-projects",
-    "default-modern",
+    "default-modern-v3",
   );
   if (!fs.existsSync(path.join(directory, "project.json")))
     initializeProject(directory, profile, "空白工程 · 现代版");

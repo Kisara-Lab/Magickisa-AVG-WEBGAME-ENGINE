@@ -9,6 +9,9 @@ export interface PlayerPreferences {
   musicLabel: boolean;
   volume: number;
   muted: boolean;
+  bgmVolume: number;
+  voiceVolume: number;
+  soundVolume: number;
 }
 export const defaultPreferences: PlayerPreferences = {
   fontSize: 21,
@@ -20,6 +23,9 @@ export const defaultPreferences: PlayerPreferences = {
   musicLabel: true,
   volume: 1,
   muted: false,
+  bgmVolume: 1,
+  voiceVolume: 1,
+  soundVolume: 1,
 };
 export const preferenceKey = (id: string) =>
   `magickisa:player-preferences:${id}`;
@@ -27,12 +33,13 @@ export function readPreferences(
   storage: StorageAdapter,
   id: string,
   audio?: { volume: number; muted: boolean },
+  defaults?: Partial<PlayerPreferences>,
 ): PlayerPreferences {
   const raw = storage.getItem(preferenceKey(id));
   const input = raw
     ? JSON.parse(raw)
     : { musicLabel: storage.getItem("magickisa:music-label") !== "off" };
-  const p = { ...defaultPreferences, ...audio };
+  const p = { ...defaultPreferences, ...defaults, ...audio };
   for (const [key, min, max] of [
     ["fontSize", 16, 32],
     ["lineHeight", 1.4, 2.4],
@@ -40,6 +47,9 @@ export function readPreferences(
     ["characterDelay", 0, 120],
     ["autoDelay", 1, 10],
     ["volume", 0, 1],
+    ["bgmVolume", 0, 1],
+    ["voiceVolume", 0, 1],
+    ["soundVolume", 0, 1],
   ] as const)
     if (typeof input[key] === "number" && Number.isFinite(input[key]))
       p[key] = Math.max(min, Math.min(max, input[key]));

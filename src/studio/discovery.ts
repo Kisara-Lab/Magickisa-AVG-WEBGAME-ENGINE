@@ -144,7 +144,7 @@ export function usages(p: AuthorProject): Usage[] {
   const result: Usage[] = [];
   const modern = {
     ...p,
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
   };
   const add = (
     kind: Usage["kind"],
@@ -276,6 +276,10 @@ export function usages(p: AuthorProject): Usage[] {
         lineId: l.id,
         field: "台词正文",
       };
+      asset(l.voice, `${n.title} · ${l.id}`, "台词配音", {
+        ...line,
+        field: "本句配音",
+      });
       add("characters", l.characterId, `${n.title} · ${l.id}`, "台词人物", {
         ...line,
         field: "本句人物",
@@ -312,6 +316,36 @@ export function usages(p: AuthorProject): Usage[] {
         field: `分支:${c.id}:effects`,
       });
     });
+  }
+  for (const entry of p.assets ?? [])
+    asset(entry.src, entry.name ?? entry.id, "资源注册", {
+      section: "project",
+      items: {},
+      field: "资源注册",
+    });
+  for (const sequence of p.sequences ?? [])
+    for (const track of sequence.tracks) {
+      asset(track.asset, `${sequence.name} · ${track.id}`, "演出轨道素材", {
+        section: "presentations",
+        items: {},
+        field: "素材 ID 或路径",
+      });
+      add(
+        "characters",
+        track.characterId,
+        `${sequence.name} · ${track.id}`,
+        "演出轨道人物",
+        { section: "presentations", items: {}, field: "轨道人物" },
+      );
+    }
+  for (const entry of p.gallery ?? []) {
+    const position: EditorPosition = {
+      section: "project",
+      items: {},
+      field: "画廊",
+    };
+    asset(entry.asset, entry.title, "画廊素材", position);
+    condition(entry.unlock, entry.title, "画廊解锁条件", position);
   }
   p.characters.forEach((c) => {
     const pos: EditorPosition = {
@@ -463,7 +497,7 @@ export const helpContent: Record<
       "条件、效果在侧栏就地编辑；布局与测试状态单独保存，状态解释不能证明全图可通行。",
   },
   presentations: {
-    purpose: "编辑献词、OP 和 ED。",
+    purpose: "编辑通用多轨演出、献词、OP 和 ED。",
     steps: [
       "选择演出类型及当前页面或字幕。",
       "拖动字幕标记粗调，数字时间输入精调，例如 12.50 秒。",
@@ -475,7 +509,7 @@ export const helpContent: Record<
   assets: {
     purpose: "导入、查找、试听和分配素材。",
     steps: [
-      "选择文件或拖入，每个文件最多 8 MB。",
+      "选择文件或拖入，每个文件最多 512 MiB；可查看进度和取消上传。",
       "选择图片或音频后分配到场景或演出。",
       "在哪里使用列出明确引用及由规则匹配的使用位置。",
     ],
@@ -506,7 +540,8 @@ export const helpContent: Record<
       "确认正在编辑的工程版本。",
       "设置资源注册和关键词规则，使用引用追踪检查影响。",
     ],
-    advanced: "保留全部项目参数及 JSON 编辑；两套工程分别保存。",
+    advanced:
+      "保留全部项目参数及 JSON 编辑；各工作区独立保存，创作资料另行保存。",
   },
   json: {
     purpose: "完整编辑工程结构及高级配置。",

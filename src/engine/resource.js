@@ -11,7 +11,10 @@ export function resolveImage(project, value) {
     /^(data|blob):/i.test(value)
   )
     return value;
-  const registered = project.backdrops?.find((b) => b.id === value);
+  const registered =
+    project.assets?.find((b) => b.id === value) ??
+    project.backdrops?.find((b) => b.id === value) ??
+    project.audio?.find((b) => b.id === value);
   if (registered) return registered.src;
   // File paths are literal; only bare asset IDs use the generated-image convention.
   if (value.includes("/") || /\.[a-z0-9]+(?:[?#]|$)/i.test(value))

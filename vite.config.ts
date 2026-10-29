@@ -10,7 +10,11 @@ export default defineConfig(({ mode }) => {
   if (mode === "release") throw new Error(LEGACY_UNSUPPORTED);
   const profile = "modern";
   const ctx = projectContext(profile, process.env.MAGICKISA_WORKSPACE);
+  const base = process.env.MAGICKISA_BUILD_BASE || "/";
+  if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/.test(base))
+    throw new Error("发行 base 必须是 / 或 /games/my-game/ 形式的路径");
   return {
+    base: process.env.MAGICKISA_BUILD_EDITOR === "1" ? "/" : base,
     plugins: [
       react(),
       studioPlugin(),

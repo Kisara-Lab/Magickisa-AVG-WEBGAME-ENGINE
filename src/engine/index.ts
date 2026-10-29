@@ -1,6 +1,15 @@
 export type * from "./types";
 export { StoryRuntime } from "./runtime";
 export { EngineStore } from "./store";
+export type { EngineEvent, EngineAction } from "./events";
+export { RouteRecorder } from "./routeRecorder";
+export {
+  runStoryTest,
+  runStorySuite,
+  storyTestSchema,
+  storyTestSuiteSchema,
+} from "./storyTest";
+export { SequenceClock, sampleSequence, sequenceVisualState } from "./sequence";
 export { EngineSession } from "./session";
 export { createEngineHost } from "./host";
 export { assertProject, validateProject, projectSchema } from "./schema";

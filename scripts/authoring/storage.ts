@@ -2,6 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { z } from "zod";
+import {
+  creativeFilesSchema,
+  readCreativeFile,
+  validateCreativeFiles,
+  writeCreativeFiles,
+  type CreativeFiles,
+} from "./creative-backup";
 import { atomicJson, contained, type ProjectContext } from "../workspaces";
 import { safeData } from "../cli/operations";
 import { stateSchema, type SyncState } from "./model";
@@ -58,6 +65,8 @@ const journalSchema = z
     stateAfter: z.string(),
     studioBefore: z.string().nullable().optional(),
     studioAfter: z.string().optional(),
+    creativeBefore: creativeFilesSchema.optional(),
+    creativeAfter: creativeFilesSchema.optional(),
   })
   .strict();
 function writeBytes(file: string, bytes: Buffer) {
@@ -75,7 +84,9 @@ export function beginCommit(
   project: unknown,
   state: SyncState,
   studio?: StudioData,
+  creative?: CreativeFiles,
 ) {
+  if (creative) validateCreativeFiles(creative);
   if (studio && Buffer.byteLength(JSON.stringify(studio)) > 32 * 1024 * 1024)
     throw new Error("创作资料超过 32 MiB，未提交工程");
   if (
@@ -88,6 +99,17 @@ export function beginCommit(
     : null;
   atomicJson(journalFile(ctx), {
     version: 1,
+    ...(creative
+      ? {
+          creativeBefore: Object.fromEntries(
+            Object.keys(creative).map((key) => [
+              key,
+              readCreativeFile(ctx, key),
+            ]),
+          ),
+          creativeAfter: creative,
+        }
+      : {}),
     ...(studio
       ? {
           studioBefore: fs.existsSync(studioFile(ctx))
@@ -112,9 +134,11 @@ export function finishCommit(
   ctx: ProjectContext,
   state: SyncState,
   studio?: StudioData,
+  creative?: CreativeFiles,
 ) {
   atomicJson(stateFile(ctx), state);
   if (studio) atomicJson(studioFile(ctx), studio);
+  if (creative) writeCreativeFiles(ctx, creative);
   fs.rmSync(journalFile(ctx));
 }
 // Called only while holding the shared project lock. Roll back both authoritative
@@ -124,6 +148,27 @@ export function recoverCommit(ctx: ProjectContext) {
   const journal = journalSchema.parse(
     readJson(journalFile(ctx), 256 * 1024 * 1024),
   );
+  if (!!journal.creativeBefore !== !!journal.creativeAfter)
+    throw new Error("创作文件恢复日志不完整");
+  if (journal.creativeBefore && journal.creativeAfter) {
+    validateCreativeFiles(journal.creativeBefore);
+    validateCreativeFiles(journal.creativeAfter);
+    if (
+      Object.keys(journal.creativeBefore).sort().join("\n") !==
+      Object.keys(journal.creativeAfter).sort().join("\n")
+    )
+      throw new Error("创作文件恢复清单不一致");
+    for (const key of Object.keys(journal.creativeBefore))
+      if (
+        ![journal.creativeBefore[key], journal.creativeAfter[key]].includes(
+          readCreativeFile(ctx, key),
+        )
+      )
+        throw Object.assign(
+          new Error("创作文件恢复遇到外部修改，保留日志并停止写入"),
+          { code: "RECOVERY_CONFLICT", exitCode: 3, status: 409 },
+        );
+  }
   const projectNow = fs.readFileSync(ctx.projectFile).toString("base64");
   const stateNow = fs.existsSync(stateFile(ctx))
     ? fs.readFileSync(stateFile(ctx)).toString("base64")
@@ -168,6 +213,7 @@ export function recoverCommit(ctx: ProjectContext) {
   else if (journal.studioBefore !== undefined)
     writeBytes(studioFile(ctx), Buffer.from(journal.studioBefore, "base64"));
   buildContent(prior, ctx.public, ctx.id.startsWith("builtin-"));
+  if (journal.creativeBefore) writeCreativeFiles(ctx, journal.creativeBefore);
   fs.rmSync(journalFile(ctx));
   return true;
 }

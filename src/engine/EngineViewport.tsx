@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { EngineRendererContext } from "./types";
 import { resolveAsset, resolveScene } from "./media";
 import { CharacterStage } from "./character";
+import { evaluateCondition } from "./condition";
+import { SequenceStage } from "./SequenceStage";
 export function EngineViewport({
   context,
   onAdvance,
@@ -21,9 +23,40 @@ export function EngineViewport({
 }) {
   const { project, node, line, save, choices } = context;
   const input = line?.input;
+  const [stageError, setStageError] = useState<{
+    id: string;
+    message: string;
+  }>();
+  const terminal = project.sequences?.find(
+    (s) => s.id === save.terminalSequence,
+  );
+  const nvl = (node?.readingMode ?? project.theme?.mode) === "nvl";
+  const dialogueBox = useRef<HTMLDivElement>(null),
+    currentText = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const box = dialogueBox.current,
+      text = currentText.current;
+    if (nvl && box && text)
+      box.scrollTop +=
+        text.getBoundingClientRect().top - box.getBoundingClientRect().top - 20;
+  }, [nvl, node?.id, line?.id]);
+  const previous =
+    nvl && node
+      ? node.lines.slice(0, line ? context.lineIndex : node.lines.length)
+      : [];
+  const pageStart = previous.reduce(
+    (last, entry, i) => (entry.pageBreak ? i : last),
+    0,
+  );
+  const paragraph = (text: string) =>
+    text
+      .replace(/\*\*/g, "")
+      .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
+        String(save.variables[key] ?? ""),
+      );
   return (
     <section
-      className={`stage ${node?.presentation === "dedication" && !context.save.presentation && !context.save.completed ? "dedication-stage" : ""}`}
+      className={`stage ${nvl ? "stage-nvl" : ""} ${node?.presentation === "dedication" && !context.save.presentation && !context.save.completed ? "dedication-stage" : ""}`}
       onClick={onAdvance}
     >
       <img
@@ -40,19 +73,59 @@ export function EngineViewport({
         }}
       />
       <CharacterStage project={project} line={line} />
+      {terminal && (
+        <div className="sequence-terminal" aria-label="演出保留画面">
+          <SequenceStage
+            project={project}
+            sequence={terminal}
+            time={terminal.duration}
+            playing={false}
+            backdrop={
+              node?.background
+                ? resolveAsset(project, node.background)
+                : resolveScene(project, node?.title ?? "")
+            }
+            line={line}
+            onFailure={(message) => setStageError({ id: terminal.id, message })}
+          />
+        </div>
+      )}
       <div className="scene-vignette" />
       <div className="scene-caption">
         <span>{node?.chapter || project.title}</span>
         <strong>{node?.title.replace(/^【|】$/g, "")}</strong>
       </div>
-      <div className="dialogue-box">
+      <div className="dialogue-box" ref={dialogueBox}>
+        {terminal && stageError?.id === terminal.id && (
+          <p role="alert">{stageError.message}</p>
+        )}
         <div className="speaker">
           {line?.speaker || node?.speaker || "旁白"}
         </div>
         <div className="dialogue-text">
+          {nvl &&
+            !line?.pageBreak &&
+            previous
+              .slice(pageStart)
+              .filter(
+                (l) =>
+                  save.readLineIds.includes(l.id) &&
+                  evaluateCondition(
+                    l.condition,
+                    save.variables,
+                    save.visitedNodes,
+                    save,
+                  ),
+              )
+              .map((l) => (
+                <p className="nvl-previous" key={l.id}>
+                  {l.speaker && <strong>{l.speaker}： </strong>}
+                  {paragraph(l.text)}
+                </p>
+              ))}
           {line ? (
             <>
-              <span className="line-in">
+              <span className="line-in" ref={currentText}>
                 {visibleText ??
                   line.text
                     .replace(/\*\*/g, "")

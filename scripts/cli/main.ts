@@ -1,4 +1,18 @@
 import { analyzeGraph } from "../../src/engine/graph";
+import { readStudioData } from "../studio-data";
+import { importAssetStream } from "../asset-stream";
+import { listBackups, previewBackup, restoreBackup } from "../backups";
+import {
+  inspectAsset,
+  changeAsset,
+  assetBackups,
+  planAssetRestore,
+  restoreAsset,
+} from "../asset-maintenance";
+import {
+  runStorySuite,
+  storyTestSuiteSchema,
+} from "../../src/engine/storyTest";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -46,9 +60,16 @@ import {
 import { ProjectPackages } from "../project-packages";
 import { exportMarkdown, importMarkdown } from "../content";
 import * as authoring from "../authoring/service";
+import {
+  planVariableRename,
+  applyVariableRename,
+} from "../variable-maintenance";
 import { readJson, home } from "../authoring/storage";
 
 const commands: Record<string, string[]> = {
+  variable: ["rename-plan", "rename"],
+  backup: ["list", "preview", "restore"],
+  test: ["list", "run"],
   agent: ["init", "context"],
   source: ["add", "list", "status"],
   sync: ["plan", "apply", "status", "recover"],
@@ -60,7 +81,16 @@ const commands: Record<string, string[]> = {
   effect: ["add", "update", "remove", "clear"],
   entity: ["list", "show", "add", "update", "remove"],
   media: ["show", "set", "unset"],
-  asset: ["list", "import"],
+  asset: [
+    "list",
+    "import",
+    "inspect",
+    "replace",
+    "remove",
+    "history",
+    "restore-plan",
+    "restore",
+  ],
   script: ["export", "import", "export-markdown", "import-markdown"],
   package: ["export", "import"],
   edit: [],
@@ -71,6 +101,7 @@ const commands: Record<string, string[]> = {
   studio: [],
   help: [],
   schema: [
+    "tests",
     "studio",
     "preset",
     "project",
@@ -91,6 +122,9 @@ const booleanOptions = new Set([
   "include-sources",
 ]);
 const valueOptions = new Set([
+  "from",
+  "to",
+  "base",
   "workspace",
   "name",
   "data",
@@ -159,6 +193,7 @@ function parse(args: string[]) {
   }
   const shared = ["json", "help", "workspace"];
   const allowed: Record<string, string[]> = {
+    variable: action === "rename-plan" ? ["from", "to", "out"] : ["file"],
     agent: action === "context" ? ["scene", "query", "limit", "offset"] : [],
     source: action === "add" ? ["file", "id"] : [],
     sync:
@@ -208,7 +243,18 @@ function parse(args: string[]) {
     effect: ["scene", "id", "phase", "index", "data", "dry-run", "if-revision"],
     entity: ["collection", "id", "data", "dry-run", "if-revision"],
     media: ["kind", "data", "dry-run", "if-revision"],
-    asset: action === "import" ? ["file", "name"] : [],
+    asset:
+      action === "import"
+        ? ["file", "name"]
+        : action === "inspect"
+          ? ["path", "out"]
+          : action === "restore-plan"
+            ? ["id", "out"]
+            : action === "replace"
+              ? ["file", "data"]
+              : ["restore", "remove"].includes(action ?? "")
+                ? ["file"]
+                : [],
     edit: ["data", "file", "dry-run", "if-revision"],
     script: action?.startsWith("export")
       ? ["out"]
@@ -218,7 +264,9 @@ function parse(args: string[]) {
         ? ["out", "if-revision", "include-sources"]
         : ["file", "name", "if-revision"],
     refs: ["id", "kind"],
-    build: ["if-revision"],
+    test: ["file", "id", "out", "if-revision"],
+    backup: ["file", "id", "out", "if-revision"],
+    build: ["if-revision", "base"],
     studio: ["no-open"],
     doctor: ["recover", "lock", "token"],
   };
@@ -242,7 +290,11 @@ function parse(args: string[]) {
       if (options[key] !== undefined)
         throw failure(`${group} ${action} does not accept --${key}`);
   }
-  if (options.file && options.data)
+  if (
+    options.file &&
+    options.data &&
+    !(group === "asset" && action === "replace")
+  )
     throw failure("--file 与 --data 只能指定一个");
   return { group, action, options };
 }
@@ -410,13 +462,15 @@ export async function execute(args: string[], signal: AbortSignal) {
     );
   if (group === "schema")
     return z.toJSONSchema(
-      action === "studio"
-        ? studioDataSchema
-        : action === "preset"
-          ? presetSchema
-          : action === "project"
-            ? projectSchema
-            : transactionSchema,
+      action === "tests"
+        ? storyTestSuiteSchema
+        : action === "studio"
+          ? studioDataSchema
+          : action === "preset"
+            ? presetSchema
+            : action === "project"
+              ? projectSchema
+              : transactionSchema,
     );
   if (group === "project" && action === "list")
     return { projects: workspaces() };
@@ -494,6 +548,69 @@ export async function execute(args: string[], signal: AbortSignal) {
   const current = readSnapshot(ctx),
     p = current.project;
   if (group === "project" && action === "show") return current;
+  if (group === "backup") {
+    if (text("if-revision")) assertRevision(ctx, text("if-revision")!);
+    if (action === "list") return { backups: listBackups(ctx) };
+    if (action === "preview") {
+      const preview = {
+        workspaceId: ctx.id,
+        ...previewBackup(ctx, need("id")),
+      };
+      if (o.out)
+        writeOutput(need("out"), JSON.stringify(preview, null, 2) + "\n");
+      return preview;
+    }
+    const file = need("file");
+    const preview = z
+      .object({
+        workspaceId: z.string(),
+        id: z.string(),
+        revision: z.string(),
+        studioRevision: z.string(),
+        creativeRevision: z.string(),
+        syncRevision: z.string(),
+        digest: z.string(),
+      })
+      .parse(await jsonInput(file === "-" ? "-" : "@" + file, signal));
+    if (preview.workspaceId !== ctx.id) throw failure("恢复方案属于另一工作区");
+    if (text("if-revision") && text("if-revision") !== preview.revision)
+      throw failure("--if-revision 与恢复方案不一致");
+    return restoreBackup(
+      ctx,
+      preview.id,
+      preview.revision,
+      preview.studioRevision,
+      preview.digest,
+      false,
+      preview.creativeRevision,
+      preview.syncRevision,
+    );
+  }
+  if (group === "test") {
+    if (text("if-revision")) assertRevision(ctx, text("if-revision")!);
+    const file = text("file");
+    const suite = storyTestSuiteSchema.parse(
+      file
+        ? await jsonInput(file === "-" ? "-" : "@" + file, signal)
+        : { formatVersion: 1, tests: readStudioData(ctx).data.tests },
+    );
+    if (action === "list")
+      return {
+        revision: current.revision,
+        tests: suite.tests.map((t) => ({
+          id: t.id,
+          name: t.name,
+          steps: t.steps.length,
+        })),
+      };
+    const report = {
+      revision: current.revision,
+      ...runStorySuite(p, suite, text("id")),
+    };
+    if (o.out) writeOutput(need("out"), JSON.stringify(report, null, 2) + "\n");
+    if (!report.passed) throw failure("剧情测试失败", "VALIDATION", 1, report);
+    return report;
+  }
   if (group === "validate") {
     const issues = diagnostics(p, "modern", ctx);
     if (issues.some((i) => i.severity === "error"))
@@ -508,13 +625,90 @@ export async function execute(args: string[], signal: AbortSignal) {
         (r) => (!o.id || r.target === o.id) && (!o.kind || r.kind === o.kind),
       ),
     };
+  if (group === "variable") {
+    if (action === "rename-plan") {
+      const plan = planVariableRename(ctx, need("from"), need("to"));
+      if (o.out) writeOutput(need("out"), JSON.stringify(plan, null, 2) + "\n");
+      return plan;
+    }
+    const plan = z
+      .object({
+        workspaceId: z.string(),
+        from: z.string(),
+        to: z.string(),
+        revision: z.string(),
+        studioRevision: z.string(),
+      })
+      .parse(await jsonInput("@" + need("file"), signal));
+    return applyVariableRename(ctx, { ...plan, changes: [] });
+  }
   if (group === "asset") {
     if (action === "list") return { files: listAssets(ctx) };
+    if (action === "history") return { backups: assetBackups(ctx) };
+    if (action === "inspect" || action === "restore-plan") {
+      const plan =
+        action === "inspect"
+          ? inspectAsset(ctx, need("path"))
+          : planAssetRestore(ctx, need("id"));
+      if (o.out) writeOutput(need("out"), JSON.stringify(plan, null, 2) + "\n");
+      return plan;
+    }
+    if (["replace", "remove", "restore"].includes(action!)) {
+      const plan = z
+        .object({
+          workspaceId: z.string(),
+          url: z.string(),
+          revision: z.string(),
+          sha256: z.string().nullable(),
+          id: z.string().optional(),
+          backupSha256: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
+        })
+        .parse(
+          await jsonInput(
+            action === "replace" ? need("data") : "@" + need("file"),
+            signal,
+          ),
+        );
+      if (plan.workspaceId !== ctx.id)
+        throw failure("素材操作方案属于另一工作区");
+      if (action === "restore") {
+        if (!plan.backupSha256) throw failure("恢复方案缺少备份 SHA256");
+        return restoreAsset(
+          ctx,
+          plan.id ?? "",
+          plan.revision,
+          plan.sha256,
+          false,
+          plan.backupSha256,
+        );
+      }
+      if (!plan.sha256) throw failure("素材操作方案缺少 SHA256");
+      const stream =
+        action === "replace"
+          ? fs.createReadStream(path.resolve(need("file")))
+          : undefined;
+      try {
+        return await changeAsset(
+          ctx,
+          { ...plan, sha256: plan.sha256 },
+          stream
+            ? { name: path.basename(need("file")), stream, signal }
+            : undefined,
+        );
+      } finally {
+        stream?.destroy();
+      }
+    }
     const file = path.resolve(need("file"));
-    return importAsset(
+    return importAssetStream(
       ctx,
       text("name") ?? path.basename(file),
-      fs.readFileSync(file),
+      fs.createReadStream(file),
+      false,
+      signal,
     );
   }
   if (group === "package") return packageCommand(ctx, action!, o, signal);
@@ -524,6 +718,7 @@ export async function execute(args: string[], signal: AbortSignal) {
       text("if-revision") ?? current.revision,
       (chunk) => process.stderr.write(chunk),
       signal,
+      text("base") ?? "/",
     );
     await job.finished;
     return {
@@ -591,10 +786,16 @@ export async function execute(args: string[], signal: AbortSignal) {
       return { url, stopped: true };
     } finally {
       detachViteShutdown();
+      if (server?.httpServer && "closeIdleConnections" in server.httpServer)
+        server.httpServer.closeIdleConnections();
       await server?.close();
       // Vite resumes piped stdin. Restore its prior state so an open caller pipe
       // does not keep a stopped CLI alive after the final JSON response.
       if (!stdinWasFlowing) process.stdin.pause();
+      // Node 22 on Windows retains a referenced pipe handle even after pause().
+      // A stopped Studio command never reads further input; release that pipe.
+      if (!process.stdin.isTTY && process.platform === "win32")
+        process.stdin.destroy();
     }
   }
   const selected = p.nodes.find((n) => n.id === text("scene"));
@@ -606,11 +807,19 @@ export async function execute(args: string[], signal: AbortSignal) {
       throw failure("必须通过 --scene 指定存在的场景 ID");
     if (
       group === "entity" &&
-      !["characters", "materials", "backdrops", "audio"].includes(
-        need("collection"),
-      )
+      ![
+        "characters",
+        "materials",
+        "backdrops",
+        "audio",
+        "assets",
+        "sequences",
+        "gallery",
+      ].includes(need("collection"))
     )
-      throw failure("collection 必须是 characters/materials/backdrops/audio");
+      throw failure(
+        "collection 必须是 characters/materials/backdrops/audio/assets/sequences/gallery",
+      );
     if (
       group === "media" &&
       o.kind &&
@@ -625,7 +834,7 @@ export async function execute(args: string[], signal: AbortSignal) {
           : group === "choice"
             ? (selected?.choices ?? [])
             : group === "entity"
-              ? p[need("collection") as "characters"]
+              ? (p[need("collection") as "characters"] ?? [])
               : undefined;
     if (group === "media")
       return o.kind ? (p.media[need("kind") as "opening"] ?? null) : p.media;

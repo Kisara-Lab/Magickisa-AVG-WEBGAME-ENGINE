@@ -1,4 +1,6 @@
 import { TargetPicker } from "./TargetPicker";
+import { BatchEditor } from "./BatchEditor";
+import { LineSelection } from "./LineSelection";
 import type { AuthorProject, AuthorNode } from "./model";
 import { uniqueId } from "./model";
 import type { StoryNode, StoryLine, StoryChoice } from "../engine/types";
@@ -36,6 +38,18 @@ export function ScriptEditor({
     });
   return (
     <>
+      <BatchEditor
+        key={node.id}
+        project={project}
+        scene={node.id}
+        onChange={onProjectChange}
+      />
+      <LineSelection
+        key={`selection:${node.id}`}
+        project={project}
+        scene={node.id}
+        onChange={onProjectChange}
+      />
       <div className="st-section-title">
         <div>
           <span className="st-kicker">SCENE / {node.id}</span>
@@ -63,6 +77,46 @@ export function ScriptEditor({
         summary={`${node.speaker || "旁白"} · ${node.next || "末场景"}`}
       >
         <div className="st-fields">
+          {(
+            [
+              ["enterSequence", "进入场景演出"],
+              ["exitSequence", "场景结束演出"],
+            ] as const
+          ).map(([key, label]) => (
+            <Field
+              key={key}
+              label={label}
+              value={node[key] ?? ""}
+              options={[
+                { value: "", label: "无" },
+                ...(project.sequences ?? []).map((s) => ({
+                  value: s.id,
+                  label: s.name,
+                })),
+              ]}
+              onChange={(value) => {
+                const next = { ...node };
+                if (value) next[key] = value;
+                else delete next[key];
+                onChange(next);
+              }}
+            />
+          ))}
+          <Field
+            label="场景阅读布局"
+            value={node.readingMode ?? ""}
+            options={[
+              { value: "", label: "沿用作品默认" },
+              { value: "adv", label: "ADV 底部对话" },
+              { value: "nvl", label: "NVL 全屏文字" },
+            ]}
+            onChange={(v) => {
+              const next = { ...node };
+              if (v) next.readingMode = v as "adv" | "nvl";
+              else delete next.readingMode;
+              onChange(next);
+            }}
+          />
           <Field
             label="默认说话人"
             value={node.speaker}
@@ -460,6 +514,43 @@ export function ScriptEditor({
               summary={`${line.characterId || "无人物"} · ${line.characterLayers?.length || 0} 个图层`}
             >
               <div className="st-fields">
+                <Check
+                  label="NVL 在本句开始新页"
+                  value={!!line.pageBreak}
+                  onChange={(pageBreak) => changeLine({ ...line, pageBreak })}
+                />
+                <Field
+                  label="本句演出序列"
+                  value={line.sequence ?? ""}
+                  options={[
+                    { value: "", label: "无" },
+                    ...(project.sequences ?? []).map((s) => ({
+                      value: s.id,
+                      label: s.name,
+                    })),
+                  ]}
+                  onChange={(sequence) => {
+                    const next = { ...line };
+                    if (sequence) next.sequence = sequence;
+                    else delete next.sequence;
+                    changeLine(next);
+                  }}
+                />
+                <Field
+                  label="本句配音"
+                  value={line.voice ?? ""}
+                  onChange={(voice) => {
+                    const next = { ...line };
+                    if (voice) next.voice = voice;
+                    else delete next.voice;
+                    changeLine(next);
+                  }}
+                />
+                <PickAsset
+                  kind="audio"
+                  label="选择本句配音"
+                  onPick={(voice) => changeLine({ ...line, voice })}
+                />
                 {
                   <Field
                     label="本句说话人"

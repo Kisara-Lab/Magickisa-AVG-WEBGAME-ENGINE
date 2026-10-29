@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { compareEngineVersions } from "./engine-version";
 import path from "node:path";
 import crypto from "node:crypto";
 import { Transform, type Readable } from "node:stream";
@@ -38,8 +39,10 @@ interface FileRecord {
 }
 interface Manifest {
   format: "magickisa-project";
-  version: 1;
+  version: 2;
   studioVersion: string;
+  projectSchemaVersion: 3;
+  minimumEngineVersion: string;
   profile: Profile;
   name: string;
   files: FileRecord[];
@@ -294,8 +297,10 @@ export class ProjectPackages {
         throw new Error("工程解压总量超过 8 GiB");
       const manifest: Manifest = {
         format: "magickisa-project",
-        version: 1,
+        version: 2,
         studioVersion,
+        projectSchemaVersion: 3,
+        minimumEngineVersion: "2.0.0-dev.5",
         profile: ctx.profile,
         name: ctx.name,
         files: records,
@@ -451,12 +456,21 @@ export class ProjectPackages {
     ) as Manifest;
     if (
       manifest.format !== "magickisa-project" ||
-      manifest.version !== 1 ||
+      manifest.version !== 2 ||
       typeof manifest.studioVersion !== "string" ||
       !manifest.studioVersion.trim()
     )
       throw new Error("不支持的工程包或 Studio 版本");
     requireModernProfile(manifest.profile);
+    if (
+      manifest.projectSchemaVersion !== 3 ||
+      typeof manifest.minimumEngineVersion !== "string"
+    )
+      throw new Error("工程包缺少格式 3 与最低引擎版本声明");
+    if (compareEngineVersions(studioVersion, manifest.minimumEngineVersion) < 0)
+      throw new Error(
+        `此工程包需要 MAGICKISA ${manifest.minimumEngineVersion} 或更新版本`,
+      );
     if (manifest.profile !== "modern")
       throw new Error("工程包缺少现代版模式元数据");
     if (

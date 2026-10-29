@@ -16,7 +16,7 @@ export const root = path.resolve(
 );
 export const projectFile = path.join(
   root,
-  "workspace-projects/default-modern",
+  "workspace-projects/default-modern-v3",
   "project.json",
 );
 export function resourceReferences(p: StoryProject): string[] {
@@ -26,6 +26,14 @@ export function resourceReferences(p: StoryProject): string[] {
       [
         ...p.backdrops.map((b) => b.src),
         ...p.audio.map((a) => a.src),
+        ...(p.assets ?? []).map((a) => a.src),
+        ...(p.gallery ?? []).map((g) => asset(g.asset)),
+        ...(p.sequences ?? []).flatMap((s) =>
+          s.tracks.filter((t) => !!t.asset).map((t) => asset(t.asset!)),
+        ),
+        ...p.nodes.flatMap((n) =>
+          n.lines.filter((l) => !!l.voice).map((l) => asset(l.voice!)),
+        ),
         ...p.characters.flatMap((c) => [
           c.portrait ? asset(c.portrait) : undefined,
           ...Object.values(c.expressions || {})
@@ -62,7 +70,7 @@ export function validateResources(p: StoryProject): void {
     const clean = decodeURIComponent(ref.split(/[?#]/)[0]);
     const file = path.resolve(
       root,
-      "workspace-projects/default-modern/public",
+      "workspace-projects/default-modern-v3/public",
       "." + clean,
     );
     if (

@@ -4,7 +4,8 @@ import type { AssetFile } from "./LibraryEditors";
 import type { Profile, AuthorProject } from "./model";
 import { mediaUrl, uniqueId } from "./model";
 import { Modal } from "./components";
-type Kind = "image" | "audio" | "lyrics";
+import { assetKind } from "../authoring/assetKind";
+type Kind = "image" | "audio" | "lyrics" | "video";
 interface Pick {
   kind: Kind;
   choose: (url: string) => void;
@@ -43,12 +44,7 @@ export function AssetPickerProvider({
     [query, setQuery] = useState(""),
     [selected, setSelected] = useState("");
   const matches = (f: AssetFile) =>
-    (pick?.kind === "image"
-      ? /\.(png|jpe?g|webp|svg)$/i
-      : pick?.kind === "audio"
-        ? /\.(mp3|ogg|wav)$/i
-        : /\.lrc$/i
-    ).test(f.url.split(/[?#]/)[0]) &&
+    assetKind(f.url) === pick?.kind &&
     f.url.toLowerCase().includes(query.toLowerCase());
   return (
     <PickerContext.Provider
@@ -61,7 +57,7 @@ export function AssetPickerProvider({
       {children}
       {pick && (
         <Modal
-          title={`选择${{ image: "图片", audio: "音乐", lyrics: "歌词" }[pick.kind]}`}
+          title={`选择${{ image: "图片", audio: "音频", lyrics: "字幕", video: "视频" }[pick.kind]}`}
           onClose={() => setPick(null)}
         >
           <input
@@ -80,7 +76,13 @@ export function AssetPickerProvider({
                 {pick.kind === "image" ? (
                   <img src={mediaUrl(profile, f.url)} alt="" loading="lazy" />
                 ) : (
-                  <span>{pick.kind === "audio" ? "♫" : "LRC"}</span>
+                  <span>
+                    {
+                      { audio: "音频", lyrics: "字幕", video: "视频" }[
+                        pick.kind
+                      ]
+                    }
+                  </span>
                 )}
                 <span>{f.url.split("/").at(-1)}</span>
               </button>
@@ -98,6 +100,16 @@ export function AssetPickerProvider({
                 <audio
                   key={selected}
                   controls
+                  src={mediaUrl(profile, selected)}
+                />
+              )}
+              {pick.kind === "video" && (
+                <video
+                  key={selected}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{ maxWidth: "100%", maxHeight: 320 }}
                   src={mediaUrl(profile, selected)}
                 />
               )}

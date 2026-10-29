@@ -9,7 +9,7 @@ const legacy =
   "https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy";
 
 // Change only metadata, keeping every payload byte and its original checksum.
-export async function legacyModernPackage(buffer, profile = "modern") {
+export async function alteredPackage(buffer, profile = "modern", version = 2) {
   const entries = await new Promise((resolve, reject) => {
     const files = [];
     yauzl.fromBuffer(buffer, { lazyEntries: true }, (error, zip) => {
@@ -38,8 +38,8 @@ export async function legacyModernPackage(buffer, profile = "modern") {
     JSON.parse(fs.readFileSync("package.json", "utf8")).version,
   );
   assert.equal(data.profile, "modern");
-  assert.equal(data.version, 1);
-  data.studioVersion = "1.0.0";
+  assert.equal(data.version, 2);
+  data.version = version;
   data.profile = profile;
   manifest[1] = Buffer.from(JSON.stringify(data));
   const zip = new yazl.ZipFile();
@@ -58,12 +58,16 @@ export async function rejectLegacyPackages(origin, buffer, workspaceId) {
   const before = fs.readFileSync(
     path.join("workspace-projects", workspaceId, "project.json"),
   );
-  for (const profile of ["release", null]) {
+  for (const [profile, version] of [
+    ["release", 2],
+    [null, 2],
+    ["modern", 1],
+  ]) {
     const response = await fetch(
       `${origin}/__studio/packages/upload?workspaceId=${workspaceId}`,
       {
         method: "POST",
-        body: await legacyModernPackage(buffer, profile),
+        body: await alteredPackage(buffer, profile, version),
       },
     );
     assert.ok(response.ok);

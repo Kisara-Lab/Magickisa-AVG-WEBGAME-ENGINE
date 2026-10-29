@@ -33,6 +33,9 @@ export function ReadingSettings({
       {slider("opacity", "对话框不透明度", 0.75, 1, 0.05)}
       {slider("characterDelay", "每字间隔（毫秒，0 为整句）", 0, 120, 10)}
       {slider("autoDelay", "自动阅读等待（秒）", 1, 10, 0.1)}
+      {slider("bgmVolume", "背景音乐音量", 0, 1, 0.05)}
+      {slider("voiceVolume", "配音音量", 0, 1, 0.05)}
+      {slider("soundVolume", "音效音量", 0, 1, 0.05)}
       <label>
         <input
           type="checkbox"

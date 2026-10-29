@@ -15,7 +15,7 @@ test("blank projects have independent stable identities and no media dependencie
     0,
   );
   assert.match(resolveScene(first, ""), /^data:image\/svg/);
-  assert.equal(first.schemaVersion, 2);
+  assert.equal(first.schemaVersion, 3);
 });
 test("branch conditions, effects and rollback preserve editing-independent runtime behavior", () => {
   const project = assertProject({

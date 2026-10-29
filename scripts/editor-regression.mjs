@@ -190,7 +190,7 @@ export async function editorRegression(browser, origin) {
         load() {}
       };
       const project = assertProject({
-        schemaVersion: 2,
+        schemaVersion: 3,
         id: "audio-regression",
         title: "Audio",
         version: "1",

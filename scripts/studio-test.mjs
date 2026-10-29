@@ -8,8 +8,8 @@ import { chromium } from "playwright";
 import { editorRegression } from "./editor-regression.mjs";
 import { cliBrowserRegression } from "./cli-browser-test.mjs";
 import { investigationBrowser } from "./investigation-browser.mjs";
+import { productionBrowser } from "./production-browser.mjs";
 import {
-  legacyModernPackage,
   modernBoundaryRegression,
   rejectLegacyPackages,
 } from "./modern-boundary-test.mjs";
@@ -53,6 +53,7 @@ try {
   await editorRegression(browser, origin);
   await cliBrowserRegression(browser, origin);
   await investigationBrowser(browser, origin);
+  await productionBrowser(browser, origin);
   await modernBoundaryRegression(origin, page);
   const api = async (profile, route, body, id) => {
     const response = await fetch(
@@ -249,7 +250,7 @@ try {
         headers: {
           "Content-Type": "application/zip",
         },
-        body: await legacyModernPackage(zip),
+        body: zip,
       },
     );
     assert.ok(upload.ok);
@@ -531,6 +532,7 @@ try {
       "build",
       {
         revision: saved.revision,
+        base: "/games/production/",
       },
       next.id,
     );
@@ -566,9 +568,14 @@ try {
     });
     const outputRoot = path.resolve("workspace-projects", next.id, "dist");
     const gameServer = http.createServer((req, res) => {
-      const relative = decodeURIComponent(
+      const requested = decodeURIComponent(
         new URL(req.url, "http://localhost").pathname,
       );
+      if (!requested.startsWith("/games/production/")) {
+        res.writeHead(404).end();
+        return;
+      }
+      const relative = requested.slice("/games/production".length);
       const file = path.resolve(
         outputRoot,
         "." + (relative === "/" ? "/index.html" : relative),
@@ -595,7 +602,9 @@ try {
     });
     await new Promise((resolve) => gameServer.listen(0, "127.0.0.1", resolve));
     try {
-      await page.goto(`http://127.0.0.1:${gameServer.address().port}/`);
+      await page.goto(
+        `http://127.0.0.1:${gameServer.address().port}/games/production/`,
+      );
       await page.locator('[data-action="new-game"]').waitFor();
       await page.locator('[data-action="new-game"]').click();
       await page.locator(".engine-splash").waitFor({

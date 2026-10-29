@@ -2,7 +2,7 @@
 
 ## 调查逻辑与连接诊断
 
-条件新增 `material`（资料 `unlocked/read`，`value` 默认 true）与 `contains`（列表中包含 JSON 深度相等值）。工程 schemaVersion 仍为 2；使用新条件须配套新版运行时。完整示例见 [调查工作台](INVESTIGATION.md)。
+条件支持 `material`（资料 `unlocked/read`，`value` 默认 true）与 `contains`（列表中包含 JSON 深度相等值）。dev.5 工程 schemaVersion 为 3，需配套新版运行时。调查逻辑示例见 [调查工作台](INVESTIGATION.md)，新增生产命令见[创作工作流](CREATOR-WORKFLOW.md)。
 
 `graph --workspace ID --json` 保留原字段，追加稳定连接 `key`、`kind`、`crossChapter`、强连通循环 `cycles` 与定位诊断 `diagnostics`。有意的调查循环是警告；静态连通不证明实际条件下可通行。
 
@@ -45,35 +45,35 @@ node scripts/magickisa.mjs doctor --workspace WORKSPACE_ID --json
 
 ## 命令速查
 
-| 命令 | 目标和数据 |
-| --- | --- |
-| `scene list/show` | show 使用 `--id 场景ID` |
-| `scene add/update/remove/move` | `--id`（add 可省略）、`--data`；add/move 可指定 before/after/index |
-| `scene link` | `--id 场景ID --data '"目标ID"'`；`--data null` 清除 next |
-| `line list/show/add/update/remove/move` | `--scene 场景ID`，现有台词用 `--id`；add/update 提供 JSON 或 text-file |
-| `choice list/show/add/update/remove/move` | `--scene 场景ID --id 分支ID`；新增 JSON 含 label、target |
-| `condition set/unset` | `--target scene/line/choice/material`，场景相关指定 `--scene`，台词/分支/资料用 `--id` |
-| `effect add/update/remove/clear` | `--phase enter/complete/choice --scene 场景ID`；choice 另用 `--id 分支ID`；update/remove 使用 index |
-| `entity list/show/add/update/remove` | `--collection characters/materials/backdrops/audio`，现有条目使用 id |
-| `media show/set/unset` | `--kind opening/ending/dedication`，set 接收整个演出配置对象 |
-| `asset list/import` | import 使用 `--file`，可用 `--name` 改导入文件名 |
-| `edit` | `--file 事务.json` 或 `--data @文件/-` |
-| `script export/import` | 完整工程 JSON；导出可指定 out，导入使用 file/data |
-| `script export-markdown/import-markdown` | 带稳定 ID 的台词正文往返，不创造场景或分支 |
-| `validate` | 结构、引用和本地素材检查，返回错误与警告 |
-| `graph` | next/choice 连接、从起点静态可达性和不可达场景 |
-| `refs` | 全部引用；可按 `--id`、`--kind assets/characters/materials/script/audio` 过滤 |
-| `package export/import` | export 使用 out；import 使用 file，可指定 name，建立独立工作区 |
-| `build` | 构建所选磁盘工作区，返回输出目录 |
-| `studio` | 启动本地服务并打开指定工程；Ctrl+C 停止 |
-| `agent init/context` | 初始化通用创作目录；context 支持 scene/query/limit/offset |
-| `source add/list/status` | add 使用 file 与可选 id；检查来源 SHA256、变化及缺失 |
-| `sync plan` | 可选 file（默认 authoring/manifest.json）、resolutions；必须指定新 out 文件 |
-| `sync apply/status/recover` | apply 使用方案 file，支持 dry-run/if-revision；recover 恢复未完成提交 |
+| 命令                                      | 目标和数据                                                                                          |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `scene list/show`                         | show 使用 `--id 场景ID`                                                                             |
+| `scene add/update/remove/move`            | `--id`（add 可省略）、`--data`；add/move 可指定 before/after/index                                  |
+| `scene link`                              | `--id 场景ID --data '"目标ID"'`；`--data null` 清除 next                                            |
+| `line list/show/add/update/remove/move`   | `--scene 场景ID`，现有台词用 `--id`；add/update 提供 JSON 或 text-file                              |
+| `choice list/show/add/update/remove/move` | `--scene 场景ID --id 分支ID`；新增 JSON 含 label、target                                            |
+| `condition set/unset`                     | `--target scene/line/choice/material`，场景相关指定 `--scene`，台词/分支/资料用 `--id`              |
+| `effect add/update/remove/clear`          | `--phase enter/complete/choice --scene 场景ID`；choice 另用 `--id 分支ID`；update/remove 使用 index |
+| `entity list/show/add/update/remove`      | `--collection characters/materials/backdrops/audio`，现有条目使用 id                                |
+| `media show/set/unset`                    | `--kind opening/ending/dedication`，set 接收整个演出配置对象                                        |
+| `asset list/import`                       | import 使用 `--file`，可用 `--name` 改导入文件名                                                    |
+| `edit`                                    | `--file 事务.json` 或 `--data @文件/-`                                                              |
+| `script export/import`                    | 完整工程 JSON；导出可指定 out，导入使用 file/data                                                   |
+| `script export-markdown/import-markdown`  | 带稳定 ID 的台词正文往返，不创造场景或分支                                                          |
+| `validate`                                | 结构、引用和本地素材检查，返回错误与警告                                                            |
+| `graph`                                   | next/choice 连接、从起点静态可达性和不可达场景                                                      |
+| `refs`                                    | 全部引用；可按 `--id`、`--kind assets/characters/materials/script/audio` 过滤                       |
+| `package export/import`                   | export 使用 out；import 使用 file，可指定 name，建立独立工作区                                      |
+| `build`                                   | 构建所选磁盘工作区，返回输出目录                                                                    |
+| `studio`                                  | 启动本地服务并打开指定工程；Ctrl+C 停止                                                             |
+| `agent init/context`                      | 初始化通用创作目录；context 支持 scene/query/limit/offset                                           |
+| `source add/list/status`                  | add 使用 file 与可选 id；检查来源 SHA256、变化及缺失                                                |
+| `sync plan`                               | 可选 file（默认 authoring/manifest.json）、resolutions；必须指定新 out 文件                         |
+| `sync apply/status/recover`               | apply 使用方案 file，支持 dry-run/if-revision；recover 恢复未完成提交                               |
 
 反复接入用户文件见 [创作与增量同步](AUTHORING.md)。`schema manifest/module/plan/resolutions --json` 提供结构发现。`package export --include-sources` 才包含原始附件；默认仅包含结构稿与基线。来源登记不执行或自动理解文件。
 
-素材导入与 Studio 一致：png/jpg/jpeg/webp/svg/mp3/ogg/wav/lrc，单文件不为空且不超过 8 MB，同名自动加序号。大素材自行放入该项目 public，再用 entity/media/场景字段登记路径。
+素材导入与 Studio 一致：png/jpg/jpeg/webp/svg/avif/gif、mp3/ogg/wav/m4a/aac/flac、mp4/webm/ogv、lrc/vtt，单文件不为空且不超过 512 MiB，同名自动加序号。媒体编码仍须浏览器支持。可将素材放入项目 public，再用 entity/media/场景字段登记路径。
 
 条件和效果使用引擎现有 JSON：flag、not、all、any、visited、count；set、toggle、increment、addToList、removeFromList、unlockMaterial、markRead、appendNote、setAudio。完整结构从 `schema project` 获取，不新增表达式语言。
 
@@ -84,13 +84,51 @@ node scripts/magickisa.mjs doctor --workspace WORKSPACE_ID --json
 ```json
 {
   "operations": [
-    { "op": "line.update", "scene": "scene-001", "id": "line-001", "value": { "text": "星门在你面前开启。" } },
+    {
+      "op": "line.update",
+      "scene": "scene-001",
+      "id": "line-001",
+      "value": { "text": "星门在你面前开启。" }
+    },
     { "op": "scene.link", "id": "scene-001", "value": "crossroad" },
-    { "op": "scene.add", "id": "crossroad", "value": { "title": "岔路", "lines": [{ "id": "crossroad-1", "text": "是否穿过星门？" }] } },
-    { "op": "choice.add", "scene": "crossroad", "id": "enter", "value": { "label": "穿过星门", "target": "arrival", "effects": [{ "type": "set", "key": "entered", "value": true }] } },
-    { "op": "scene.add", "id": "arrival", "value": { "title": "抵达", "lines": [{ "id": "arrival-1", "text": "欢迎来到另一片天空。" }] } },
-    { "op": "condition.set", "target": "scene", "scene": "arrival", "value": { "type": "flag", "key": "entered", "equals": true } },
-    { "op": "effect.add", "phase": "complete", "scene": "arrival", "value": { "type": "appendNote", "text": "完成星门旅途" } }
+    {
+      "op": "scene.add",
+      "id": "crossroad",
+      "value": {
+        "title": "岔路",
+        "lines": [{ "id": "crossroad-1", "text": "是否穿过星门？" }]
+      }
+    },
+    {
+      "op": "choice.add",
+      "scene": "crossroad",
+      "id": "enter",
+      "value": {
+        "label": "穿过星门",
+        "target": "arrival",
+        "effects": [{ "type": "set", "key": "entered", "value": true }]
+      }
+    },
+    {
+      "op": "scene.add",
+      "id": "arrival",
+      "value": {
+        "title": "抵达",
+        "lines": [{ "id": "arrival-1", "text": "欢迎来到另一片天空。" }]
+      }
+    },
+    {
+      "op": "condition.set",
+      "target": "scene",
+      "scene": "arrival",
+      "value": { "type": "flag", "key": "entered", "equals": true }
+    },
+    {
+      "op": "effect.add",
+      "phase": "complete",
+      "scene": "arrival",
+      "value": { "type": "appendNote", "text": "完成星门旅途" }
+    }
   ]
 }
 ```
@@ -127,13 +165,12 @@ node scripts/magickisa.mjs doctor --workspace WORKSPACE_ID --recover --lock "检
 
 只允许恢复所选工程或已知服务锁，且 token 相同、持有进程均已退出。未知归属或活进程锁拒绝自动恢复；不按“时间久”猜测锁失效。手工改工程文件的外部程序不遵守锁，revision 可发现已观察到的修改，但不能提供文件系统级跨应用事务保证。
 
-保存备份仍在工作区 backups；构建输出仍在工作区 dist。工程包使用现有格式 1、SHA256 与路径安全检查，不包含浏览器草稿、历史备份或引擎；导入不覆盖旧项目。
+保存备份仍在工作区 backups；构建输出仍在工作区 dist。工程包使用格式 2、SHA256 与路径安全检查，不包含浏览器草稿、历史备份或引擎；导入不覆盖旧项目。`build --base /games/my-game/` 支持部署至网站子目录。
 
 ## 验证边界
 
 静态图只计算配置连接；条件是否成立取决于实际变量、效果和运行历史。本轮不提供剧情模拟或自动通关工具。使用 `studio --workspace ID`，在真实预览检查分支、输入、OP/ED 与音频。
 
-只支持现有工作区与现代 schemaVersion: 2。兼容档使用冻结的 [v1.0legacy](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。没有 MCP、专用剧本语法、外部工程目录或自动模型调用。
-
+只支持现有工作区与现代 schemaVersion: 3。兼容档使用冻结的 [v1.0legacy](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。没有 MCP、专用剧本语法、外部工程目录或自动模型调用。
 
 `studio --workspace ID --no-open` starts the full service without opening a browser (useful for automation). Stop with Ctrl+C.

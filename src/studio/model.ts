@@ -1,6 +1,7 @@
 import type { StoryProject, StoryNode, Effect } from "../engine/types";
 import { randomId } from "../engine/id";
 import { resolveImage, isExternalResource } from "../engine/resource.js";
+import { deploymentResource } from "../engine/projectResources";
 export type AuthorNode = StoryNode;
 export type Profile = "modern";
 export type AuthorProject = Omit<StoryProject, "nodes"> & {
@@ -48,9 +49,12 @@ export function mediaUrl(profile: Profile, s: string) {
   const workspace = new URLSearchParams(location.search).get("workspaceId");
   return !s
     ? ""
-    : s.startsWith("/") && !isExternalResource(s)
-      ? `/__studio/media/${profile}${workspace ? "/@" + workspace : ""}${s.split("/").map(encodeURIComponent).join("/")}`
-      : s;
+    : s.startsWith("/__studio/media/")
+      ? s
+      : deploymentResource(
+          s,
+          `/__studio/media/${profile}${workspace ? "/@" + workspace : ""}/`,
+        );
 }
 export function assetUrl(p: AuthorProject, s: string) {
   const ref = resolveImage(p, s);

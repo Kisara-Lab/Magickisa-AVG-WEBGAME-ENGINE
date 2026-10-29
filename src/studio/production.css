@@ -1,0 +1,56 @@
+.production-stage {
+  position: relative;
+  touch-action: none;
+  max-width: 100%;
+}
+.production-safe-area {
+  position: absolute;
+  inset: 5%;
+  border: 1px dashed #f4d47a;
+  pointer-events: none;
+}
+.production-timeline {
+  overflow: auto;
+  max-height: 400px;
+  max-width: 100%;
+  border: 1px solid #6b4d14;
+  margin-block: 12px;
+}
+.production-track {
+  min-height: 46px;
+  border-bottom: 1px solid #8f6928;
+  padding-block: 3px;
+}
+.production-track button {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.production-track button[aria-pressed="true"] {
+  outline: 3px solid #24201b;
+  outline-offset: -3px;
+}
+.st-content textarea[aria-label="轨道关键帧 JSON"],
+.st-content textarea[aria-label="剧情测试 JSON"] {
+  width: 100%;
+  min-height: 220px;
+  font-family: monospace;
+}
+.sequence-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #121318;
+  color: #fff;
+}
+.sequence-world {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+}
+@media (max-width: 700px) {
+  .production-track {
+    min-height: 48px;
+  }
+}
