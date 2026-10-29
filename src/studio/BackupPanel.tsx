@@ -70,10 +70,19 @@ export function BackupPanel({
           <article key={b.id}>
             <strong>{b.title}</strong>
             <p>
-              {new Date(b.createdAt).toLocaleString()} · {b.scenes} 场景 ·{" "}
-              {b.studio ? "含创作资料" : "无创作资料"} ·{" "}
+              {new Date(b.createdAt).toLocaleString()} · 格式 {b.schemaVersion}{" "}
+              · {b.scenes} 场景 · {b.studio ? "含创作资料" : "无创作资料"} ·{" "}
               {b.sync ? "含同步基线" : "无同步基线"}
             </p>
+            {(busy || dirty || b.schemaVersion !== 3) && (
+              <p role="status">
+                {b.schemaVersion !== 3
+                  ? "此备份不是当前格式 3，无法恢复。原文件保留，请使用对应版本引擎读取。"
+                  : busy
+                    ? "正在处理另一项备份操作，请稍候。"
+                    : "请先保存或放弃当前工程、JSON 与创作资料修改。"}
+              </p>
+            )}
             <button
               disabled={busy || dirty || b.schemaVersion !== 3}
               onClick={() =>

@@ -1,4 +1,5 @@
 import type { StorageAdapter } from "../engine/types";
+import { fontSizeLimits } from "../engine/readingLimits";
 export interface PlayerPreferences {
   fontSize: number;
   lineHeight: number;
@@ -41,7 +42,7 @@ export function readPreferences(
     : { musicLabel: storage.getItem("magickisa:music-label") !== "off" };
   const p = { ...defaultPreferences, ...defaults, ...audio };
   for (const [key, min, max] of [
-    ["fontSize", 16, 32],
+    ["fontSize", fontSizeLimits.min, fontSizeLimits.max],
     ["lineHeight", 1.4, 2.4],
     ["opacity", 0.75, 1],
     ["characterDelay", 0, 120],

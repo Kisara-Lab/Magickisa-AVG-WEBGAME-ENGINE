@@ -1,4 +1,5 @@
 import type { StoryProject, Condition, Effect, Value } from "../engine/types";
+import { interpolationKeys } from "../engine/interpolation";
 export interface VariableUse {
   key: string;
   mode: "read" | "write" | "input";
@@ -58,6 +59,15 @@ export function variableIndex(p: StoryProject) {
     effects(n.onComplete, n.title + " · 完成", n.id);
     for (const l of n.lines) {
       condition(l.condition, n.title + " · " + l.id, n.id);
+      for (const key of interpolationKeys(l.text))
+        uses.push({
+          key,
+          mode: "read",
+          type: "unknown",
+          nodeId: n.id,
+          label: n.title + " · " + l.id,
+          field: "text",
+        });
       if (l.input)
         uses.push({
           key: l.input.key,
@@ -85,7 +95,8 @@ export function variableIndex(p: StoryProject) {
     locations,
     warnings: [
       ...(locations.some((l) => l.mode === "read") &&
-      !locations.some((l) => l.mode !== "read")
+      !locations.some((l) => l.mode !== "read") &&
+      !Object.hasOwn(p.variables ?? {}, key)
         ? ["只发现读取，未发现写入；可能由外部赋值"]
         : []),
       ...(new Set(locations.map((l) => l.type).filter((t) => t !== "unknown"))

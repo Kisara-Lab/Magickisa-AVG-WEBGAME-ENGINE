@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fontSizeLimits } from "../engine/readingLimits";
 import type { StoryProject } from "../engine/types";
 import { storyTestSuiteSchema, runStorySuite } from "../engine/storyTest";
 import type { StudioDataController } from "./useStudioData";
@@ -95,7 +96,13 @@ export function ProductionPanel({
           ))}
           {(
             [
-              ["fontSize", "默认字号", 16, 40, 1],
+              [
+                "fontSize",
+                "默认字号",
+                fontSizeLimits.min,
+                fontSizeLimits.max,
+                1,
+              ],
               ["panelOpacity", "窗口不透明度", 0.75, 1, 0.05],
               ["dialogueWidth", "窗口宽度百分比", 50, 100, 1],
             ] as const

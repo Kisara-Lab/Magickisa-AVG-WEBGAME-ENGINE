@@ -63,7 +63,6 @@ export function SaveRecovery({
       <SavePanel
         project={project}
         slots={slots}
-        current={createSave(project)}
         confirm={(message, action) => setConfirm({ message, action })}
         onLoad={onRecover}
         notify={setMessage}

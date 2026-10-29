@@ -129,7 +129,9 @@ function safeName(name: string) {
     !["manifest.json", "project.json", "README.txt"].includes(name) &&
     !name.startsWith("public/") &&
     !/^content\/[^/]+\.json$/.test(name) &&
-    !/^content\/authoring\/(?:.*\.json|sources\/[^/]+\.(?:txt|md))$/.test(name)
+    !/^content\/authoring\/(?:.*\.json|AGENTS\.md|README\.md|sources\/[^/]+\.(?:txt|md))$/.test(
+      name,
+    )
   )
     throw new Error("压缩包包含不支持的文件：" + name);
   return name;

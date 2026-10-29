@@ -1,4 +1,5 @@
 import type { PlayerPreferences } from "./preferences";
+import { fontSizeLimits } from "../engine/readingLimits";
 export function ReadingSettings({
   value,
   onChange,
@@ -28,7 +29,13 @@ export function ReadingSettings({
   );
   return (
     <section className="reading-settings">
-      {slider("fontSize", "正文字号", 16, 32, 1)}
+      {slider(
+        "fontSize",
+        "正文字号",
+        fontSizeLimits.min,
+        fontSizeLimits.max,
+        1,
+      )}
       {slider("lineHeight", "正文行距", 1.4, 2.4, 0.1)}
       {slider("opacity", "对话框不透明度", 0.75, 1, 0.05)}
       {slider("characterDelay", "每字间隔（毫秒，0 为整句）", 0, 120, 10)}

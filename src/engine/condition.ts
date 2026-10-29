@@ -74,7 +74,7 @@ function evaluateValue(
     case "flag":
       return c.equals === undefined
         ? !!v[c.key]
-        : JSON.stringify(v[c.key]) === JSON.stringify(c.equals);
+        : jsonEqual(v[c.key], c.equals);
     case "not":
       return !evaluateCondition(c.condition, v, visited, state, observe);
     case "all":

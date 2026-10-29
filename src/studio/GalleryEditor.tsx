@@ -12,7 +12,7 @@ export function GalleryEditor({
 }) {
   const [id, setId] = useState("");
   const items = project.gallery ?? [],
-    entry = items.find((g) => g.id === id) ?? items[0];
+    entry = items.find((g) => g.id === id);
   const change = (value: NonNullable<typeof entry>) =>
     onChange({
       ...project,
@@ -38,7 +38,11 @@ export function GalleryEditor({
       />
       <label>
         选择画廊条目
-        <select value={entry?.id ?? ""} onChange={(e) => setId(e.target.value)}>
+        <select
+          aria-label="选择画廊条目"
+          value={entry?.id ?? ""}
+          onChange={(e) => setId(e.target.value)}
+        >
           <option value="">选择条目</option>
           {items.map((g) => (
             <option key={g.id} value={g.id}>

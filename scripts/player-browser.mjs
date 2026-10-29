@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { issuePlayerBrowser } from "./issue-player-browser.mjs";
 export async function playerBrowser(browser, origin) {
   const project = {
     schemaVersion: 3,
@@ -324,6 +325,22 @@ export async function playerBrowser(browser, origin) {
       await button("菜单").evaluate((e) => e === document.activeElement),
       true,
     );
+    // Focus return must preserve story navigation; keyboard Tab still activates buttons.
+    await page.keyboard.press("ArrowRight");
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "first arrow completes revealing text",
+    );
+    await page.keyboard.press("ArrowRight");
+    assert.equal((await snapshot()).lineIndex, 2);
+    await page.keyboard.press("Space");
+    assert.equal(
+      (await snapshot()).lineIndex,
+      2,
+      "first press completes revealing text",
+    );
+    await page.evaluate(() => window.__MAGICKISA_ENGINE__.jump("hall", 1));
     await page.reload();
     await button("继续游戏").click();
     assert.equal(
@@ -407,6 +424,8 @@ export async function playerBrowser(browser, origin) {
     await page
       .getByRole("heading", { name: "存档需要处理", exact: true })
       .waitFor();
+    assert.equal(await button("保存到此槽").count(), 0);
+    assert.equal(await button("导出当前进度").count(), 0);
     await page
       .locator('[data-slot="manual-01"]')
       .getByRole("button", { name: "读取", exact: true })
@@ -646,6 +665,7 @@ export async function playerBrowser(browser, origin) {
   } finally {
     await nvlContext.close();
   }
+  await issuePlayerBrowser(browser, origin);
   console.log(
     "Player browser: saves, reading, clues, keyboard, ownership, recovery and responsive layouts passed.",
   );

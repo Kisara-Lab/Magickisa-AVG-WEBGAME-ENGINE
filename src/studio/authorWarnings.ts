@@ -2,6 +2,12 @@ import type { AuthorProject, Profile } from "./model";
 import type { Condition } from "../engine/types";
 import { analyzeGraph } from "../engine/graph";
 import { variableIndex } from "./logicIndex";
+import { interpolationKeys } from "../engine/interpolation";
+import {
+  interfaceLabels,
+  interfaceFeatures,
+  notificationKeys,
+} from "../engine/uiConfig";
 export function authorWarnings(p: AuthorProject, profile: Profile) {
   const issues: {
     code: string;
@@ -11,6 +17,45 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
     lineId?: string;
     field?: string;
   }[] = [];
+  for (const [group, known] of [
+    ["labels", Object.keys(interfaceLabels)],
+    ["enabled", [...Object.keys(interfaceFeatures), "music"]],
+    [
+      "notifications",
+      [
+        ...notificationKeys,
+        ...p.materials.map((m) =>
+          m.category === "note" ? "notes" : m.category,
+        ),
+      ],
+    ],
+  ] as const)
+    for (const key of Object.keys(p.ui?.[group] ?? {}))
+      if (!known.includes(key))
+        issues.push({
+          code: "unknown-ui-key",
+          severity: "warning",
+          field: `ui.${group}.${key}`,
+          message: `界面配置 ${group}.${key} 在当前版本没有对应入口，原值保留。`,
+        });
+  const knownVariables = new Set(
+    variableIndex(p)
+      .filter((v) => v.locations.some((l) => l.mode !== "read"))
+      .map((v) => v.key),
+  );
+  Object.keys(p.variables ?? {}).forEach((key) => knownVariables.add(key));
+  for (const n of p.nodes)
+    for (const l of n.lines)
+      for (const key of interpolationKeys(l.text))
+        if (!key || !knownVariables.has(key))
+          issues.push({
+            code: "unknown-interpolation",
+            severity: "warning",
+            nodeId: n.id,
+            lineId: l.id,
+            field: "台词正文",
+            message: `台词插值 {{${key}}} ${key ? "未发现声明、输入或效果赋值；若由外部提供，请在预览中验证。" : "缺少变量名。"}`,
+          });
   const condition = (
     c: Condition | undefined,
     owner: string,

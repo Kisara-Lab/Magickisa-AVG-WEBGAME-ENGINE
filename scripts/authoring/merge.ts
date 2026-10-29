@@ -173,6 +173,29 @@ export function merge<T>(
   const changes: any[] = [],
     conflicts: any[] = [],
     blocked: string[] = [];
+  const deferred: { path: string; reason: string; origin: Origin }[] = [];
+  const nextRefusals: NonNullable<SyncState["refusals"]> = {};
+  const subtree = (at: string) =>
+    Object.fromEntries(
+      entries
+        .filter((e) => e.path === at || e.path.startsWith(at + "/"))
+        .map((e) => [e.path, e.cell]),
+    );
+  for (const [at, rejected] of Object.entries(state.refusals ?? {})) {
+    const entry = entries.find((e) => e.path === at);
+    const explicit = resolutions.some(
+      (r) => r.path === at || at.startsWith(r.path + "/"),
+    );
+    if (entry && !explicit && equal(subtree(at), rejected)) {
+      nextRefusals[at] = rejected;
+      deferred.push({
+        path: at,
+        reason: "previously-kept-current",
+        origin: entry.origin,
+      });
+      blocked.push(at);
+    }
+  }
   const ordered = [...entries].sort(
     (a, b) => segments(a.path).length - segments(b.path).length,
   );
@@ -181,8 +204,7 @@ export function merge<T>(
     const choice = [...resolutions]
       .filter((r) => at === r.path || at.startsWith(r.path + "/"))
       .sort((a, b) => b.path.length - a.path.length)[0]?.take;
-    nextEntries[at] = entry.cell;
-    if (blocked.some((p) => at.startsWith(p + "/"))) continue;
+    if (blocked.some((p) => at === p || at.startsWith(p + "/"))) continue;
     const raw = get(current, at);
     const actual =
       entry.mode === "record" && raw.present
@@ -255,9 +277,18 @@ export function merge<T>(
       continue;
     }
     if (choice === "current") {
+      if (entry.mode === "record" || entry.mode === "remove") {
+        nextRefusals[at] = subtree(at);
+        deferred.push({
+          path: at,
+          reason: "kept-current",
+          origin: entry.origin,
+        });
+      } else nextEntries[at] = entry.cell;
       if (entry.mode === "record") blocked.push(at);
       continue;
     }
+    nextEntries[at] = entry.cell;
     if (
       !choice &&
       base !== undefined &&
@@ -276,5 +307,5 @@ export function merge<T>(
       changes.push({ ...entry, before, after: entry.cell });
     }
   }
-  return { project, changes, conflicts, nextEntries };
+  return { project, changes, conflicts, deferred, nextEntries, nextRefusals };
 }

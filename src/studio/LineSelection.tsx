@@ -125,6 +125,7 @@ export function LineSelection({
       {error && <p role="alert">{error}</p>}
       {confirm && (
         <Modal title="确认删除选中台词" onClose={() => setConfirm(false)}>
+          {error && <p role="alert">{error}</p>}
           <p>
             将删除 {selected.length}{" "}
             条台词及其高级属性。可通过一次撤销恢复；引用这些台词的测试需复核。

@@ -1,5 +1,9 @@
 # Agent Based MAGICKISA 开发指南
 
+同步结果中的 `deferred` 表示作者已选择保留当前记录／拒绝删除，不等于原稿已应用。重复同步会继续列出；需要重新采用时，对稳定路径显式提交 `take: "incoming"` 的 resolutions。不要删除基线来强制接管。工程包携带项目自定义 `authoring/AGENTS.md` 和 `README.md`；导入后先查询实际工作区 ID，再执行其中命令。
+
+台词插值使用 `{{变量名}}`，允许名称两侧空格。请检查 unknown-interpolation 警告；动态赋值需在真实预览中验证。玩家文字输入仅绑定字符串变量。音乐鉴赏条目使用 `unlockNode`，未知的 `unlock` 等字段会直接拒绝，不会静默丢弃。详见 [Issue 核查记录](ISSUE-HARDENING.md)。
+
 ## 调查与非线性文字游戏（dev.3）
 
 先读取现有 ID 与资源，把地点回访、询问、线索获取和结局整理为场景与分支，允许自环和多个分支指向同一目标。使用 `material` 检查资料已解锁／已读，`contains` 检查列表变量；不要自行发明任务 schema。条件说明见 [调查工作台手册](INVESTIGATION.md)。

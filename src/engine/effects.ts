@@ -1,4 +1,5 @@
 import type { Effect, EngineSave, Value } from "./types";
+import { jsonEqual } from "./condition";
 export const effectHandlers = new Map<
   string,
   (save: EngineSave, effect: Effect) => EngineSave
@@ -25,13 +26,19 @@ export function applyEffects(
       case "toggle":
         v[e.key] = !v[e.key];
         break;
-      case "increment":
-        v[e.key] = Number(v[e.key] ?? 0) + e.amount;
+      case "increment": {
+        const next = Number(v[e.key] ?? 0) + e.amount;
+        if (!Number.isFinite(next))
+          throw new Error(
+            `变量 ${e.key} 无法进行有限数值运算，请检查输入和效果。`,
+          );
+        v[e.key] = next;
         break;
+      }
       case "addToList": {
         const current = v[e.key];
         const list: Value[] = Array.isArray(current) ? [...current] : [];
-        if (!list.some((x) => JSON.stringify(x) === JSON.stringify(e.value)))
+        if (!list.some((x) => jsonEqual(x, e.value)))
           list.push(structuredClone(e.value));
         v[e.key] = list;
         break;
@@ -39,7 +46,7 @@ export function applyEffects(
       case "removeFromList": {
         const list = v[e.key];
         v[e.key] = Array.isArray(list)
-          ? list.filter((x) => JSON.stringify(x) !== JSON.stringify(e.value))
+          ? list.filter((x) => !jsonEqual(x, e.value))
           : [];
         break;
       }

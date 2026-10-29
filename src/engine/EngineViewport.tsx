@@ -4,6 +4,7 @@ import { resolveAsset, resolveScene } from "./media";
 import { CharacterStage } from "./character";
 import { evaluateCondition } from "./condition";
 import { SequenceStage } from "./SequenceStage";
+import { interpolate } from "./interpolation";
 export function EngineViewport({
   context,
   onAdvance,
@@ -49,11 +50,7 @@ export function EngineViewport({
     0,
   );
   const paragraph = (text: string) =>
-    text
-      .replace(/\*\*/g, "")
-      .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
-        String(save.variables[key] ?? ""),
-      );
+    interpolate(text.replace(/\*\*/g, ""), save.variables);
   return (
     <section
       className={`stage ${nvl ? "stage-nvl" : ""} ${node?.presentation === "dedication" && !context.save.presentation && !context.save.completed ? "dedication-stage" : ""}`}
@@ -126,12 +123,7 @@ export function EngineViewport({
           {line ? (
             <>
               <span className="line-in" ref={currentText}>
-                {visibleText ??
-                  line.text
-                    .replace(/\*\*/g, "")
-                    .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
-                      String(save.variables[key] ?? ""),
-                    )}
+                {visibleText ?? paragraph(line.text)}
               </span>
               {input && (
                 <label
