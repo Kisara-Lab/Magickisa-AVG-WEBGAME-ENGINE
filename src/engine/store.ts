@@ -45,6 +45,8 @@ export class EngineStore {
     this.runtime = new StoryRuntime(
       project,
       initial || createSave(project, slot),
+      options.observeCondition,
+      options.onSkipLine,
     );
     this.current = structuredClone(this.runtime.save);
     this.collections = new CollectionStore(project.id, this.storage);

@@ -5,6 +5,7 @@ import { CharacterStage } from "./character";
 import { evaluateCondition } from "./condition";
 import { SequenceStage } from "./SequenceStage";
 import { interpolate } from "./interpolation";
+import type { ChoiceHint } from "./choiceHints";
 export function EngineViewport({
   context,
   onAdvance,
@@ -13,6 +14,7 @@ export function EngineViewport({
   children,
   visibleText,
   statusText,
+  choiceHints,
 }: {
   context: EngineRendererContext;
   onAdvance: () => void;
@@ -21,6 +23,7 @@ export function EngineViewport({
   children?: ReactNode;
   visibleText?: string;
   statusText?: string;
+  choiceHints?: ChoiceHint[];
 }) {
   const { project, node, line, save, choices } = context;
   const input = line?.input;
@@ -140,12 +143,16 @@ export function EngineViewport({
                 </label>
               )}
             </>
-          ) : choices.length ? (
+          ) : choiceHints?.length || choices.length ? (
             <div className="choice-list">
-              {choices.map((c, i) => (
+              {(
+                choiceHints ??
+                choices.map((choice) => ({ choice, allowed: true, reason: "" }))
+              ).map(({ choice: c, allowed, reason }, i) => (
                 <button
                   key={c.id}
                   data-choice-id={c.id}
+                  disabled={!allowed}
                   onClick={(e) => {
                     e.stopPropagation();
                     onChoose(c.id);
@@ -153,8 +160,14 @@ export function EngineViewport({
                 >
                   <b>{String.fromCharCode(65 + i)}</b>
                   <span>{c.label}</span>
+                  {reason && <small>{reason}</small>}
                 </button>
               ))}
+              {!!choiceHints?.length && !choices.length && (
+                <p role="status">
+                  当前没有可用选项。可查看资料或返回菜单；下一场景若可用，仍可继续。
+                </p>
+              )}
             </div>
           ) : (
             <span className="continue-card">

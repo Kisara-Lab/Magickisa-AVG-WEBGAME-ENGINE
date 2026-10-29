@@ -29,6 +29,7 @@ export class StoryRuntime {
     public project: StoryProject,
     public save: EngineSave,
     private observeCondition?: Parameters<typeof evaluateCondition>[4],
+    private onSkipLine?: (nodeId: string, lineId: string) => void,
   ) {
     this.enter();
     this.skipHidden();
@@ -124,8 +125,10 @@ export class StoryRuntime {
         this.save,
         this.observeCondition,
       )
-    )
+    ) {
+      this.onSkipLine?.(this.save.nodeId, this.line!.id);
       this.save.lineIndex++;
+    }
   }
   private syncPosition() {
     this.save.lineId = this.line?.id ?? null;

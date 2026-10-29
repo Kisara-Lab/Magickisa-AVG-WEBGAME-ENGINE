@@ -112,7 +112,7 @@ export function acquireLock(directory: string): () => void {
 export function acquireProjectWrite(ctx: ProjectContext) {
   const gate = acquireLock(gatePath);
   try {
-    if (lockInfo(buildLockPath)) throw busy("正在构建，请完成后再写入工程");
+    requireUnlocked(buildLockPath, "构建锁阻止工程写入");
     const unlock = acquireLock(projectLockPath(ctx));
     try {
       recoverCommit(ctx);
@@ -128,7 +128,7 @@ export function acquireProjectWrite(ctx: ProjectContext) {
 export function acquireRegistry() {
   const gate = acquireLock(gatePath);
   try {
-    if (lockInfo(buildLockPath)) throw busy("正在构建，暂不能登记工程");
+    requireUnlocked(buildLockPath, "构建锁阻止登记工程");
     return acquireLock(registryLockPath);
   } finally {
     gate();
@@ -137,22 +137,28 @@ export function acquireRegistry() {
 export function acquireBuild() {
   const gate = acquireLock(gatePath);
   try {
-    if (lockInfo(registryLockPath)) throw busy("正在登记工程，暂不能构建");
+    requireUnlocked(registryLockPath, "工程登记锁阻止构建");
     for (const entry of fs.readdirSync(workspaceRoot, {
       withFileTypes: true,
     })) {
-      if (
-        entry.isDirectory() &&
-        fs.existsSync(
+      if (entry.isDirectory())
+        requireUnlocked(
           path.join(workspaceRoot, entry.name, ".magickisa-write.lock"),
-        )
-      )
-        throw busy("有工程正在写入，暂不能构建");
+          "工程写锁阻止构建",
+        );
     }
     return acquireLock(buildLockPath);
   } finally {
     gate();
   }
+}
+function requireUnlocked(directory: string, message: string) {
+  const info = lockInfo(directory);
+  if (info)
+    throw Object.assign(
+      busy(`${message}：${info.state}；${directory}；${info.recoveryHint}`),
+      { details: info },
+    );
 }
 export function inspectLocks(ctx?: ProjectContext) {
   return [

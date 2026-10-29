@@ -89,7 +89,9 @@ export function GalleryPanel({
       {progress.endings.length ? (
         <ul>
           {progress.endings.map((id) => (
-            <li key={id}>{id}</li>
+            <li key={id}>
+              {store.project.nodes.find((n) => n.ending === id)?.title ?? id}
+            </li>
           ))}
         </ul>
       ) : (

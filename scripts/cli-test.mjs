@@ -478,6 +478,13 @@ try {
       undefined,
       4,
     );
+    fs.unlinkSync(path.join(globalLock, "owner.json"));
+    const unknown = await call(["project", "update", "--data", '{"title":"must-not-write"}'], undefined, 4);
+    assert.equal(unknown.details.state, "unknown");
+    assert.equal(unknown.details.directory, globalLock);
+    assert.ok(unknown.message.includes("unknown") && unknown.message.includes(globalLock));
+    await call(["doctor", "--recover", "--lock", globalLock, "--token", "cli-build-test"], undefined, 4);
+    assert.equal(fs.existsSync(globalLock), true, "unknown ownership never permits unsafe unlock");
   } finally {
     fs.rmSync(globalLock, { recursive: true });
   }

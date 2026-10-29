@@ -254,6 +254,9 @@ export interface StorageAdapter {
   setItem(key: string, value: string): void;
 }
 export interface SessionOptions {
+  /** Optional author tooling; omitted by ordinary player sessions. */
+  observeCondition?: (condition: Condition, result: boolean) => void;
+  onSkipLine?: (nodeId: string, lineId: string) => void;
   persist?: boolean;
   slotId?: string;
   initialSave?: unknown;
