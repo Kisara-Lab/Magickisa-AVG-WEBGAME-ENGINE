@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { describeError } from "../engine/errors";
+import { useState, useEffect } from "react";
 import type { EngineStore } from "../engine/store";
 import { resolveAsset } from "../engine/media";
 import { downloadText, type ConfirmAction } from "./SavePanel";
 export function GalleryPanel({
   store,
   confirm,
+  selectedId,
 }: {
   store: EngineStore;
   confirm: ConfirmAction;
+  selectedId?: string;
 }) {
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(selectedId ?? "");
+  useEffect(() => {
+    if (selectedId) setSelected(selectedId);
+  }, [selectedId]);
   const [imageError, setImageError] = useState(false),
     [retry, setRetry] = useState(0);
   const [recoveryError, setRecoveryError] = useState("");
@@ -19,7 +25,7 @@ export function GalleryPanel({
       setRecoveryError("");
       setRetry((n) => n + 1);
     } catch (error) {
-      setRecoveryError(String(error));
+      setRecoveryError(describeError(error));
     }
   };
   const progress = store.collections.snapshot;

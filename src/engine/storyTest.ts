@@ -1,3 +1,4 @@
+import { describeError } from "./errors";
 import { z } from "zod";
 import { assertProject, conditionSchema, valueSchema } from "./schema";
 import { createSave, importSave, saveSchema } from "./save";
@@ -257,7 +258,7 @@ export function runStoryTest(
     } catch (error) {
       failure = {
         step: index + 1,
-        message: error instanceof Error ? error.message : String(error),
+        message: describeError(error),
         node: runtime.save.nodeId,
         line: runtime.line?.id ?? null,
       };
@@ -323,7 +324,7 @@ export function runStorySuite(
         passed: false,
         failure: {
           step: 0,
-          message: error instanceof Error ? error.message : String(error),
+          message: describeError(error),
           node: test.initial?.node ?? project.startNodeId,
           line: null,
         },

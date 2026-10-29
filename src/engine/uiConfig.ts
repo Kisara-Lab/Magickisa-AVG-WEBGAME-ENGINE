@@ -18,7 +18,6 @@ export const interfaceLabels: Record<string, string> = {
   continue: "继续游戏",
   load: "读取存档",
   about: "作品介绍",
-  development: "开发预览",
 };
 export const interfaceFeatures: Record<string, string> = {
   musicGallery: "音乐鉴赏",
@@ -31,6 +30,17 @@ export const interfaceFeatures: Record<string, string> = {
   newspaper: "报刊",
 };
 export const notificationKeys = ["clue", "encyclopedia", "newspaper", "notes"];
+export function notificationKey(category: string) {
+  return category === "note" ? "notes" : category;
+}
+export function projectNotificationKeys(p: StoryProject) {
+  return [
+    ...new Set([
+      ...notificationKeys,
+      ...p.materials.map((m) => notificationKey(m.category)),
+    ]),
+  ];
+}
 export function uiLabel(
   p: StoryProject,
   key: string,

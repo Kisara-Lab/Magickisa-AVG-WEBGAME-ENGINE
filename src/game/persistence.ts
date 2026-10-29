@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import type { EngineSave, StoryProject, StorageAdapter } from "../engine/types";
 import { importSave, slotKey, writeSave } from "../engine/save";
 
@@ -56,7 +57,7 @@ export class PlayerSlots {
         error: "",
       };
     } catch (e) {
-      return { id, raw, save: null, error: String(e) };
+      return { id, raw, save: null, error: describeError(e) };
     }
   }
   list() {
@@ -92,7 +93,7 @@ export class PlayerSlots {
         error: "",
       };
     } catch (error) {
-      return { raw, save: null, error: String(error) };
+      return { raw, save: null, error: describeError(error) };
     }
   }
   recovery(id = "auto") {

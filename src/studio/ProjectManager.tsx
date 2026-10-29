@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { LEGACY_RELEASE_URL } from "../engine/support";
 import { useEffect, useRef, useState } from "react";
 import type { AuthorProject, Profile } from "./model";
@@ -120,7 +121,7 @@ export function ProjectManager({
           setProjects(data.projects);
           setUnsupported(data.unsupportedProjects || 0);
         })
-        .catch((e) => setError(String(e)));
+        .catch((e) => setError(describeError(e)));
   }, [open, profile]);
   useEffect(() => {
     if (!task || task.status !== "running") return;
@@ -136,7 +137,7 @@ export function ProjectManager({
         })
         .catch((e) => {
           if (!disposed) {
-            setError(String(e));
+            setError(describeError(e));
             setTask((t) =>
               t
                 ? {
@@ -159,7 +160,7 @@ export function ProjectManager({
     try {
       await fn();
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     } finally {
       setPending(false);
     }

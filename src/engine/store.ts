@@ -1,3 +1,4 @@
+import { describeError, errorSentence } from "./errors";
 import { StoryRuntime } from "./runtime";
 import { assertProject } from "./schema";
 import { createSave, importSave, readSave, writeSave } from "./save";
@@ -77,7 +78,7 @@ export class EngineStore {
         writeSave(this.runtime.save, this.storage);
         this.persistenceError = "";
       } catch (e) {
-        this.persistenceError = `进度未保存：${String(e)}。请导出存档，释放存储空间后重试。`;
+        this.persistenceError = `进度未保存：${errorSentence(e)}可先导出当前进度；请根据上述原因处理后重试保存。`;
       }
     }
     if (changed) {
@@ -98,7 +99,7 @@ export class EngineStore {
               try {
                 observer(structuredClone(event));
               } catch (error) {
-                this.observerError = String(error);
+                this.observerError = describeError(error);
               }
             }
           }

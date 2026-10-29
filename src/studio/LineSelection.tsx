@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import type { StoryProject } from "../engine/types";
 import { editSelectedLines } from "../authoring/batch";
@@ -31,7 +32,7 @@ export function LineSelection({
       setConfirm(false);
       if (["remove", "move"].includes(action)) setSelected([]);
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   };
   return (

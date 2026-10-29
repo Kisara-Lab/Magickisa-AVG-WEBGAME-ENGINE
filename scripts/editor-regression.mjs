@@ -24,6 +24,7 @@ export async function editorRegression(browser, origin) {
       document.body.append(host);
       window.fieldWrites = [];
       function Harness() {
+        const group = React.useRef(new Set()).current;
         const [value, setValue] = React.useState({
           a: 1,
         });
@@ -81,11 +82,13 @@ export async function editorRegression(browser, origin) {
               className: "material-list",
             },
             React.createElement(GalleryAudio, {
+              group,
               src: "",
               audio,
               volume: 0.5,
             }),
             React.createElement(GalleryAudio, {
+              group,
               src: "",
               audio,
               volume: 0,
@@ -264,8 +267,9 @@ export async function editorRegression(browser, origin) {
       })
       .click();
     await page.waitForFunction(
-      () => window.audioPlayers.length === 2 && !window.audioPlayers[1].paused,
+      () => window.audioPlayers.length === 1 && !window.audioPlayers[0].paused,
     );
+    assert.equal(await page.evaluate(() => window.audioPlayers[0].currentTime), 37);
     // The real presentation host must finish without audio, including empty OP pages.
     await page.evaluate(async () => {
       const { default: React } =

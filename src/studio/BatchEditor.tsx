@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import type { StoryProject } from "../engine/types";
 import {
@@ -45,7 +46,7 @@ export function BatchEditor({
       invalidate();
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   };
   return (
@@ -248,7 +249,7 @@ export function BatchEditor({
                 setRaw("");
                 setError("");
               } catch (e) {
-                setError(String(e));
+                setError(describeError(e));
               }
             }}
           >

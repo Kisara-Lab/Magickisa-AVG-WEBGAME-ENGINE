@@ -1,3 +1,4 @@
+import { describeError } from "./errors";
 import type { EngineSave, StoryProject, StoryChoice, Value } from "./types";
 import { evaluateCondition } from "./condition";
 import { applyEffects } from "./effects";
@@ -62,7 +63,7 @@ export class StoryRuntime {
           this.targetAllowed(c, basis),
       );
     } catch (error) {
-      this.availabilityError = `无法检查出口：${String(error)}`;
+      this.availabilityError = `无法检查出口：${describeError(error)}`;
       return [];
     }
   }

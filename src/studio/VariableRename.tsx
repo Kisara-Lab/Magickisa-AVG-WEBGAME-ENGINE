@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import { Fold, Modal } from "./components";
 import { studioRequest } from "./ProjectManager";
@@ -27,7 +28,7 @@ export function VariableRename({
     try {
       await action();
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }

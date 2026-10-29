@@ -1,3 +1,4 @@
+import { describeError } from "./errors";
 import { z } from "zod";
 import { valueSchema } from "./schema";
 import { contentLayout } from "./contentLayout.js";
@@ -211,7 +212,7 @@ export function readSave(
     return importSave(JSON.parse(text), p, slotId);
   } catch (e) {
     throw new Error(
-      `读取存档失败，原数据未被覆盖：${e instanceof Error ? e.message : String(e)}`,
+      `读取存档失败，原数据未被覆盖：${describeError(e)}`,
     );
   }
 }

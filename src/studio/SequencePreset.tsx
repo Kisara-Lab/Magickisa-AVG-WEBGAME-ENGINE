@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import { z } from "zod";
 import {
@@ -54,7 +55,7 @@ export function SequencePreset({
           try {
             add(sequence!);
           } catch (e) {
-            setError(String(e));
+            setError(describeError(e));
           }
         }}
       >
@@ -100,7 +101,7 @@ export function SequencePreset({
                 );
               setPending(data.sequence);
             } catch (e) {
-              setError(String(e));
+              setError(describeError(e));
             }
           }}
         />
@@ -126,7 +127,7 @@ export function SequencePreset({
               try {
                 add(pending);
               } catch (e) {
-                setError(String(e));
+                setError(describeError(e));
               }
             }}
           >

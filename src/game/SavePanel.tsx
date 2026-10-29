@@ -1,3 +1,4 @@
+import { describeError, errorSentence } from "../engine/errors";
 import { useState } from "react";
 import type { EngineSave, StoryProject } from "../engine/types";
 import { importSave } from "../engine/save";
@@ -38,7 +39,7 @@ export function SavePanel({
       setError("");
     } catch (e) {
       setError(
-        `操作未完成：${String(e)}。原槽位与当前进度保留，可导出后重试。`,
+        `操作未完成：${errorSentence(e)}原槽位与当前进度保留，可导出后重试。`,
       );
     }
   };
@@ -71,7 +72,7 @@ export function SavePanel({
                   );
                   setError("");
                 } catch (err) {
-                  setError(`导入未应用：${String(err)}`);
+                  setError(`导入未应用：${describeError(err)}`);
                 }
             }}
           />
