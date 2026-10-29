@@ -216,5 +216,7 @@ export function readSave(
   }
 }
 export function writeSave(save: EngineSave, storage: StorageAdapter): void {
+  // Validate before stringify: JSON would silently turn NaN/Infinity into null.
+  saveSchema.parse(save);
   storage.setItem(slotKey(save.projectId, save.slotId), JSON.stringify(save));
 }

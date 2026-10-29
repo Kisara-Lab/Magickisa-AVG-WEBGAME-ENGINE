@@ -67,7 +67,10 @@ export function renameVariable(
         line.input.key = key(line.input.key, `${field}.input.key`);
       line.text = line.text.replace(
         /\{\{([^}]+)\}\}/g,
-        (_, name: string) => `{{${key(name, `${field}.text`)}}}`,
+        (match, name: string) =>
+          name.trim() === from
+            ? `{{${key(name.trim(), `${field}.text`)}}}`
+            : match,
       );
     }
     for (const choice of node.choices ?? []) {

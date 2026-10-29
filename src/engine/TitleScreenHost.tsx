@@ -1,3 +1,5 @@
+import { featureEnabled, uiLabel } from "./uiConfig";
+import { validPublicLink } from "./links";
 import type { ReactNode } from "react";
 import type { StoryProject } from "./types";
 import { resolveAsset, resolveScene } from "./media";
@@ -48,12 +50,22 @@ export function TitleScreenHost({
           <button disabled={!canContinue} onClick={onContinue}>
             {labels.continue || "继续游戏"}
           </button>
-          {onLoad && <button onClick={onLoad}>读取存档</button>}
-          {onSettings && <button onClick={onSettings}>设置</button>}
-          {t.galleryUrl && (
-            <a href={t.galleryUrl}>{labels.gallery || "素材画廊"}</a>
+          {onLoad && (
+            <button onClick={onLoad}>{uiLabel(project, "load")}</button>
           )}
-          {t.aboutUrl && <a href={t.aboutUrl}>{labels.about || "作品介绍"}</a>}
+          {onSettings && (
+            <button onClick={onSettings}>
+              {uiLabel(project, "settings", "设置")}
+            </button>
+          )}
+          {t.galleryUrl &&
+            validPublicLink(t.galleryUrl) &&
+            featureEnabled(project, "gallery") && (
+              <a href={t.galleryUrl}>{labels.gallery || "素材画廊"}</a>
+            )}
+          {t.aboutUrl && validPublicLink(t.aboutUrl) && (
+            <a href={t.aboutUrl}>{labels.about || "作品介绍"}</a>
+          )}
           {children}
         </div>
         {continueSummary && (
@@ -72,15 +84,22 @@ export function TitleScreenHost({
       </div>
       <footer className="title-footer">
         <nav aria-label="相关作品">
-          {t.footerLinks?.map((link) => (
-            <a key={link.url} href={link.url} target="_blank" rel="noreferrer">
-              {link.label}
-            </a>
-          ))}
+          {t.footerLinks
+            ?.filter((link) => validPublicLink(link.url))
+            .map((link) => (
+              <a
+                key={link.url}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {link.label}
+              </a>
+            ))}
         </nav>
         <div className="title-studio">
           {t.studio}
-          {t.studioUrl && (
+          {t.studioUrl && validPublicLink(t.studioUrl) && (
             <>
               {" "}
               ·{" "}

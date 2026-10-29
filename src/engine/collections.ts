@@ -38,6 +38,41 @@ export class CollectionStore {
   get snapshot() {
     return structuredClone(this.progress);
   }
+  get needsRecovery() {
+    return this.unreadable;
+  }
+  raw() {
+    return this.storage?.getItem(this.key) ?? null;
+  }
+  reload() {
+    try {
+      const raw = this.raw();
+      const disk = raw
+        ? schema.parse(JSON.parse(raw))
+        : { formatVersion: 1 as const, gallery: [], endings: [] };
+      this.progress = {
+        formatVersion: 1,
+        gallery: [...new Set([...disk.gallery, ...this.progress.gallery])],
+        endings: [...new Set([...disk.endings, ...this.progress.endings])],
+      };
+      this.persisted = raw ? JSON.stringify(disk) : "";
+      this.unreadable = false;
+      this.error = "";
+    } catch (error) {
+      this.unreadable = true;
+      this.error = `收藏记录仍无法读取，原数据已保留：${String(error)}`;
+    }
+  }
+  rebuild() {
+    if (!this.storage) throw new Error("收藏存储不可用");
+    const raw = this.raw();
+    if (raw !== null) this.storage.setItem(`${this.key}:recovery`, raw);
+    const next = JSON.stringify(this.progress);
+    this.storage.setItem(this.key, next);
+    this.persisted = next;
+    this.unreadable = false;
+    this.error = "";
+  }
   update(project: StoryProject, save: EngineSave, persist = true) {
     this.progress = {
       formatVersion: 1,

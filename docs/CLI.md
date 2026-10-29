@@ -169,6 +169,10 @@ node scripts/magickisa.mjs doctor --workspace WORKSPACE_ID --recover --lock "检
 
 ## 验证边界
 
+损坏锁恢复：doctor 返回 `state: "unknown"`、`alive: null` 时，归属不可判定，不能用 `--token null` 解锁。先退出本引擎的全部 Studio／CLI／构建与启动器；无法确认残留进程时重启电脑后先不要启动引擎。将 doctor 指出的单个锁目录复制到引擎外留存，再离线移除该已核对目录，重新执行 doctor。活进程锁禁止清除；详见 [Issue 核查说明](ISSUE-HARDENING.md)。
+
+同步方案和 apply/status 的 `deferred` 列出被选择“保留当前”的记录接管或删除。重新采用须在 resolutions 对相同稳定路径显式选择 `take: "incoming"`；不需要修改或删除同步基线文件。
+
 静态图只计算配置连接；条件是否成立取决于实际变量、效果和运行历史。本轮不提供剧情模拟或自动通关工具。使用 `studio --workspace ID`，在真实预览检查分支、输入、OP/ED 与音频。
 
 只支持现有工作区与现代 schemaVersion: 3。兼容档使用冻结的 [v1.0legacy](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。没有 MCP、专用剧本语法、外部工程目录或自动模型调用。

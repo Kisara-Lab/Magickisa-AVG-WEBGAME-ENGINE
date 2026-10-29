@@ -1,10 +1,27 @@
 import { useState } from "react";
 import type { EngineStore } from "../engine/store";
 import { resolveAsset } from "../engine/media";
-export function GalleryPanel({ store }: { store: EngineStore }) {
+import { downloadText, type ConfirmAction } from "./SavePanel";
+export function GalleryPanel({
+  store,
+  confirm,
+}: {
+  store: EngineStore;
+  confirm: ConfirmAction;
+}) {
   const [selected, setSelected] = useState("");
   const [imageError, setImageError] = useState(false),
     [retry, setRetry] = useState(0);
+  const [recoveryError, setRecoveryError] = useState("");
+  const run = (action: () => void) => {
+    try {
+      action();
+      setRecoveryError("");
+      setRetry((n) => n + 1);
+    } catch (error) {
+      setRecoveryError(String(error));
+    }
+  };
   const progress = store.collections.snapshot;
   const entries = store.project.gallery ?? [];
   const entry = entries.find(
@@ -17,6 +34,7 @@ export function GalleryPanel({ store }: { store: EngineStore }) {
         {entries.length} 张画面。收藏跨周目保留，不改变剧情变量。
       </p>
       {store.collections.error && <p role="alert">{store.collections.error}</p>}
+      {recoveryError && <p role="alert">{recoveryError}</p>}
       <div className="player-menu">
         {entries.map((g) => (
           <button
@@ -87,8 +105,41 @@ export function GalleryPanel({ store }: { store: EngineStore }) {
       >
         导出收藏记录
       </button>
-      {store.collections.error && (
-        <button onClick={() => store.retrySave()}>重试保存收藏</button>
+      {store.collections.needsRecovery ? (
+        <div>
+          <p>
+            重新读取可恢复暂时的存储错误；若原数据已损坏，请先导出，再备份并重建。重建只保留本次已获得收藏。
+          </p>
+          <button onClick={() => run(() => store.collections.reload())}>
+            重新读取收藏记录
+          </button>
+          <button
+            onClick={() =>
+              run(() =>
+                downloadText(
+                  store.collections.raw() ?? "",
+                  "magickisa-collections-original.json",
+                ),
+              )
+            }
+          >
+            导出原收藏数据
+          </button>
+          <button
+            onClick={() =>
+              confirm(
+                "备份原收藏数据并以本次收藏重建？无法解析的旧解锁记录不能自动恢复；备份失败将停止操作。",
+                () => run(() => store.collections.rebuild()),
+              )
+            }
+          >
+            备份并重建收藏
+          </button>
+        </div>
+      ) : (
+        store.collections.error && (
+          <button onClick={() => store.retrySave()}>重试保存收藏</button>
+        )
       )}
     </section>
   );

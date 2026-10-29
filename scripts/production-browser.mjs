@@ -60,6 +60,10 @@ export async function productionBrowser(browser, origin) {
     const initial = await api("project");
     const project = initial.project;
     project.variables = { clue: { type: "boolean", initial: false } };
+    project.gallery = [
+      { id: "cg-1", title: "第一幅", asset: asset.url },
+      { id: "cg-2", title: "第二幅", asset: asset.url },
+    ];
     project.sequences = [
       {
         id: "test",
@@ -83,6 +87,22 @@ export async function productionBrowser(browser, origin) {
     await api("project", { project, revision: initial.revision });
     await page.goto(`${origin}/engine.html?profile=modern&workspaceId=${id}`);
     await page.getByRole("button", { name: "工程", exact: true }).click();
+    // Blank projects expose supported UI keys, and empty gallery selection is real.
+    await page.getByLabel("开始游戏 · newGame", { exact: true }).waitFor();
+    const gallerySelect = page.getByLabel("选择画廊条目", { exact: true });
+    assert.equal(await gallerySelect.inputValue(), "");
+    await gallerySelect.selectOption("cg-2");
+    assert.equal(
+      await page.getByLabel("画廊标题", { exact: true }).inputValue(),
+      "第二幅",
+    );
+    await gallerySelect.selectOption("");
+    assert.equal(
+      await page
+        .getByRole("button", { name: "移除此画廊条目", exact: true })
+        .count(),
+      0,
+    );
     await page.locator("summary").filter({ hasText: "协调重命名变量" }).click();
     await page.getByLabel("原变量名", { exact: true }).fill("clue");
     await page.getByLabel("新变量名", { exact: true }).fill("evidence");
@@ -222,6 +242,50 @@ export async function productionBrowser(browser, origin) {
         .scrollIntoViewIfNeeded();
       await page.screenshot({ path: "docs/images/production-mobile.png" });
     }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const oldBackup = path.resolve(
+      "workspace-projects",
+      id,
+      "backups",
+      "issue-old-format",
+    );
+    fs.mkdirSync(oldBackup, { recursive: true });
+    fs.writeFileSync(
+      path.join(oldBackup, "project.json"),
+      JSON.stringify({ ...project, schemaVersion: 2, title: "旧格式回归备份" }),
+    );
+    await page
+      .getByRole("button", { name: "读取备份列表", exact: true })
+      .click();
+    const oldCard = page
+      .locator("article")
+      .filter({ has: page.getByText("旧格式回归备份", { exact: true }) });
+    await oldCard.getByText(/此备份不是当前格式 3/).waitFor();
+    assert.equal(
+      await oldCard
+        .getByRole("button", { name: "检查恢复差异", exact: true })
+        .isDisabled(),
+      true,
+    );
+    // Invalid pending content must explain failed batch deletion inside its modal.
+    await page.locator("summary").filter({ hasText: "高级工程配置" }).click();
+    await page.getByRole("button", { name: "添加链接", exact: true }).click();
+    await page.getByRole("button", { name: "剧本", exact: true }).click();
+    await page.locator("summary").filter({ hasText: "多选台词操作" }).click();
+    await page.getByRole("button", { name: /选择全部搜索结果/ }).click();
+    await page
+      .getByRole("button", { name: "删除选中台词", exact: true })
+      .click();
+    const deletion = page.getByRole("dialog", {
+      name: "确认删除选中台词",
+      exact: true,
+    });
+    await deletion
+      .getByRole("button", { name: "确认删除选中台词", exact: true })
+      .click();
+    await deletion.getByRole("alert").waitFor();
+    assert.match(await deletion.getByRole("alert").innerText(), /footerLinks/);
+    await deletion.getByRole("button", { name: "取消", exact: true }).click();
     assert.deepEqual(errors, []);
     console.log(
       "PASS production browser: timeline keyboard/drag, one-step undo, visual keyframes, mobile overflow",

@@ -89,7 +89,7 @@ test("preferences isolate projects, migrate music label and clamp values; text s
       musicLabel: true,
     }),
   );
-  assert.equal(readPreferences(storage, "one").fontSize, 32);
+  assert.equal(readPreferences(storage, "one").fontSize, 40);
   assert.equal(readPreferences(storage, "one").autoDelay, 1);
   assert.equal(readPreferences(storage, "two").wheel, false);
   assert.deepEqual(graphemes("中👨‍👩‍👧‍👦e\u0301𠮷"), ["中", "👨‍👩‍👧‍👦", "e\u0301", "𠮷"]);

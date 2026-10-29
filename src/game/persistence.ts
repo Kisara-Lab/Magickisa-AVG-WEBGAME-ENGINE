@@ -6,7 +6,8 @@ export const manualSlots = Array.from(
   { length: 12 },
   (_, i) => `manual-${String(i + 1).padStart(2, "0")}`,
 );
-export const recoveryKey = (id: string) => `${slotKey(id)}:player-recovery`;
+export const recoveryKey = (id: string, slot = "auto") =>
+  `${slotKey(id, slot)}:player-recovery`;
 export function memoryStorage(): PlayerStorage {
   const entries = new Map<string, string>();
   return {
@@ -64,22 +65,40 @@ export class PlayerSlots {
   write(id: string, input: unknown) {
     if (!["auto", ...manualSlots].includes(id)) throw new Error("无效存档槽位");
     const save = importSave(input, this.project, id);
-    if (id === "auto") this.backup();
+    this.backup(id);
     save.savedAt = new Date().toISOString();
     writeSave(save, this.storage);
     return save;
   }
-  backup() {
-    const raw = this.storage.getItem(slotKey(this.project.id));
-    if (raw !== null) this.storage.setItem(recoveryKey(this.project.id), raw);
+  backup(id = "auto") {
+    if (!["auto", ...manualSlots].includes(id)) throw new Error("无效存档槽位");
+    const raw = this.storage.getItem(slotKey(this.project.id, id));
+    if (raw !== null)
+      this.storage.setItem(recoveryKey(this.project.id, id), raw);
   }
   remove(id: string) {
     if (!manualSlots.includes(id)) throw new Error("只能删除手动存档");
+    this.backup(id);
     this.storage.removeItem(slotKey(this.project.id, id));
   }
-  recovery() {
-    const raw = this.storage.getItem(recoveryKey(this.project.id));
-    return raw ? importSave(JSON.parse(raw), this.project) : null;
+  recoveryEntry(id = "auto") {
+    if (!["auto", ...manualSlots].includes(id)) throw new Error("无效存档槽位");
+    let raw: string | null = null;
+    try {
+      raw = this.storage.getItem(recoveryKey(this.project.id, id));
+      return {
+        raw,
+        save: raw ? importSave(JSON.parse(raw), this.project, id) : null,
+        error: "",
+      };
+    } catch (error) {
+      return { raw, save: null, error: String(error) };
+    }
+  }
+  recovery(id = "auto") {
+    const entry = this.recoveryEntry(id);
+    if (entry.error) throw new Error(entry.error);
+    return entry.save;
   }
 }
 export function saveSummary(project: StoryProject, save: EngineSave) {

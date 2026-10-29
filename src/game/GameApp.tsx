@@ -1,3 +1,5 @@
+import { menuLabels, uiLabel, featureEnabled } from "../engine/uiConfig";
+import { interpolate } from "../engine/interpolation";
 import { PlayerGate } from "./PlayerGate";
 import { useVoice } from "./useVoice";
 import { SequencePlayer } from "../engine/SequenceStage";
@@ -303,11 +305,10 @@ export function GameSession({
       setError(e instanceof Error ? e.message : String(e));
     }
   };
-  const text = (line?.text ?? "")
-    .replace(/\*\*/g, "")
-    .replace(/\{\{([^}]+)\}\}/g, (_, key: string) =>
-      String(save.variables[key] ?? ""),
-    );
+  const text = interpolate(
+    (line?.text ?? "").replace(/\*\*/g, ""),
+    save.variables,
+  );
   const segments = useMemo(() => graphemes(text), [text]);
   const revealKey = `${save.nodeId}:${line?.id}:${text}`;
   const [pageActive, setPageActive] = useState(true);
@@ -358,11 +359,18 @@ export function GameSession({
     );
     return () => clearInterval(timer);
   }, [revealKey, typed, preferences.characterDelay]);
-  const next = useMemo(
-    () => (node ? explainNext(project, node, save) : undefined),
-    [project, node, save],
-  );
-  const canAdvance = !!line || !save.completed || !!next?.allowed;
+  const next = useMemo(() => {
+    try {
+      return node ? explainNext(project, node, save) : undefined;
+    } catch (error) {
+      return { allowed: false, error: `无法检查出口：${String(error)}` };
+    }
+  }, [project, node, save]);
+  const logicError =
+    store.runtime.availabilityError ||
+    (next && "error" in next ? next.error : "");
+  const canAdvance =
+    !!line || (!logicError && (!save.completed || !!next?.allowed));
   const statusText = line?.input
     ? "等待输入"
     : line
@@ -426,8 +434,10 @@ export function GameSession({
       delete window.__MAGICKISA_DEBUG__;
     };
   }, [store]);
+  const pointerNavigation = useRef(false);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.code === "Tab") pointerNavigation.current = false;
       if (
         e.repeat ||
         e.isComposing ||
@@ -436,8 +446,15 @@ export function GameSession({
         e.metaKey ||
         e.shiftKey ||
         (e.target as HTMLElement).closest(
-          "input,textarea,select,button,[contenteditable=true]",
+          "input,textarea,select,[contenteditable=true]",
         )
+      )
+        return;
+      // Preserve native button activation, but allow story arrows after focus return.
+      if (
+        (e.target as HTMLElement).closest("button,[role=button],a") &&
+        (e.code === "Enter" ||
+          (e.code === "Space" && !pointerNavigation.current))
       )
         return;
       if (e.code === "Escape") {
@@ -666,19 +683,9 @@ export function GameSession({
     "--player-leading": preferences.lineHeight,
     "--player-opacity": preferences.opacity,
   } as CSSProperties;
-  const names: Record<string, string> = {
-    menu: "游戏菜单",
-    saves: "存读档",
-    settings: "阅读与演出设置",
-    history: "历史回看",
-    chapters: "章节目录",
-    notes: "旅者笔记",
-    music: "音乐鉴赏",
-    gallery: "画廊与结局",
-    clue: "证据",
-    encyclopedia: "百科全书",
-    newspaper: "报刊",
-  };
+  const names = Object.fromEntries(
+    Object.keys(menuLabels).map((key) => [key, uiLabel(project, key)]),
+  );
   const showMaterials = (category: string) => (
     <MaterialReader
       key={category}
@@ -715,16 +722,18 @@ export function GameSession({
                 "music",
                 "gallery",
                 "settings",
-              ].map((id) => (
-                <button key={id} onClick={() => open(id)}>
-                  {names[id]}
-                  {["clue", "encyclopedia", "newspaper", "notes"].includes(
-                    id,
-                  ) && unread(id)
-                    ? " · 未读"
-                    : ""}
-                </button>
-              ))}
+              ]
+                .filter((id) => featureEnabled(project, id))
+                .map((id) => (
+                  <button key={id} onClick={() => open(id)}>
+                    {names[id]}
+                    {["clue", "encyclopedia", "newspaper", "notes"].includes(
+                      id,
+                    ) && unread(id)
+                      ? " · 未读"
+                      : ""}
+                  </button>
+                ))}
               <button onClick={exportSave}>导出当前进度</button>
               <button
                 onClick={() => {
@@ -770,7 +779,7 @@ export function GameSession({
               )}
             </nav>
           ) : panel === "gallery" ? (
-            <GalleryPanel store={store} />
+            <GalleryPanel store={store} confirm={confirm} />
           ) : panel === "settings" ? (
             <>
               <ReadingSettings
@@ -1026,7 +1035,13 @@ export function GameSession({
       </div>
     );
   return (
-    <div className="app player-root" style={css}>
+    <div
+      className="app player-root"
+      style={css}
+      onPointerDownCapture={() => {
+        pointerNavigation.current = true;
+      }}
+    >
       {(store.temporary || store.persistenceError) && !embedded && (
         <div className="recovery-error" role="alert">
           <p>
@@ -1137,14 +1152,22 @@ export function GameSession({
           >
             快进
           </button>
-          <button onClick={() => open("history")}>历史</button>
-          <button onClick={() => open("saves")}>存读档</button>
-          <button onClick={() => open("menu")}>菜单</button>
+          {featureEnabled(project, "history") && (
+            <button onClick={() => open("history")}>
+              {uiLabel(project, "history", "历史")}
+            </button>
+          )}
+          <button onClick={() => open("saves")}>
+            {uiLabel(project, "saves")}
+          </button>
+          <button onClick={() => open("menu")}>
+            {uiLabel(project, "menu", "菜单")}
+          </button>
         </nav>
       </header>
-      {error && (
+      {(error || logicError) && (
         <div className="runtime-error" role="alert">
-          {error}
+          {error || logicError}
           <button onClick={() => setError("")}>关闭</button>
         </div>
       )}

@@ -430,6 +430,7 @@ export function makePlan(
   const nextState: SyncState = {
     formatVersion: 1,
     entries: merged.nextEntries,
+    refusals: merged.nextRefusals,
     project: parsed.success ? parsed.data : current.project,
     operationResults: compiled.operationResults,
     sourceHashes: compiled.sourceHashes,
@@ -458,6 +459,7 @@ export function makePlan(
     resolutions,
     changes: merged.changes,
     conflicts: merged.conflicts,
+    deferred: merged.deferred,
     issues,
     operations,
     nextState,
@@ -503,11 +505,18 @@ export function applyPlan(
         changed,
         revision: current.revision,
         changes: fresh.changes,
+        deferred: fresh.deferred,
       };
     if (!changed && equal(readState(ctx), fresh.nextState))
-      return { changed: false, revision: current.revision, backup: null };
+      return {
+        changed: false,
+        revision: current.revision,
+        backup: null,
+        deferred: fresh.deferred,
+      };
     return {
       changed,
+      deferred: fresh.deferred,
       ...saveProject(ctx, next, current.revision, true, fresh.nextState),
     };
   } finally {
@@ -644,6 +653,10 @@ export function status(ctx: ProjectContext) {
         state.sourceHashes?.[source.id] !== source.currentSha256,
     })),
     managedFields: Object.keys(state.entries).length,
+    deferred: Object.keys(state.refusals ?? {}).map((path) => ({
+      path,
+      reason: "kept-current",
+    })),
     localChanges: Object.entries(state.entries)
       .filter(
         ([pointer, baseline]) =>

@@ -1,3 +1,4 @@
+import { InterfaceSettings } from "./InterfaceSettings";
 import { requireModernProject } from "../engine/support";
 import {
   changeRecord,
@@ -1902,28 +1903,7 @@ export function Studio() {
                           ))}
                         </div>
                       </Card>
-                      <Card title="界面功能开关">
-                        {Object.entries(project.ui?.enabled || {}).map(
-                          ([key, value]) => (
-                            <Check
-                              key={key}
-                              label={project.ui?.labels?.[key] || key}
-                              value={value}
-                              onChange={(v) =>
-                                mutate((p) => {
-                                  p.ui = {
-                                    ...p.ui,
-                                    enabled: {
-                                      ...p.ui?.enabled,
-                                      [key]: v,
-                                    },
-                                  };
-                                })
-                              }
-                            />
-                          ),
-                        )}
-                      </Card>
+                      <InterfaceSettings project={project} onChange={edit} />
                       <Fold
                         title="高级工程配置"
                         summary="链接、章节音乐、音轨、鉴赏与界面文案"

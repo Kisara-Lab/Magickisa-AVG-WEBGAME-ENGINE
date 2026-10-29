@@ -44,9 +44,25 @@ export function lockInfo(directory: string) {
         if ((error as NodeJS.ErrnoException).code !== "ESRCH") alive = true;
       }
     }
-    return { directory, ...owner, alive };
+    return {
+      directory,
+      ...owner,
+      alive,
+      state: alive ? "active" : "stale",
+      recoveryHint: alive
+        ? "持有进程仍存在，不能恢复。"
+        : "可使用 doctor --recover --lock <directory> --token <token> 恢复。",
+    };
   } catch {
-    return { directory, pid: null, token: null, alive: null };
+    return {
+      directory,
+      pid: null,
+      token: null,
+      alive: null,
+      state: "unknown",
+      recoveryHint:
+        "锁归属文件缺失或损坏，无法证明持有进程已退出，禁止强制解锁。请关闭此引擎的全部 Studio、CLI 和构建进程，保留锁目录副本后离线移除该锁目录；详见 docs/CLI.md 的损坏锁恢复。",
+    };
   }
 }
 export function protectChild(directory: string, pid: number) {
@@ -68,9 +84,10 @@ export function acquireLock(directory: string): () => void {
     );
   }
   const token = crypto.randomUUID();
+  const temporaryOwner = path.join(directory, `owner-${token}.tmp`);
   try {
     fs.writeFileSync(
-      path.join(directory, "owner.json"),
+      temporaryOwner,
       JSON.stringify({
         pid: process.pid,
         token,
@@ -78,7 +95,9 @@ export function acquireLock(directory: string): () => void {
       }),
       { flag: "wx" },
     );
+    fs.renameSync(temporaryOwner, path.join(directory, "owner.json"));
   } catch (error) {
+    fs.rmSync(temporaryOwner, { force: true });
     fs.rmdirSync(directory);
     throw error;
   }
@@ -147,6 +166,7 @@ export function inspectLocks(ctx?: ProjectContext) {
 }
 export function recoverLock(directory: string, token: string) {
   const info = lockInfo(directory);
+  if (info?.alive === null) throw busy(info.recoveryHint);
   if (!info || info.token !== token || info.alive !== false)
     throw busy("只能恢复 token 匹配且持有进程已退出的锁");
   const marker = path.join(directory, "recovering");

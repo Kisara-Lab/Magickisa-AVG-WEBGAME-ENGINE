@@ -25,7 +25,7 @@ export function ProjectDetails({
               edit((p) => {
                 p.titleScreen.footerLinks = [
                   ...(p.titleScreen.footerLinks || []),
-                  { label: "新链接", url: "https://" },
+                  { label: "新链接", url: "" },
                 ];
               })
             }
@@ -34,6 +34,9 @@ export function ProjectDetails({
           </button>
         }
       >
+        <p>
+          填写完整的 HTTP(S)、mailto 或相对链接；未完成的链接会阻止保存和构建。
+        </p>
         {(project.titleScreen.footerLinks || []).map((link, i) => (
           <div className="st-registry" key={i}>
             <Field
@@ -331,24 +334,6 @@ export function ProjectDetails({
           </div>
         ))}
       </Card>
-      {(["labels", "notifications"] as const).map((group, i) => (
-        <Card key={group} title={["界面文案", "解锁通知文案"][i]}>
-          <div className="st-fields">
-            {Object.entries(project.ui?.[group] || {}).map(([key, value]) => (
-              <Field
-                key={key}
-                label={key}
-                value={value}
-                onChange={(v) =>
-                  edit((p) => {
-                    p.ui = { ...p.ui, [group]: { ...p.ui?.[group], [key]: v } };
-                  })
-                }
-              />
-            ))}
-          </div>
-        </Card>
-      ))}
     </>
   );
 }

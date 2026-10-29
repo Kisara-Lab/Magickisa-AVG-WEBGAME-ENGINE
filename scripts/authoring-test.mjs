@@ -362,6 +362,18 @@ try {
   assert.ok(
     prepared.value.conflicts.some((item) => item.path === "/nodes/@unused"),
   );
+  prepared = await plan([{ path: "/nodes/@unused", take: "current" }]);
+  const refused = await call(["sync", "apply", "--file", prepared.file]);
+  assert.ok(refused.deferred.some((item) => item.path === "/nodes/@unused"));
+  prepared = await plan();
+  assert.ok(
+    prepared.value.deferred.some((item) => item.path === "/nodes/@unused"),
+  );
+  assert.ok(
+    (await call(["sync", "status"])).deferred.some(
+      (item) => item.path === "/nodes/@unused",
+    ),
+  );
   prepared = await plan([{ path: "/nodes/@unused", take: "incoming" }]);
   await call(["sync", "apply", "--file", prepared.file]);
   assert.equal(
@@ -438,6 +450,11 @@ try {
   assert.deepEqual(fs.readFileSync(projectFile), before);
   assert.deepEqual(fs.readFileSync(stateFile), oldState);
   const zip = path.join(temp, "创作资料.magickisa.zip");
+  for (const name of ["AGENTS.md", "README.md"])
+    fs.appendFileSync(
+      path.join(authoring, name),
+      "\n项目自定义约定：保留中文、空格与稳定 ID。\n",
+    );
   await call(["package", "export", "--out", zip]);
   assert.deepEqual(
     json(path.join(authoring, "studio.json")),
@@ -457,6 +474,11 @@ try {
     false,
   );
   assert.ok(fs.existsSync(path.join(importedHome, ".sync-state.json")));
+  for (const name of ["AGENTS.md", "README.md"])
+    assert.deepEqual(
+      fs.readFileSync(path.join(importedHome, name)),
+      fs.readFileSync(path.join(authoring, name)),
+    );
   assert.deepEqual(
     json(path.join(importedHome, "studio.json")),
     studioData,

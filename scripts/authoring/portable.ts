@@ -4,6 +4,7 @@ import { contained, atomicJson, type ProjectContext } from "../workspaces";
 import { manifestSchema, moduleSchema, stateSchema } from "./model";
 import { sourceFile } from "./sources";
 import { studioDataSchema } from "../../src/studio/investigationModel";
+import { creativeRootFiles } from "./creative-files";
 import {
   home,
   hash,
@@ -23,7 +24,10 @@ export function exportAuthoring(
     manifestFile = contained(sourceRoot, "manifest.json");
   if (
     !fs.existsSync(manifestFile) &&
-    !fs.existsSync(contained(sourceRoot, "studio.json"))
+    !fs.existsSync(contained(sourceRoot, "studio.json")) &&
+    !creativeRootFiles.some((name) =>
+      fs.existsSync(contained(sourceRoot, name)),
+    )
   )
     return () => {};
   const expected = new Map<string, string>();
@@ -43,6 +47,13 @@ export function exportAuthoring(
   );
   const output = contained(snapshot, "content/authoring");
   fs.mkdirSync(output, { recursive: true });
+  for (const name of creativeRootFiles.filter(
+    (name) => name !== "manifest.json",
+  )) {
+    const file = contained(sourceRoot, name);
+    if (fs.existsSync(file))
+      fs.writeFileSync(contained(output, name), read(file));
+  }
   if (fs.existsSync(contained(sourceRoot, "studio.json"))) {
     const bytes = read(contained(sourceRoot, "studio.json"));
     studioDataSchema.parse(
@@ -101,6 +112,8 @@ export function restoreAuthoring(stage: string) {
     readJson(contained(sourceRoot, "manifest.json")),
   );
   const files = new Set(["manifest.json"]);
+  for (const name of creativeRootFiles)
+    if (fs.existsSync(contained(sourceRoot, name))) files.add(name);
   if (fs.existsSync(contained(sourceRoot, "studio.json"))) {
     studioDataSchema.parse(readJson(contained(sourceRoot, "studio.json")));
     files.add("studio.json");

@@ -77,7 +77,10 @@ export function useVoice(
       !state.error &&
       !paused &&
       !skip,
-    pending: !!source && !skip && (state.identity !== identity || !state.ended),
+    pending:
+      !!source &&
+      !skip &&
+      (state.identity !== identity || (!state.ended && !state.error)),
     error: state.identity === identity ? state.error : "",
     retry: () => {
       audio.current?.load();

@@ -4,12 +4,13 @@ import crypto from "node:crypto";
 import { z } from "zod";
 import { contained, type ProjectContext } from "../workspaces";
 import { manifestSchema } from "./model";
+import { creativeRootFiles } from "./creative-files";
 
 const key = z
   .string()
   .refine(
     (s) =>
-      ["manifest.json", "AGENTS.md", "README.md"].includes(s) ||
+      (creativeRootFiles as readonly string[]).includes(s) ||
       /^modules\/(?:[^/\\:.]+\/)*[^/\\:.]+\.json$/.test(s),
     "无效创作备份路径",
   );
@@ -32,7 +33,7 @@ export function readCreativeFile(ctx: ProjectContext, key: string) {
 }
 export function creativeSnapshot(ctx: ProjectContext): CreativeFiles {
   const files: CreativeFiles = {};
-  for (const name of ["manifest.json", "AGENTS.md", "README.md"])
+  for (const name of creativeRootFiles)
     files[name] = readCreativeFile(ctx, name);
   if (files["manifest.json"]) {
     const manifest = manifestSchema.parse(

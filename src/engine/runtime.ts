@@ -4,7 +4,9 @@ import { applyEffects } from "./effects";
 import { snapshot, importSave } from "./save";
 import { randomId } from "./id";
 import { SequenceClock } from "./sequence";
+import { valueSchema } from "./schema";
 export class StoryRuntime {
+  availabilityError = "";
   private indexedNodes?: StoryProject["nodes"];
   private nodeIndex = new Map<string, number>();
   private nodeCount = -1;
@@ -41,22 +43,28 @@ export class StoryRuntime {
     return !this.node || this.save.lineIndex >= this.node.lines.length;
   }
   get choices(): StoryChoice[] {
+    this.availabilityError = "";
     if (!this.done || this.save.presentation || this.save.sequence) return [];
-    const basis = this.save.completed
-      ? this.save
-      : applyEffects(this.save, this.node?.onComplete);
-    return (this.node?.choices || []).filter(
-      (c) =>
-        (!c.once || !basis.usedChoices.includes(c.id)) &&
-        evaluateCondition(
-          c.condition,
-          basis.variables,
-          basis.visitedNodes,
-          basis,
-          this.observeCondition,
-        ) &&
-        this.targetAllowed(c, basis),
-    );
+    try {
+      const basis = this.save.completed
+        ? this.save
+        : applyEffects(this.save, this.node?.onComplete);
+      return (this.node?.choices || []).filter(
+        (c) =>
+          (!c.once || !basis.usedChoices.includes(c.id)) &&
+          evaluateCondition(
+            c.condition,
+            basis.variables,
+            basis.visitedNodes,
+            basis,
+            this.observeCondition,
+          ) &&
+          this.targetAllowed(c, basis),
+      );
+    } catch (error) {
+      this.availabilityError = `无法检查出口：${String(error)}`;
+      return [];
+    }
   }
   private targetAllowed(c: StoryChoice, basis: EngineSave) {
     const simulated = applyEffects(basis, c.effects);
@@ -177,9 +185,15 @@ export class StoryRuntime {
     this.save.sequence = null;
     this.scheduleSequence();
   }
-  private complete() {
+  private complete(checkpoint = false) {
     if (this.save.completed) return;
-    this.save = applyEffects(this.save, this.node?.onComplete);
+    const next = applyEffects(this.save, this.node?.onComplete);
+    // Failed effects must not append history or mutate progress.
+    if (checkpoint) {
+      this.checkpoint();
+      next.history = [...this.save.history];
+    }
+    this.save = next;
     this.save.completed = true;
     if (
       this.node?.ending &&
@@ -224,8 +238,7 @@ export class StoryRuntime {
       return this.syncPosition();
     }
     if (!this.save.completed) {
-      this.checkpoint();
-      this.complete();
+      this.complete(true);
       const kind =
         this.node.presentation === "dedication"
           ? "opening"
@@ -326,7 +339,9 @@ export class StoryRuntime {
     this.save.presentation = null;
     this.move(nodeId, revisiting);
     this.save.lineIndex = 0;
-    this.save.completed = false;
+    // Chapter review replays text, not the already-applied completion effects.
+    // Normal story transitions still create a fresh visit through move().
+    this.save.completed = revisiting;
     this.save.lineIndex = Math.max(
       0,
       Math.min(lineIndex, this.node?.lines.length ?? 0),
@@ -335,6 +350,13 @@ export class StoryRuntime {
     return this.syncPosition();
   }
   setVariable(key: string, value: Value) {
+    valueSchema.parse(value);
+    if (
+      this.line?.input?.key === key &&
+      this.project.variables?.[key] &&
+      this.project.variables[key].type !== "string"
+    )
+      throw new Error("玩家文字输入不能覆盖非字符串变量。");
     this.save.variables[key] = structuredClone(value);
     this.unlock();
     this.skipHidden();

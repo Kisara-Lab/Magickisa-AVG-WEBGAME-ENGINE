@@ -131,6 +131,7 @@ export interface SyncState {
   incomingProject?: unknown;
   operationResults?: Record<string, { path: string; cell: Cell }>;
   sourceHashes?: Record<string, string>;
+  refusals?: Record<string, Record<string, Cell>>;
 }
 export const cellSchema = z.discriminatedUnion("present", [
   z.object({ present: z.literal(false) }).strict(),
@@ -140,6 +141,7 @@ export const stateSchema = z
   .object({
     formatVersion: z.literal(1),
     entries: z.record(z.string(), cellSchema),
+    refusals: z.record(z.string(), z.record(z.string(), cellSchema)).optional(),
     project: projectSchema.optional(),
     incomingProject: z.unknown().optional(),
     sourceHashes: z
@@ -161,6 +163,7 @@ export const planSchema = z
     resolutions: resolutionsSchema,
     changes: z.array(z.unknown()),
     conflicts: z.array(z.unknown()),
+    deferred: z.array(z.unknown()).optional(),
     issues: z.array(z.unknown()),
     operations: z.array(operationSchema),
     nextState: stateSchema,

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { fontSizeLimits } from "./readingLimits";
+import { validPublicLink } from "./links";
 import { sequenceSchema, sequenceIssues } from "./sequence";
 import type { Condition, Effect, StoryProject, Value } from "./types";
 export const valueSchema: z.ZodType<Value> = z.lazy(() =>
@@ -161,7 +163,7 @@ export const projectSchema = z
       .object({
         mode: z.enum(["adv", "nvl"]),
         fontFamily: z.string().min(1).max(200),
-        fontSize: z.number().min(16).max(40),
+        fontSize: z.number().min(fontSizeLimits.min).max(fontSizeLimits.max),
         textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
         accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
         panelColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -287,14 +289,16 @@ export const projectSchema = z
           .optional(),
         musicGallery: z
           .array(
-            z.object({
-              id,
-              title: id,
-              artist: z.string().optional(),
-              src: id,
-              mood: z.string().optional(),
-              unlockNode: id.optional(),
-            }),
+            z
+              .object({
+                id,
+                title: id,
+                artist: z.string().optional(),
+                src: id,
+                mood: z.string().optional(),
+                unlockNode: id.optional(),
+              })
+              .strict(),
           )
           .optional(),
       })
@@ -399,6 +403,15 @@ export function validateProject(input: unknown): ValidationIssue[] {
       effects(c.effects, c.id);
     }
     for (const l of n.lines) {
+      if (
+        l.input &&
+        p.variables?.[l.input.key] &&
+        p.variables[l.input.key].type !== "string"
+      )
+        issues.push({
+          path: `nodes.${n.id}.lines.${l.id}.input.key`,
+          message: "玩家文字输入只能绑定字符串变量；请使用独立的字符串变量。",
+        });
       condition(l.condition, l.id);
       for (const c of [
         l.characterId,
@@ -415,6 +428,10 @@ export function validateProject(input: unknown): ValidationIssue[] {
     ref(m.unlockNode, m.id);
     condition(m.unlock, m.id);
   }
+  duplicate(
+    (p.media.musicGallery ?? []).map((m) => m.id),
+    "media.musicGallery",
+  );
   for (const m of p.media.musicGallery || []) ref(m.unlockNode, m.id);
   duplicate(
     (p.assets ?? []).map((a) => a.id),
@@ -491,6 +508,18 @@ export function validateProject(input: unknown): ValidationIssue[] {
   }
   for (const g of p.gallery ?? [])
     condition(g.unlock, `gallery.${g.id}.unlock`);
+  for (const key of ["studioUrl", "galleryUrl", "aboutUrl"] as const)
+    if (p.titleScreen[key] && !validPublicLink(p.titleScreen[key]))
+      issues.push({
+        path: `titleScreen.${key}`,
+        message: "请输入有效的 HTTP(S)、mailto 或相对链接。",
+      });
+  for (const [i, link] of (p.titleScreen.footerLinks ?? []).entries())
+    if (!validPublicLink(link.url))
+      issues.push({
+        path: `titleScreen.footerLinks.${i}.url`,
+        message: "链接无效，请填写完整网址或相对路径。",
+      });
   return issues;
 }
 export function assertProject(input: unknown): StoryProject {
