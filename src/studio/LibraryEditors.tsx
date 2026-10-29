@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useSelection, useNavigationSignal } from "./workspace";
 import { useEffect, useState } from "react";
 import type { AuthorProject, Profile } from "./model";
@@ -89,7 +90,7 @@ export function AssetEditor({
             j === i
               ? {
                   ...x,
-                  state: `失败：${String(e)}`,
+                  state: `失败：${describeError(e)}`,
                 }
               : x,
           ),

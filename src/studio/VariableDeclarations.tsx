@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import type { StoryProject, Value } from "../engine/types";
 import { validateProject } from "../engine/schema";
@@ -92,7 +93,7 @@ function DefinitionForm({
                 onChange({ ...value, initial: parsed });
                 setError("");
               } catch (error) {
-                setError(String(error));
+                setError(describeError(error));
               }
             }}
           >

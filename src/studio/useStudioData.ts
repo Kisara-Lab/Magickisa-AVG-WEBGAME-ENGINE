@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useEffect, useState } from "react";
 import { studioRequest } from "./ProjectManager";
 import {
@@ -24,7 +25,7 @@ export function useStudioData(scope: string) {
       setFuture([]);
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   }
   useEffect(() => {
@@ -46,7 +47,7 @@ export function useStudioData(scope: string) {
           }
         })
         .catch((e) => {
-          if (active) setError(String(e));
+          if (active) setError(describeError(e));
         });
     return () => {
       active = false;
@@ -69,7 +70,7 @@ export function useStudioData(scope: string) {
       setError("");
       return true;
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
       return false;
     } finally {
       setBusy(false);

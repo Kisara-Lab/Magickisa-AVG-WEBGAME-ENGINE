@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { InterfaceSettings } from "./InterfaceSettings";
 import { requireModernProject } from "../engine/support";
 import {
@@ -392,7 +393,7 @@ export function Studio() {
       if (!workspaceId())
         sessionStorage.removeItem(`magickisa-studio-draft:${profile}`);
     } catch (e) {
-      setDraftState(`草稿保留失败：${String(e)}；原草稿仍保留。`);
+      setDraftState(`草稿保留失败：${describeError(e)}；原草稿仍保留。`);
     }
     setProject(d.project);
     setPast([]);
@@ -415,14 +416,14 @@ export function Studio() {
         sessionStorage.removeItem(`magickisa-studio-draft:${profile}`);
       setRecovery((list) => list.filter((x) => x.key !== d.key));
     } catch (e) {
-      setError(`无法丢弃草稿：${String(e)}`);
+      setError(`无法丢弃草稿：${describeError(e)}`);
     }
   }
   const refreshAssets = useCallback(async () => {
     try {
       setFiles((await request(profile, "assets")).files);
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   }, [profile]);
   const load = useCallback(
@@ -442,7 +443,7 @@ export function Studio() {
           else if (!workspaceId())
             sessionStorage.removeItem(`magickisa-studio-draft:${profile}`);
         } catch (e) {
-          setDraftState(`旧草稿存储不可用：${String(e)}`);
+          setDraftState(`旧草稿存储不可用：${describeError(e)}`);
         }
         await initializePreferences();
         const preferences = readLayout(profile);
@@ -478,7 +479,7 @@ export function Studio() {
             setRecovery([]);
           }
         } catch (e) {
-          setDraftState(`草稿存储不可用：${String(e)}`);
+          setDraftState(`草稿存储不可用：${describeError(e)}`);
         }
         const p = data.project as AuthorProject;
         setSectionLevels(data.sectionLevels || {});
@@ -513,7 +514,7 @@ export function Studio() {
         void refreshAssets();
         loadedProfile.current = profile;
       } catch (e) {
-        setError(String(e));
+        setError(describeError(e));
       } finally {
         setBusy(false);
       }
@@ -556,7 +557,7 @@ export function Studio() {
         : removeDraft(key);
       void op
         .then(() => setDraftState(dirty ? "✓ 草稿已保留" : "草稿无需保留"))
-        .catch((e) => setDraftState(`草稿保留失败：${String(e)}`));
+        .catch((e) => setDraftState(`草稿保留失败：${describeError(e)}`));
     }, 500);
     return () => clearTimeout(timer);
   }, [project, saved, revision, raw, rawBase, profile, dirty, recovery]);
@@ -613,7 +614,8 @@ export function Studio() {
           );
       }
       if (data.type === "studio:state") setRuntime(data.save);
-      if (data.type === "studio:error") setError(data.error);
+      if (data.type === "studio:error") setError(`预览：${data.error}`);
+      if (data.type === "studio:notice") setNotice(data.error);
       if (data.type === "studio:time") setTimeState(data.time);
       if (data.type === "studio:skip") {
         setPlaying(false);
@@ -661,7 +663,7 @@ export function Studio() {
     const timer = setInterval(() => {
       void request(profile, "build")
         .then(setJob)
-        .catch((e) => setError(String(e)));
+        .catch((e) => setError(describeError(e)));
     }, 1000);
     return () => clearInterval(timer);
   }, [job.status, profile]);
@@ -758,7 +760,7 @@ export function Studio() {
         ).issues || [],
       );
       setValidated("");
-      setError(String(e));
+      setError(describeError(e));
       return false;
     }
   }
@@ -796,7 +798,7 @@ export function Studio() {
       setError("");
       return data.revision as string;
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
       return undefined;
     } finally {
       saving.current = false;
@@ -861,7 +863,7 @@ export function Studio() {
         testState,
       });
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   }
   async function runPreview(
@@ -929,7 +931,7 @@ export function Studio() {
         setNotice("已导入草稿，保存后写入当前工程。");
       }
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   }
   async function upload(file: File) {
@@ -969,7 +971,7 @@ export function Studio() {
       await refreshAssets();
       return data.url as string;
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
       throw e;
     } finally {
       activeUpload.current = undefined;
@@ -1026,7 +1028,7 @@ export function Studio() {
       );
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   }
   function deleteNode() {
@@ -1484,7 +1486,7 @@ export function Studio() {
                   </button>
                 </p>
               )}
-              {error ? (
+              {error && (
                 <div className="st-error" role="alert">
                   <AlertCircle size={17} />
                   <pre>{error}</pre>
@@ -1492,12 +1494,11 @@ export function Studio() {
                     ×
                   </button>
                 </div>
-              ) : (
-                <p role="status">
-                  <CheckCircle2 size={14} />
-                  {notice || "准备就绪"}
-                </p>
               )}
+              <p role="status">
+                <CheckCircle2 size={14} />
+                {notice || "准备就绪"}
+              </p>
             </div>
             <main className="st-content">
               {project && node && (
@@ -1971,7 +1972,7 @@ export function Studio() {
                                 });
                               }
                             } catch (e) {
-                              setError(String(e));
+                              setError(describeError(e));
                             }
                           }}
                         >
@@ -2385,7 +2386,7 @@ function VariableDebug({
               value: JSON.parse(value),
             });
           } catch (e) {
-            onError(String(e));
+            onError(describeError(e));
           }
         }}
       >

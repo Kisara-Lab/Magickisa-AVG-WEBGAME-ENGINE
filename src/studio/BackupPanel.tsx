@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import { studioRequest } from "./ProjectManager";
 import { Card } from "./fields";
@@ -38,7 +39,7 @@ export function BackupPanel({
       await action();
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }

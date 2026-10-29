@@ -1,5 +1,7 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import { sequenceTrackSchema, type SequenceTrack } from "../engine/sequence";
+import { Field } from "./fields";
 
 const properties = {
   x: "横向位置 (%)",
@@ -48,7 +50,7 @@ export function SequenceKeyframes({
       onChange(sequenceTrackSchema.parse({ ...track, properties: props }));
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(describeError(e));
     }
   };
   return (
@@ -97,38 +99,45 @@ export function SequenceKeyframes({
       </button>
       {frames.map((frame, index) => (
         <div className="st-fields" key={`${track.id}:${property}:${index}`}>
-          <label>
-            时间（秒）
-            <input
-              type="number"
-              min={0}
-              max={track.duration}
-              step="0.01"
-              value={frame.at}
-              onChange={(e) =>
-                apply(
-                  frames.map((k, i) =>
-                    i === index ? { ...k, at: Number(e.target.value) } : k,
-                  ),
-                )
-              }
-            />
-          </label>
-          <label>
-            {properties[property]}
-            <input
-              type="number"
-              step="0.01"
-              value={frame.value}
-              onChange={(e) =>
-                apply(
-                  frames.map((k, i) =>
-                    i === index ? { ...k, value: Number(e.target.value) } : k,
-                  ),
-                )
-              }
-            />
-          </label>
+          <Field
+            label="时间（秒）"
+            type="number"
+            min={0}
+            max={track.duration}
+            step={0.01}
+            value={frame.at}
+            validate={(v) =>
+              frames.some((k, i) => i !== index && k.at === Number(v))
+                ? "关键帧时间不能重复"
+                : undefined
+            }
+            onChange={(v) =>
+              apply(
+                frames.map((k, i) =>
+                  i === index ? { ...k, at: Number(v) } : k,
+                ),
+              )
+            }
+          />
+          <Field
+            label={properties[property]}
+            type="number"
+            step={0.01}
+            min={
+              ["opacity", "volume", "scale", "shake"].includes(property)
+                ? 0
+                : undefined
+            }
+            max={["opacity", "volume"].includes(property) ? 1 : undefined}
+            value={frame.value}
+            onChange={(v) =>
+              apply(
+                frames.map((k, i) =>
+                  i === index ? { ...k, value: Number(v) } : k,
+                ),
+              )
+            }
+          />
           <label>
             到达此帧的缓动
             <select

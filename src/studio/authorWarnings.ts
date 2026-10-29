@@ -6,7 +6,7 @@ import { interpolationKeys } from "../engine/interpolation";
 import {
   interfaceLabels,
   interfaceFeatures,
-  notificationKeys,
+  projectNotificationKeys,
 } from "../engine/uiConfig";
 export function authorWarnings(p: AuthorProject, profile: Profile) {
   const issues: {
@@ -20,15 +20,7 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
   for (const [group, known] of [
     ["labels", Object.keys(interfaceLabels)],
     ["enabled", [...Object.keys(interfaceFeatures), "music"]],
-    [
-      "notifications",
-      [
-        ...notificationKeys,
-        ...p.materials.map((m) =>
-          m.category === "note" ? "notes" : m.category,
-        ),
-      ],
-    ],
+    ["notifications", projectNotificationKeys(p)],
   ] as const)
     for (const key of Object.keys(p.ui?.[group] ?? {}))
       if (!known.includes(key))

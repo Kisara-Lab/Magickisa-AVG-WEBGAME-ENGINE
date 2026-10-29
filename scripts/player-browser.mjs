@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 import { issuePlayerBrowser } from "./issue-player-browser.mjs";
+import { followupPlayerBrowser } from "./followup-player-browser.mjs";
 export async function playerBrowser(browser, origin) {
   const project = {
     schemaVersion: 3,
@@ -666,6 +667,7 @@ export async function playerBrowser(browser, origin) {
     await nvlContext.close();
   }
   await issuePlayerBrowser(browser, origin);
+  await followupPlayerBrowser(browser, origin);
   console.log(
     "Player browser: saves, reading, clues, keyboard, ownership, recovery and responsive layouts passed.",
   );

@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useEffect, useState, type RefObject } from "react";
 import { storyTestSchema, type StoryTest } from "../engine/storyTest";
 import type { StudioDataController } from "./useStudioData";
@@ -31,7 +32,7 @@ export function PreviewRecorder({
           setRecorded(storyTestSchema.parse(e.data.test));
           setError("");
         } catch (error) {
-          setError(String(error));
+          setError(describeError(error));
         }
       }
       if (e.data?.type === "studio:error") {

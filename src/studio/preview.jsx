@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import {
   mapProjectResources,
   deploymentResource,
@@ -56,8 +57,12 @@ function Director({ Component, data }) {
         if (e.data.play)
           audio.current?.play().catch((e) =>
             send({
-              type: "studio:error",
-              error: e.message,
+              type:
+                e.name === "NotAllowedError" ? "studio:notice" : "studio:error",
+              error:
+                e.name === "NotAllowedError"
+                  ? "预览音频被浏览器阻止，请在预览画面中点击后重试播放。"
+                : `音频无法播放：${describeError(e)}`,
             }),
           );
         else audio.current?.pause();
@@ -220,8 +225,8 @@ window.addEventListener("message", async (e) => {
       });
   } catch (error) {
     send({
-      type: "studio:error",
-      error: String(error),
+      type: e.data.type === "studio:record" ? "studio:notice" : "studio:error",
+      error: e.data.type === "studio:record" ? `路线录制：${describeError(error)}` : describeError(error),
     });
   }
 });

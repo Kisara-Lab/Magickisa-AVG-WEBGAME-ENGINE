@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useEffect, useState, useRef } from "react";
 import type { StoryProject } from "../engine/types";
 import {
@@ -17,6 +18,7 @@ import "./production.css";
 import { SequenceTimeline } from "./SequenceTimeline";
 import { SequenceKeyframes } from "./SequenceKeyframes";
 import { SequencePreset } from "./SequencePreset";
+import { waitPointsError } from "./sequenceInput";
 
 export function SequenceEditor({
   project,
@@ -254,19 +256,14 @@ export function SequenceEditor({
               value={sequence.name}
               onChange={(name) => change({ ...sequence, name })}
             />
-            <label>
-              演出长度（秒）
-              <input
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={sequence.duration}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (n > 0) change({ ...sequence, duration: n });
-                }}
-              />
-            </label>
+            <Field
+              label="演出长度（秒）"
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={sequence.duration}
+              onChange={(v) => change({ ...sequence, duration: Number(v) })}
+            />
             <Check
               label="允许玩家跳过"
               value={sequence.skippable}
@@ -275,10 +272,10 @@ export function SequenceEditor({
             <Field
               label="等待点（秒，逗号分隔）"
               value={sequence.waits.join(",")}
+              validate={(text) => waitPointsError(text, sequence.duration)}
               onChange={(v) => {
                 const waits = v.trim() ? v.split(",").map(Number) : [];
-                if (waits.every(Number.isFinite))
-                  change({ ...sequence, waits });
+                change({ ...sequence, waits });
               }}
             />
           </div>
@@ -370,25 +367,18 @@ export function SequenceEditor({
             >
               {playing ? "暂停演出预览" : "播放演出预览"}
             </button>
-            <label>
-              播放头
-              <input
-                type="number"
-                min="0"
-                max={sequence.duration}
-                step="0.01"
-                value={Number(time.toFixed(2))}
-                onChange={(e) => {
-                  setPlaying(false);
-                  setTime(
-                    Math.max(
-                      0,
-                      Math.min(sequence.duration, Number(e.target.value)),
-                    ),
-                  );
-                }}
-              />
-            </label>
+            <Field
+              label="播放头"
+              type="number"
+              min={0}
+              max={sequence.duration}
+              step={0.01}
+              value={Number(time.toFixed(2))}
+              onChange={(v) => {
+                setPlaying(false);
+                setTime(Number(v));
+              }}
+            />
             <label>
               时间轴缩放
               <input
@@ -577,23 +567,17 @@ export function SequenceEditor({
                       ["offset", "素材起点"],
                     ] as const
                   ).map(([key, label]) => (
-                    <label key={key}>
-                      {label}
-                      <input
-                        type="number"
-                        min={key === "duration" ? 0.01 : 0}
-                        step="0.01"
-                        value={track[key]}
-                        onChange={(e) => {
-                          const n = Number(e.target.value);
-                          if (
-                            Number.isFinite(n) &&
-                            n >= (key === "duration" ? 0.01 : 0)
-                          )
-                            changeTrack({ ...track, [key]: n });
-                        }}
-                      />
-                    </label>
+                    <Field
+                      key={key}
+                      label={label}
+                      type="number"
+                      min={key === "duration" ? 0.01 : 0}
+                      step={0.01}
+                      value={track[key]}
+                      onChange={(v) =>
+                        changeTrack({ ...track, [key]: Number(v) })
+                      }
+                    />
                   ))}
                   <label>
                     轨道音量
@@ -702,7 +686,7 @@ export function SequenceEditor({
                           setKeys("");
                           setError("");
                         } catch (e) {
-                          setError(String(e));
+                          setError(describeError(e));
                         }
                       }}
                     >

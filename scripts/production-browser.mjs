@@ -60,6 +60,9 @@ export async function productionBrowser(browser, origin) {
     const initial = await api("project");
     const project = initial.project;
     project.variables = { clue: { type: "boolean", initial: false } };
+    project.materials = [
+      { id: "photo", title: "照片", body: "一张照片", category: "photos" },
+    ];
     project.gallery = [
       { id: "cg-1", title: "第一幅", asset: asset.url },
       { id: "cg-2", title: "第二幅", asset: asset.url },
@@ -89,6 +92,11 @@ export async function productionBrowser(browser, origin) {
     await page.getByRole("button", { name: "工程", exact: true }).click();
     // Blank projects expose supported UI keys, and empty gallery selection is real.
     await page.getByLabel("开始游戏 · newGame", { exact: true }).waitFor();
+    await page.getByLabel("photos · photos", { exact: true }).fill("发现照片");
+    assert.equal(
+      await page.getByLabel("开发预览 · development", { exact: true }).count(),
+      0,
+    );
     const gallerySelect = page.getByLabel("选择画廊条目", { exact: true });
     assert.equal(await gallerySelect.inputValue(), "");
     await gallerySelect.selectOption("cg-2");
@@ -103,6 +111,7 @@ export async function productionBrowser(browser, origin) {
         .count(),
       0,
     );
+    await page.keyboard.press("Control+s");
     await page.locator("summary").filter({ hasText: "协调重命名变量" }).click();
     await page.getByLabel("原变量名", { exact: true }).fill("clue");
     await page.getByLabel("新变量名", { exact: true }).fill("evidence");
@@ -121,10 +130,29 @@ export async function productionBrowser(browser, origin) {
     );
     await page.getByRole("button", { name: "演出", exact: true }).click();
     await page.getByRole("heading", { name: "多轨演出与舞台" }).waitFor();
+    const length = page.getByLabel("演出长度（秒）", { exact: true });
+    await length.fill("0.05");
+    assert.equal(await length.inputValue(), "0.05");
+    await page.getByRole("alert").filter({ hasText: "尚未应用" }).waitFor();
+    // An unrelated edit must not discard the invalid draft or change the stored duration.
+    await page.getByLabel("演出名称", { exact: true }).fill("多轨检验改名");
+    assert.equal(await length.inputValue(), "0.05");
+    await length.fill("10");
+    const waits = page.getByLabel("等待点（秒，逗号分隔）", { exact: true });
+    await waits.fill("2,");
+    await page.getByRole("alert").filter({ hasText: "等待点须" }).waitFor();
+    assert.equal(await waits.inputValue(), "2,");
+    await waits.fill("2,4");
+    await waits.fill("");
     const clip = page.locator(".production-track button").first();
     await clip.click();
     await page.getByText("当前轨道检查器", { exact: false }).first().click();
     await page.getByLabel("开始时间", { exact: true }).waitFor();
+    const start = page.getByLabel("开始时间", { exact: true });
+    await start.fill("-1");
+    assert.equal(await start.inputValue(), "-1");
+    await page.getByRole("alert").filter({ hasText: "尚未应用" }).waitFor();
+    await start.fill("1");
     await page.getByLabel("锁定当前轨道（本次编辑）", { exact: true }).check();
     assert.equal(
       await page.getByLabel("开始时间", { exact: true }).isDisabled(),
@@ -147,16 +175,25 @@ export async function productionBrowser(browser, origin) {
       await page.getByLabel("开始时间", { exact: true }).inputValue(),
       "1.1",
     );
+    await clip.scrollIntoViewIfNeeded();
     const rect = await clip.boundingBox();
     await page.mouse.move(rect.x + 25, rect.y + rect.height / 2);
     await page.mouse.down();
     await page.mouse.move(rect.x + 65, rect.y + rect.height / 2, { steps: 5 });
     await page.mouse.up();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('input[aria-label="开始时间"]')?.value === "2.1",
+    );
     assert.equal(
       await page.getByLabel("开始时间", { exact: true }).inputValue(),
       "2.1",
     );
     await page.getByRole("button", { name: "撤销", exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('input[aria-label="开始时间"]')?.value === "1.1",
+    );
     assert.equal(
       await page.getByLabel("开始时间", { exact: true }).inputValue(),
       "1.1",
@@ -202,7 +239,38 @@ export async function productionBrowser(browser, origin) {
     );
     await page.getByRole("button", { name: "剧本", exact: true }).click();
     await page.keyboard.press("Control+Enter");
+    await page.getByText("✓ 预览已同步", { exact: true }).waitFor();
     const previewFrame = page.frameLocator('iframe[title="游戏预览"]');
+    const frame = page.frames().find((f) => f.url().includes("studio-preview"));
+    await frame.waitForFunction(() => !!window.__MAGICKISA_ENGINE__);
+    await frame.evaluate(() =>
+      parent.postMessage(
+        { type: "studio:error", error: "生成的预览错误" },
+        location.origin,
+      ),
+    );
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "预览：生成的预览错误" })
+      .waitFor();
+    await frame.evaluate(() =>
+      parent.postMessage(
+        { type: "studio:notice", error: "请点击预览画面允许播放" },
+        location.origin,
+      ),
+    );
+    await page
+      .getByRole("status")
+      .filter({ hasText: "请点击预览画面允许播放" })
+      .waitFor();
+    assert.equal(
+      await page
+        .locator(".st-feedback .st-error")
+        .filter({ hasText: "生成的预览错误" })
+        .count(),
+      1,
+    );
+    await page.getByRole("button", { name: "关闭错误", exact: true }).click();
     await page.getByText("录制路线测试", { exact: true }).click();
     await page
       .getByRole("button", { name: "开始录制路线", exact: true })
@@ -210,8 +278,6 @@ export async function productionBrowser(browser, origin) {
     await page
       .getByRole("button", { name: "停止录制并检查", exact: true })
       .waitFor();
-    const frame = page.frames().find((f) => f.url().includes("studio-preview"));
-    await frame.waitForFunction(() => !!window.__MAGICKISA_ENGINE__);
     await frame.evaluate(() => window.__MAGICKISA_ENGINE__.advance());
     await page
       .getByRole("button", { name: "停止录制并检查", exact: true })

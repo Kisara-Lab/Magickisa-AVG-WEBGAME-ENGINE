@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useMemo, useState } from "react";
 import type { EngineSave, StoryProject } from "../engine/types";
 import { createSave, slotKey } from "../engine/save";
@@ -42,7 +43,7 @@ export function SaveRecovery({
               `${project.id}-damaged-auto.json`,
             );
           } catch (e) {
-            setMessage(String(e));
+            setMessage(describeError(e));
           }
         }}
       >
@@ -80,7 +81,7 @@ export function SaveRecovery({
               try {
                 action();
               } catch (e) {
-                setMessage(`恢复未完成，原存档保留：${String(e)}`);
+                setMessage(`恢复未完成，原存档保留：${describeError(e)}`);
               }
             }}
           >

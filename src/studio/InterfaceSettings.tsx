@@ -2,7 +2,7 @@ import type { StoryProject } from "../engine/types";
 import {
   interfaceFeatures,
   interfaceLabels,
-  notificationKeys,
+  projectNotificationKeys,
 } from "../engine/uiConfig";
 import { Card, Check, Field } from "./fields";
 export function InterfaceSettings({
@@ -49,7 +49,7 @@ export function InterfaceSettings({
           <div className="st-fields">
             {(group === "labels"
               ? Object.keys(interfaceLabels)
-              : notificationKeys
+              : projectNotificationKeys(project)
             ).map((key) => (
               <Field
                 key={key}

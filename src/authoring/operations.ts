@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { randomId } from "../engine/id";
 import { jsonEqual } from "../engine/condition";
 import { z } from "zod";
@@ -392,7 +393,7 @@ export function applyOperations(input: StoryProject, operations: Operation[]) {
     } catch (error) {
       throw Object.assign(
         new Error(
-          `操作 ${step + 1} (${raw.op})：${error instanceof Error ? error.message : String(error)}`,
+          `操作 ${step + 1} (${raw.op})：${describeError(error)}`,
         ),
         { step, operation: raw },
       );

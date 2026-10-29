@@ -4,12 +4,22 @@ export function GalleryAudio({
   src,
   audio,
   volume = 1,
+  group,
 }: {
   src: string;
   audio: { volume: number; muted: boolean };
   volume?: number;
+  group: Set<HTMLAudioElement>;
 }) {
   const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const audio = ref.current!;
+    group.add(audio);
+    return () => {
+      audio.pause();
+      group.delete(audio);
+    };
+  }, [group]);
   useEffect(() => {
     if (ref.current) {
       ref.current.volume = playbackVolume(audio, volume);
@@ -23,11 +33,9 @@ export function GalleryAudio({
       preload="none"
       src={src}
       onPlay={(event) => {
-        document
-          .querySelectorAll<HTMLAudioElement>(".material-list audio")
-          .forEach((other) => {
-            if (other !== event.currentTarget) other.pause();
-          });
+        group.forEach((other) => {
+          if (other !== event.currentTarget) other.pause();
+        });
       }}
     />
   );

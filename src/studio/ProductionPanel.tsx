@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useState } from "react";
 import { fontSizeLimits } from "../engine/readingLimits";
 import type { StoryProject } from "../engine/types";
@@ -155,7 +156,7 @@ export function ProductionPanel({
               onChange({ ...project, variables: value });
               setError("");
             } catch (e) {
-              setError(String(e));
+              setError(describeError(e));
             }
           }}
         >
@@ -178,7 +179,7 @@ export function ProductionPanel({
                 try {
                   setTestInput(await file.text());
                 } catch (e) {
-                  setError(String(e));
+                  setError(describeError(e));
                 }
             }}
           />
@@ -213,7 +214,7 @@ export function ProductionPanel({
                   setTestInput("");
                   setError("");
                 } catch (e) {
-                  setError(String(e));
+                  setError(describeError(e));
                 }
               }}
             >
@@ -245,7 +246,7 @@ export function ProductionPanel({
               setTestedDefinitions(authoring.data.tests);
               setError("");
             } catch (e) {
-              setError(String(e));
+              setError(describeError(e));
             }
           }}
         >

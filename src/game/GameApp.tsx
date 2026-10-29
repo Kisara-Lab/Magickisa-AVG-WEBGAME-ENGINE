@@ -1,4 +1,11 @@
-import { menuLabels, uiLabel, featureEnabled } from "../engine/uiConfig";
+import { describeError } from "../engine/errors";
+import {
+  menuLabels,
+  uiLabel,
+  featureEnabled,
+  notificationKey,
+} from "../engine/uiConfig";
+import { usePlayerNotices } from "./usePlayerNotices";
 import { interpolate } from "../engine/interpolation";
 import { PlayerGate } from "./PlayerGate";
 import { useVoice } from "./useVoice";
@@ -88,7 +95,7 @@ export function GameApp() {
         ),
       )
       .catch((e) => {
-        if (e.name !== "AbortError") setError(String(e));
+        if (e.name !== "AbortError") setError(describeError(e));
       });
     return () => c.abort();
   }, []);
@@ -141,7 +148,7 @@ function LoadSession({
       setResult({ store });
       return () => store.destroy();
     } catch (e) {
-      setResult({ error: String(e) });
+      setResult({ error: describeError(e) });
     }
   }, [project, fresh, sessionStorage]);
   return result.error ? (
@@ -241,9 +248,16 @@ export function GameSession({
     const audio = initialPreferences.value;
     store.setAudio(audio.volume, audio.muted, false);
   }, [store, initialPreferences]);
-  const [notice, setNotice] = useState("");
-  const [noticeId, setNoticeId] = useState("");
   const [selectedMaterial, setSelectedMaterial] = useState<string>();
+  useEffect(() => {
+    if (panel === "music" && selectedMaterial) {
+      const item = document.querySelector<HTMLElement>(
+        `[data-music-id="${CSS.escape(selectedMaterial)}"]`,
+      );
+      item?.focus();
+      item?.scrollIntoView({ block: "nearest" });
+    }
+  }, [panel, selectedMaterial]);
   const [confirmation, setConfirmation] = useState<{
     message: string;
     action: () => void;
@@ -261,11 +275,6 @@ export function GameSession({
     q.addEventListener("change", f);
     return () => q.removeEventListener("change", f);
   }, []);
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(""), 4200);
-    return () => clearTimeout(timer);
-  }, [notice]);
   const updatePreferences = (next: PlayerPreferences) => {
     setPreferences(next);
     try {
@@ -282,17 +291,22 @@ export function GameSession({
     );
     previousMaterials.current = save.unlockedMaterials;
     if (!added.length) return;
-    setNoticeId(added.at(-1) ?? "");
     const category = project.materials.find(
       (m) => m.id === added.at(-1),
     )?.category;
+    const targetPanel =
+      materialCategory(category || "clue") === "note"
+        ? "notes"
+        : materialCategory(category || "clue");
+    if (!featureEnabled(project, targetPanel)) return;
     setNotice(
-      project.ui?.notifications?.[
-        category === "note" ? "notes" : category || ""
-      ] || "有新的调查资料可读",
+      project.ui?.notifications?.[notificationKey(category || "")] ||
+        "有新的调查资料可读",
+      {
+        panel: targetPanel,
+        id: added.at(-1),
+      },
     );
-    const timer = setTimeout(() => setNotice(""), 4200);
-    return () => clearTimeout(timer);
   }, [save.unlockedMaterials.join("|"), project]);
   const node = store.runtime.node,
     line = store.runtime.line,
@@ -302,7 +316,7 @@ export function GameSession({
       action();
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeError(e));
     }
   };
   const text = interpolate(
@@ -312,6 +326,38 @@ export function GameSession({
   const segments = useMemo(() => graphemes(text), [text]);
   const revealKey = `${save.nodeId}:${line?.id}:${text}`;
   const [pageActive, setPageActive] = useState(true);
+  const {
+    notice,
+    target: noticeTarget,
+    notify: setNotice,
+  } = usePlayerNotices(
+    !!panel ||
+      !!confirmation ||
+      !pageActive ||
+      !!save.presentation ||
+      !!save.sequence ||
+      node?.presentation === "dedication" ||
+      splash,
+  );
+  const collectionProgress = store.collections.snapshot;
+  const previousCollections = useRef(collectionProgress);
+  useEffect(() => {
+    for (const kind of ["gallery", "music"] as const) {
+      const added = collectionProgress[kind].filter(
+        (id) => !previousCollections.current[kind].includes(id),
+      );
+      if (added.length && featureEnabled(project, kind))
+        setNotice(kind === "gallery" ? "画廊有新收录" : "音乐鉴赏有新曲目", {
+          panel: kind,
+          id: added.at(-1),
+        });
+    }
+    previousCollections.current = collectionProgress;
+  }, [
+    collectionProgress.gallery.join("|"),
+    collectionProgress.music.join("|"),
+    setNotice,
+  ]);
   useEffect(() => {
     const pause = () => setPageActive(false);
     window.addEventListener("blur", pause);
@@ -363,7 +409,7 @@ export function GameSession({
     try {
       return node ? explainNext(project, node, save) : undefined;
     } catch (error) {
-      return { allowed: false, error: `无法检查出口：${String(error)}` };
+      return { allowed: false, error: `无法检查出口：${describeError(error)}` };
     }
   }, [project, node, save]);
   const logicError =
@@ -526,14 +572,12 @@ export function GameSession({
     save.audio.currentTrackId,
   );
   const musicRef = useRef<HTMLAudioElement | null>(null);
-  const bgm =
-    panel === "music"
+  const galleryAudioGroup = useRef(new Set<HTMLAudioElement>()).current;
+  const bgm = !started
+    ? project.titleScreen.music
+    : save.presentation || save.sequence
       ? undefined
-      : !started
-        ? project.titleScreen.music
-        : save.presentation || save.sequence
-          ? undefined
-          : playback.src;
+      : playback.src;
   useEffect(() => {
     const src = bgm;
     if (!src) return;
@@ -545,25 +589,39 @@ export function GameSession({
       started ? playback.volume : 1,
       0.65 * preferences.bgmVolume * (voice.playing ? 0.35 : 1),
     );
-    void audio
-      .play()
-      .then(() => setBlocked(false))
-      .catch(() => setBlocked(true));
-    const enable = () => {
-      void audio
-        .play()
-        .then(() => setBlocked(false))
-        .catch(() => setBlocked(true));
-    };
-    window.addEventListener("pointerdown", enable, { once: true });
     return () => {
       audio.pause();
       if (musicRef.current === audio) musicRef.current = null;
       audio.removeAttribute("src");
       audio.load();
-      window.removeEventListener("pointerdown", enable);
     };
   }, [bgm]);
+  useEffect(() => {
+    const audio = musicRef.current;
+    if (!audio) return;
+    if (panel === "music") {
+      audio.pause();
+      setBlocked(false);
+      return;
+    }
+    let active = true;
+    const enable = () => {
+      void audio
+        .play()
+        .then(() => {
+          if (active) setBlocked(false);
+        })
+        .catch(() => {
+          if (active) setBlocked(true);
+        });
+    };
+    enable();
+    window.addEventListener("pointerdown", enable, { once: true });
+    return () => {
+      active = false;
+      window.removeEventListener("pointerdown", enable);
+    };
+  }, [bgm, panel === "music"]);
   useEffect(() => {
     if (musicRef.current)
       musicRef.current.volume = playbackVolume(
@@ -628,7 +686,7 @@ export function GameSession({
       try {
         store.markRead(id);
       } catch (e) {
-        setError(String(e));
+        setError(describeError(e));
       }
     },
     [store],
@@ -779,7 +837,11 @@ export function GameSession({
               )}
             </nav>
           ) : panel === "gallery" ? (
-            <GalleryPanel store={store} confirm={confirm} />
+            <GalleryPanel
+              store={store}
+              confirm={confirm}
+              selectedId={selectedMaterial}
+            />
           ) : panel === "settings" ? (
             <>
               <ReadingSettings
@@ -957,23 +1019,38 @@ export function GameSession({
             </>
           ) : panel === "music" ? (
             <div className="material-list">
-              {(project.media.musicGallery || [])
-                .filter(
-                  (t) =>
-                    !t.unlockNode || save.visitedNodes.includes(t.unlockNode),
-                )
-                .map((t) => (
-                  <article key={t.id}>
-                    <h3>{t.title}</h3>
+              <p>
+                已解锁{" "}
+                {
+                  (project.media.musicGallery || []).filter((t) =>
+                    collectionProgress.music.includes(t.id),
+                  ).length
+                }{" "}
+                / {(project.media.musicGallery || []).length}{" "}
+                首。已获得的音乐跨周目保留；关闭后继续播放剧情音乐。
+              </p>
+              {!project.media.musicGallery?.length && (
+                <p>作者尚未设置音乐鉴赏内容。</p>
+              )}
+              {(project.media.musicGallery || []).map((t) => (
+                <article key={t.id} data-music-id={t.id} tabIndex={-1}>
+                  <h3>
+                    {collectionProgress.music.includes(t.id)
+                      ? t.title
+                      : "尚未解锁"}
+                  </h3>
+                  {collectionProgress.music.includes(t.id) && (
                     <GalleryAudio
+                      group={galleryAudioGroup}
                       src={t.src}
                       audio={save.audio}
                       volume={
                         project.audio.find((a) => a.src === t.src)?.volume
                       }
                     />
-                  </article>
-                ))}
+                  )}
+                </article>
+              ))}
             </div>
           ) : (
             showMaterials(panel)
@@ -1056,26 +1133,29 @@ export function GameSession({
           )}
         </div>
       )}
-      {notice && !save.presentation && node?.presentation !== "dedication" && (
-        <div className="unlock-notice" role="status">
-          {notice}
-          <button
-            onClick={() => {
-              const item = materials.find((m) => m.id === noticeId);
-              if (item) {
-                open(
-                  materialCategory(item.category) === "note"
-                    ? "notes"
-                    : materialCategory(item.category),
-                );
-                setSelectedMaterial(item.id);
-              }
-            }}
-          >
-            查看
-          </button>
-        </div>
-      )}
+      {notice &&
+        pageActive &&
+        !panel &&
+        !confirmation &&
+        !splash &&
+        !save.presentation &&
+        !save.sequence &&
+        node?.presentation !== "dedication" && (
+          <div className="unlock-notice" role="status">
+            {notice}
+            <button
+              onClick={() => {
+                if (noticeTarget) {
+                  open(noticeTarget.panel);
+                  setSelectedMaterial(noticeTarget.id);
+                }
+                setNotice("");
+              }}
+            >
+              {noticeTarget ? "查看" : "关闭提示"}
+            </button>
+          </div>
+        )}
       {preferences.musicLabel &&
         musicTitle &&
         !save.presentation &&
@@ -1168,7 +1248,13 @@ export function GameSession({
       {(error || logicError) && (
         <div className="runtime-error" role="alert">
           {error || logicError}
-          <button onClick={() => setError("")}>关闭</button>
+          {error ? (
+            <button onClick={() => setError("")}>关闭</button>
+          ) : (
+            <p>
+              当前出口逻辑无法计算，请从菜单导出进度或读取其他存档，并向作者反馈。
+            </p>
+          )}
         </div>
       )}
       {blocked && (

@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -22,6 +23,7 @@ export function Field({
   max,
   step,
   allowEmpty = false,
+  validate,
 }: {
   label: string;
   value?: string | number;
@@ -34,6 +36,7 @@ export function Field({
   max?: number;
   step?: number;
   allowEmpty?: boolean;
+  validate?: (text: string) => string | undefined;
 }) {
   const [numberText, setNumberText] = useState(String(value ?? ""));
   const [numberError, setNumberError] = useState("");
@@ -79,11 +82,19 @@ export function Field({
           min={min}
           max={max}
           step={step}
-          value={type === "number" ? numberText : (value ?? "")}
+          value={type === "number" || validate ? numberText : (value ?? "")}
           placeholder={placeholder}
           aria-invalid={!!numberError}
           onChange={(e) => {
             const text = e.target.value;
+            if (validate) {
+              setNumberText(text);
+              const problem = validate(text);
+              setNumberError(
+                problem ? `尚未应用：${problem}；工程保留原值。` : "",
+              );
+              if (problem) return;
+            }
             if (type !== "number") {
               onChange(text);
               return;
@@ -221,7 +232,7 @@ export function JsonField({
             setDirty(false);
             setError("");
           } catch (e) {
-            setError(String(e));
+            setError(describeError(e));
           }
         }}
       >

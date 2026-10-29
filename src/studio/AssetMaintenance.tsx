@@ -1,3 +1,4 @@
+import { describeError } from "../engine/errors";
 import { useEffect, useRef, useState } from "react";
 import { studioRequest, studioUrl } from "./ProjectManager";
 import { Fold, Modal } from "./components";
@@ -47,7 +48,7 @@ export function AssetMaintenance({
     try {
       await action();
     } catch (error) {
-      setError(String(error));
+      setError(describeError(error));
     } finally {
       setBusy(false);
     }

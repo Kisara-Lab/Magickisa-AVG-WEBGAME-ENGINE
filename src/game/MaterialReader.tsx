@@ -13,6 +13,12 @@ export function MaterialReader({
 }) {
   const [query, setQuery] = useState(""),
     [id, setId] = useState(selected ?? "");
+  useEffect(() => {
+    if (selected) {
+      setId(selected);
+      setQuery("");
+    }
+  }, [selected]);
   const entry = entries.find((m) => m.id === id);
   const body = useRef<HTMLElement>(null);
   const alreadyRead = !!entry && read.includes(entry.id);
