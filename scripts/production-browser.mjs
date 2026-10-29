@@ -171,6 +171,10 @@ export async function productionBrowser(browser, origin) {
     await page.getByLabel("独奏预览（不影响发行）", { exact: true }).uncheck();
     await clip.focus();
     await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      () =>
+        document.querySelector('input[aria-label="开始时间"]')?.value === "1.1",
+    );
     assert.equal(
       await page.getByLabel("开始时间", { exact: true }).inputValue(),
       "1.1",
