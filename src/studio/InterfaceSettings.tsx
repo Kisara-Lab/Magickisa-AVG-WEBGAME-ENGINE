@@ -40,6 +40,24 @@ export function InterfaceSettings({
           />
         ))}
       </Card>
+      <Card title="分支可见性">
+        <p>
+          默认隐藏不可用选项，避免剧透。启用后显示选项文案和通用锁定原因，不公开条件变量或目标场景。一次性选项仍仅能选择一次；重新开始会重置本周目记录。
+        </p>
+        <Check
+          label="向玩家显示锁定分支"
+          value={project.ui?.enabled?.choiceHints === true}
+          onChange={(value) =>
+            onChange({
+              ...project,
+              ui: {
+                ...project.ui,
+                enabled: { ...project.ui?.enabled, choiceHints: value },
+              },
+            })
+          }
+        />
+      </Card>
       {(["labels", "notifications"] as const).map((group) => (
         <Card
           key={group}

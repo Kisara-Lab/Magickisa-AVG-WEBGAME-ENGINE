@@ -1,5 +1,7 @@
 import { describeError } from "../engine/errors";
 import { InterfaceSettings } from "./InterfaceSettings";
+import { ConditionReport } from "./ConditionReport";
+import type { ConditionDiagnostics } from "../engine/logicDiagnostics";
 import { requireModernProject } from "../engine/support";
 import {
   changeRecord,
@@ -175,6 +177,8 @@ export function Studio() {
       log: "",
     });
   const [layout, setLayout] = useState<Layout>(() => readLayout(profile));
+  const [conditionReport, setConditionReport] =
+    useState<ConditionDiagnostics>();
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [recovery, setRecovery] = useState<Draft[]>([]);
   const [draftState, setDraftState] = useState("草稿无需保留");
@@ -614,6 +618,8 @@ export function Studio() {
           );
       }
       if (data.type === "studio:state") setRuntime(data.save);
+      if (data.type === "studio:diagnostics")
+        setConditionReport(data.diagnostics);
       if (data.type === "studio:error") setError(`预览：${data.error}`);
       if (data.type === "studio:notice") setNotice(data.error);
       if (data.type === "studio:time") setTimeState(data.time);
@@ -1414,8 +1420,10 @@ export function Studio() {
               </span>
               <div>
                 <button
+                  className="st-sidebar-toggle"
                   aria-label="切换章节栏"
                   onClick={() =>
+                    window.innerWidth > 1050 &&
                     updateLayout({
                       sidebar: !layout.sidebar,
                     })
@@ -1620,23 +1628,57 @@ export function Studio() {
                 </p>
               )}
               {project && (
-                <label className="st-mobile-node">
-                  当前场景
-                  <select
-                    aria-label="跳转节点"
-                    value={node?.id || ""}
-                    onChange={(e) => {
-                      select(e.target.value);
-                      setSection("script");
-                    }}
-                  >
-                    {project.nodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.id} · {n.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="st-mobile-node">
+                  <label>
+                    当前场景
+                    <select
+                      aria-label="跳转节点"
+                      value={node?.id || ""}
+                      onChange={(e) => {
+                        select(e.target.value);
+                        setSection("script");
+                      }}
+                    >
+                      {project.nodes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.id} · {n.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <details>
+                    <summary>章节导航与搜索</summary>
+                    <input
+                      aria-label="窄屏搜索场景"
+                      placeholder="搜索 ID、标题或台词"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                    <button
+                      onClick={() => {
+                        const n = newNode(project);
+                        mutate((p) => p.nodes.push(n));
+                        select(n.id);
+                        setSection("script");
+                      }}
+                    >
+                      添加场景
+                    </button>
+                    <SceneTree
+                      nodes={project.nodes}
+                      selected={node?.id || ""}
+                      start={project.startNodeId}
+                      levels={sectionLevels}
+                      search={search}
+                      collapsed={layout.collapsed}
+                      onCollapse={(collapsed) => updateLayout({ collapsed })}
+                      onSelect={(id) => {
+                        select(id);
+                        setSection("script");
+                      }}
+                    />
+                  </details>
+                </div>
               )}
               {!project || !node ? (
                 <div className="st-loading">
@@ -2251,6 +2293,16 @@ export function Studio() {
                   : JSON.stringify(runtime, null, 2)}
               </pre>
             </Fold>
+            {project && (
+              <ConditionReport
+                data={conditionReport}
+                project={project}
+                stale={
+                  JSON.stringify(preview?.project) !== JSON.stringify(project)
+                }
+                visit={visit}
+              />
+            )}
             <p className="st-preview-hint">
               编辑后点击“应用到预览”。预览不修改玩家存档。
             </p>

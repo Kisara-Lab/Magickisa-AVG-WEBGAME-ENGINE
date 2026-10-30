@@ -84,6 +84,7 @@ export function variableIndex(p: StoryProject) {
     }
   }
   for (const m of p.materials) condition(m.unlock, m.title);
+  for (const g of p.gallery ?? []) condition(g.unlock, `画廊 · ${g.title}`);
   const groups = new Map<string, VariableUse[]>();
   for (const use of uses) {
     const group = groups.get(use.key);

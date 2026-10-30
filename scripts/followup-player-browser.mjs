@@ -9,7 +9,10 @@ export async function followupPlayerBrowser(browser, origin) {
     version: "1",
     startNodeId: "hall",
     nodes: [
-      { id: "hall", title: "门厅", lines: [{ id: "one", text: "开始调查" }] },
+      { id: "hall", title: "门厅", lines: [{ id: "one", text: "开始调查" }], choices: [
+        { id: "once-ask", label: "一次询问", target: "hall", once: true },
+        { id: "locked-path", label: "秘密路径", target: "study", condition: { type: "flag", key: "never" } },
+      ] },
       {
         id: "study",
         title: "书房",
@@ -176,6 +179,21 @@ export async function followupPlayerBrowser(browser, origin) {
     await button("继续游戏").click();
     await menu("音乐鉴赏");
     await page.getByRole("heading", { name: "书房主题" }).waitFor();
+    await close();
+    await page.evaluate(() => { const s = window.__MAGICKISA_ENGINE__; s.jump("hall"); s.advance(); });
+    assert.equal(await page.locator('[data-choice-id="locked-path"]').count(), 0, "locked choices stay hidden by default");
+    project.ui = { enabled: { choiceHints: true } };
+    await page.reload();
+    await button("继续游戏").click();
+    const locked = page.locator('[data-choice-id="locked-path"]');
+    await locked.waitFor();
+    assert.equal(await locked.isDisabled(), true);
+    await locked.getByText("尚未满足选项条件", { exact: true }).waitFor();
+    await page.locator('[data-choice-id="once-ask"]').click();
+    await page.evaluate(() => window.__MAGICKISA_ENGINE__.advance());
+    const used = page.locator('[data-choice-id="once-ask"]');
+    assert.equal(await used.isDisabled(), true);
+    await used.getByText("已选择（本周目仅一次）", { exact: true }).waitFor();
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

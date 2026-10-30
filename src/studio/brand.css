@@ -750,6 +750,33 @@
   }
 }
 @media (max-width: 1050px) {
+  .studio-root .st-topbar { gap: 8px; padding: 10px; }
+  .studio-root .st-brand { min-width: 0; flex-shrink: 1; }
+  .studio-root .st-command-label,
+  .studio-root .st-save-state,
+  .studio-root .st-brand > div > span { display: none; }
+  .studio-root .st-top-actions { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+  /* Keep this breakpoint aligned with storage.ts and Studio's sidebar guard. */
+  .studio-root .st-contextbar .st-sidebar-toggle {
+    display: none;
+  }
+  .st-mobile-node {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+  .st-mobile-node label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .st-mobile-node select,
+  .st-mobile-node input {
+    width: 100%;
+    min-width: 0;
+  }
   .studio-root,
   .studio-root.preview-closed,
   .studio-root.sidebar-closed,

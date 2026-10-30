@@ -9,6 +9,7 @@ import { editorRegression } from "./editor-regression.mjs";
 import { cliBrowserRegression } from "./cli-browser-test.mjs";
 import { investigationBrowser } from "./investigation-browser.mjs";
 import { productionBrowser } from "./production-browser.mjs";
+import { remainingStudioBrowser } from "./remaining-studio-browser.mjs";
 import {
   modernBoundaryRegression,
   rejectLegacyPackages,
@@ -54,6 +55,7 @@ try {
   await cliBrowserRegression(browser, origin);
   await investigationBrowser(browser, origin);
   await productionBrowser(browser, origin);
+  await remainingStudioBrowser(browser, origin);
   await modernBoundaryRegression(origin, page);
   const api = async (profile, route, body, id) => {
     const response = await fetch(

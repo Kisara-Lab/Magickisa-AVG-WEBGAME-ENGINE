@@ -6,6 +6,7 @@ import {
   notificationKey,
 } from "../engine/uiConfig";
 import { usePlayerNotices } from "./usePlayerNotices";
+import { choiceHints } from "../engine/choiceHints";
 import { interpolate } from "../engine/interpolation";
 import { PlayerGate } from "./PlayerGate";
 import { useVoice } from "./useVoice";
@@ -1300,6 +1301,15 @@ export function GameSession({
         {!save.sequence && (
           <>
             <EngineViewport
+              choiceHints={
+                project.ui?.enabled?.choiceHints === true &&
+                store.runtime.done &&
+                !save.presentation &&
+                !save.sequence &&
+                node
+                  ? choiceHints(node, save, choices)
+                  : undefined
+              }
               context={selectContext(project, save, choices)}
               visibleText={segments.slice(0, count).join("")}
               statusText={statusText}

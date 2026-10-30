@@ -3,6 +3,9 @@ import type { Condition } from "../engine/types";
 import { analyzeGraph } from "../engine/graph";
 import { variableIndex } from "./logicIndex";
 import { interpolationKeys } from "../engine/interpolation";
+import { variableDiagnostics } from "../engine/logicDiagnostics";
+import { issuePosition } from "./issuePosition";
+import type { EditorPosition } from "./workspace";
 import {
   interfaceLabels,
   interfaceFeatures,
@@ -16,10 +19,17 @@ export function authorWarnings(p: AuthorProject, profile: Profile) {
     nodeId?: string;
     lineId?: string;
     field?: string;
+    position?: EditorPosition;
   }[] = [];
+  issues.push(
+    ...variableDiagnostics(p).map((i) => ({
+      ...i,
+      position: issuePosition(p, i.path),
+    })),
+  );
   for (const [group, known] of [
     ["labels", Object.keys(interfaceLabels)],
-    ["enabled", [...Object.keys(interfaceFeatures), "music"]],
+    ["enabled", [...Object.keys(interfaceFeatures), "music", "choiceHints"]],
     ["notifications", projectNotificationKeys(p)],
   ] as const)
     for (const key of Object.keys(p.ui?.[group] ?? {}))

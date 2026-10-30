@@ -7,6 +7,7 @@ import { requireModernProfile, requireModernProject } from "../engine/support";
 import { explainBranches, explainNext } from "../engine/investigation";
 import React, { useEffect, useRef, useState } from "react";
 import { RouteRecorder } from "../engine/routeRecorder";
+import { createConditionDiagnostics } from "../engine/logicDiagnostics";
 import { createRoot } from "react-dom/client";
 const send = (data) => parent.postMessage(data, location.origin);
 // Preview sessions never write the player's real saves, notes, or audio settings.
@@ -62,7 +63,7 @@ function Director({ Component, data }) {
               error:
                 e.name === "NotAllowedError"
                   ? "预览音频被浏览器阻止，请在预览画面中点击后重试播放。"
-                : `音频无法播放：${describeError(e)}`,
+                  : `音频无法播放：${describeError(e)}`,
             }),
           );
         else audio.current?.pause();
@@ -159,10 +160,13 @@ window.addEventListener("message", async (e) => {
         const { EngineStore } = await import("../engine/store");
         const { GameSession } = await import("../game/GameApp");
         if (current !== generation) return;
+        const diagnostics = createConditionDiagnostics(project);
         store = new EngineStore(project, {
           persist: false,
           slotId: "studio-preview",
           initialSave: d.testState,
+          observeCondition: diagnostics.observeCondition,
+          onSkipLine: diagnostics.onSkipLine,
         });
         if (!d.testState)
           store.jump(d.nodeId || project.startNodeId, d.line || 0);
@@ -177,7 +181,11 @@ window.addEventListener("message", async (e) => {
           type: "studio:state",
           save: store.getSnapshot(),
         });
-        const explain = () =>
+        const explain = () => {
+          send({
+            type: "studio:diagnostics",
+            diagnostics: diagnostics.snapshot(),
+          });
           send({
             type: "studio:explanation",
             nodeId: store.runtime.node.id,
@@ -189,6 +197,7 @@ window.addEventListener("message", async (e) => {
             ),
             next: explainNext(project, store.runtime.node, store.getSnapshot()),
           });
+        };
         store.subscribe(explain);
         explain();
       }
@@ -226,7 +235,10 @@ window.addEventListener("message", async (e) => {
   } catch (error) {
     send({
       type: e.data.type === "studio:record" ? "studio:notice" : "studio:error",
-      error: e.data.type === "studio:record" ? `路线录制：${describeError(error)}` : describeError(error),
+      error:
+        e.data.type === "studio:record"
+          ? `路线录制：${describeError(error)}`
+          : describeError(error),
     });
   }
 });
