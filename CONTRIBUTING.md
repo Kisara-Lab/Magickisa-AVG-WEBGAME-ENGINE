@@ -1,6 +1,6 @@
 # 贡献说明
 
-玩家端改动需顺序运行 `npm run test:player` 与 Studio 验收，覆盖自动／手动槽、校验失败和配额失败不覆盖、多标签页写权限与接管、临时／预览隔离、逐字阅读和资料逐条已读。浏览器测试使用生成作品，不引入私有剧情或媒体。当前版本为 `2.0.0-dev.4`。
+玩家端改动需顺序运行 `npm run test:player` 与 Studio 验收，覆盖自动／手动槽、校验失败和配额失败不覆盖、多标签页写权限与接管、临时／预览隔离、逐字阅读和资料逐条已读。浏览器测试使用生成作品，不引入私有剧情或媒体。当前版本为 `2.0.0`。
 
 调查流程改动需覆盖资料／列表条件及组合上下文、效果顺序、连接身份、创作资料独立 revision、恢复日志和包往返。`npm test` 包含生成的 1,000 节点／5,000 连接索引与布局测试；`npm run test:studio` 包含实际拖线、状态预览、409 和响应式验收。CLI、Agent、Studio 写入测试顺序运行，测试只使用生成内容。
 
@@ -48,7 +48,7 @@ CLI 和 Studio 共用工程服务；新增写入入口必须遵守跨进程工�
 
 使用 Node.js 22+，执行 `npm ci`，再执行 `npx playwright install chromium` 安装浏览器验收需要的 Chromium。Linux 如需同时安装系统依赖，使用 `npx playwright install --with-deps chromium`；也可以设置 `MAGICKISA_BROWSER` 指向已安装的 Chromium / Edge 可执行文件。修改后运行 `npm run typecheck`、`npm test`、`npm run test:studio` 和 `npm run build:studio`。工程写入与浏览器验收应串行执行。
 
-新增测试使用生成的最小数据，不引入原游戏剧情、素材或发行包。当前为 2.0.0-dev.4，仅开发现代版；兼容档在 v1.0legacy 冻结，不建立维护分支或转换工具。请保持现代稳定 ID、schemaVersion: 2、玩家存档与 Studio 预览消息协议；兼容输入应明确拒绝并提供 Legacy 链接，原文件与浏览器记录不得删除。详见 [破坏性变更](BREAKING-CHANGES.md)。
+新增测试使用生成的最小数据，不引入原游戏剧情、素材或发行包。当前为 2.0.0，仅开发现代版；兼容档在 v1.0legacy 冻结，不建立维护分支或转换工具。请保持现代稳定 ID、schemaVersion: 3、玩家存档与 Studio 预览消息协议；兼容输入应明确拒绝并提供 Legacy 链接，原文件与浏览器记录不得删除。详见 [破坏性变更](BREAKING-CHANGES.md)。
 
 Agent 创作模块需保持 manifest 格式 1、稳定目标的三方比较和默认不打包原始附件。顺序运行 `npm run test:cli`、`npm run test:authoring`、`npm run test:studio`，再运行许可检查与 Studio 构建。新增同步写入必须经过恢复日志，不直接修改基线；查看来源与生成方案不得改写工程。详见 [创作手册](docs/AUTHORING.md)。
 

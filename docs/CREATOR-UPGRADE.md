@@ -1,5 +1,7 @@
 # 创作生产升级实施记录
 
+> 本文保留 dev.5 实施时的历史过程与验收记录。相关功能已合并至 main，并纳入 v2.0.0 正式版；发布与当前兼容边界以 [版本记录](../CHANGELOG.md) 和 [兼容说明](../BREAKING-CHANGES.md) 为准。
+
 目标版本：2.0.0-dev.5。工作分支：`feat/creator-production-dev5`。
 
 本文件记录实施与验收结果。交付 PR 为 [#72](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/pull/72)，最终合并状态与提交以该 PR 为准。

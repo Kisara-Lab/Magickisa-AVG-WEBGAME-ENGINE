@@ -2,7 +2,7 @@
 
 ## 调查逻辑与连接诊断
 
-条件支持 `material`（资料 `unlocked/read`，`value` 默认 true）与 `contains`（列表中包含 JSON 深度相等值）。dev.5 工程 schemaVersion 为 3，需配套新版运行时。调查逻辑示例见 [调查工作台](INVESTIGATION.md)，新增生产命令见[创作工作流](CREATOR-WORKFLOW.md)。
+条件支持 `material`（资料 `unlocked/read`，`value` 默认 true）与 `contains`（列表中包含 JSON 深度相等值）。v2.0.0 工程 schemaVersion 为 3，需配套新版运行时。调查逻辑示例见 [调查工作台](INVESTIGATION.md)，新增生产命令见[创作工作流](CREATOR-WORKFLOW.md)。
 
 `graph --workspace ID --json` 保留原字段，追加稳定连接 `key`、`kind`、`crossChapter`、强连通循环 `cycles` 与定位诊断 `diagnostics`。有意的调查循环是警告；静态连通不证明实际条件下可通行。
 

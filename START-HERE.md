@@ -2,7 +2,9 @@
 
 使用 **v1.0legacy** 的用户，请阅读 [Legacy 专用手册](docs/legacy/README.md)，其中提供该版本的安装、创作、演出、导入导出、备份恢复和发行步骤。
 
-本包包含完整引擎与 Studio，当前为 2.0.0-dev.4，仅支持现代档。兼容档请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，不提供旧档转换或后续维护。新版工程包不保证能由 Legacy Studio 打开。
+从 [v2.0.0 Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v2.0.0) 下载 `MAGICKISA-v2.0.0-Studio-start.zip`。附件 `SHA256SUMS.txt` 同时覆盖源码 ZIP 和启动包 ZIP。
+
+本包包含完整引擎与 Studio，当前正式版本为 2.0.0，仅支持现代档。兼容档请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)，不提供旧档转换或后续维护。新版工程包不保证能由 Legacy Studio 打开。
 
 命令行开发者与 Agent 可在安装依赖后运行 `node scripts/magickisa.mjs help`，无须打开浏览器即可编辑、校验和构建。详见 [CLI 手册](docs/CLI.md) 与 [Agent 指南](docs/AGENT-GUIDE.md)。
 
@@ -20,4 +22,4 @@
 
 同一目录只运行一个 Studio。启动器在依赖安装和服务运行期间持有目录锁；请勿另行用 npm run dev 启动第二个服务。依赖损坏时执行 `node scripts/launch-studio.mjs --reinstall`；配置加载失败会自动清除缓存标记供下次重装。
 
-本包不包含 Node.js、依赖、浏览器或游戏内容。玩家端已加入作品级多标签页写入保护，安全保存需要支持 Web Locks 的浏览器和 HTTPS／本机环境；不支持时可临时游玩并导出。阅读设置、12 个手动槽和恢复方法见 [玩家指南](docs/PLAYER.md)。工程备份管理仍追踪 #6。
+本包不包含 Node.js、依赖、浏览器或游戏内容。玩家端已加入作品级多标签页写入保护，安全保存需要支持 Web Locks 的浏览器和 HTTPS／本机环境；不支持时可临时游玩并导出。阅读设置、12 个手动槽和恢复方法见 [玩家指南](docs/PLAYER.md)。工程备份管理支持列表、差异检查与协调恢复；升级前先导出完整工程包。

@@ -447,7 +447,7 @@ export function ProjectManager({
             <div>
               <strong>{item.name}</strong>
               <small>
-                {"现代开发版"} ·{" "}
+                {"现代版"} ·{" "}
                 {item.lastOpened
                   ? new Date(item.lastOpened).toLocaleString()
                   : "原有工程"}
