@@ -172,6 +172,10 @@ export async function playerBrowser(browser, origin) {
     await page.waitForFunction(
       () => window.__MAGICKISA_ENGINE__.save.lineIndex === 1,
     );
+    await page
+      .locator(".dialogue-text")
+      .getByText("你听见远处传来钟声。", { exact: true })
+      .waitFor();
     await wheel(80);
     assert.equal(
       (await snapshot()).lineIndex,
