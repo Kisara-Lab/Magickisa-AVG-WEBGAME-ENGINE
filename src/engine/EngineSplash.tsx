@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { version } from "../../package.json";
 import type { StoryProject } from "./types";
 import { ResourceManager } from "./resourceManager";
 import { resolveAsset, resolveScene } from "./media";
@@ -57,7 +58,7 @@ export function EngineSplash({
         <i style={{ width: `${progress * 100}%` }} />
       </div>
       <div className="engine-splash-version">
-        Magickisa-AVG-webgame-Engine · v1.0
+        Magickisa-AVG-webgame-Engine · v{version}
       </div>
     </div>
   );
