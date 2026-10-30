@@ -20,7 +20,7 @@ export const defaultPreferences: PlayerPreferences = {
   opacity: 0.9,
   characterDelay: 0,
   autoDelay: 2.6,
-  wheel: false,
+  wheel: true,
   musicLabel: true,
   volume: 1,
   muted: false,

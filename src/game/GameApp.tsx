@@ -653,21 +653,67 @@ export function GameSession({
       ?.split("/")
       .at(-1)
       ?.replace(/\.mp3$/, "");
+  // Keep gesture state across dialogue updates; re-rendering must not reset it.
+  const wheelGesture = useRef({
+    lastEvent: -Infinity,
+    direction: 0,
+    total: 0,
+    handled: false,
+  });
   useEffect(() => {
     if (!started || !preferences.wheel) return;
-    let last = 0;
     const handle = (e: WheelEvent) => {
-      if (Date.now() - last < 300 || Math.abs(e.deltaY) < 20) return;
-      last = Date.now();
       if (
         panel ||
         confirmation ||
         splash ||
+        !pageActive ||
         save.presentation ||
-        (e.target as HTMLElement).closest("input,textarea,select,.choice-list")
+        save.sequence ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        e.shiftKey ||
+        Math.abs(e.deltaX) > Math.abs(e.deltaY) ||
+        !e.deltaY ||
+        (e.target as HTMLElement).closest(
+          "input,textarea,select,button,a,[contenteditable],.choice-list",
+        )
       )
         return;
+      const gesture = wheelGesture.current;
+      const now = performance.now();
+      if (
+        now - gesture.lastEvent > 250 ||
+        gesture.direction !== Math.sign(e.deltaY)
+      ) {
+        gesture.total = 0;
+        gesture.handled = false;
+      }
+      gesture.lastEvent = now;
+      gesture.direction = Math.sign(e.deltaY);
+      const box = (e.target as HTMLElement).closest<HTMLElement>(
+        ".dialogue-box",
+      );
+      if (
+        box &&
+        box.scrollHeight > box.clientHeight + 1 &&
+        (e.deltaY < 0
+          ? box.scrollTop > 1
+          : box.scrollTop + box.clientHeight < box.scrollHeight - 1)
+      ) {
+        gesture.handled = true; // Do not turn native text scrolling momentum into a story action.
+        return;
+      }
+      if (e.deltaY < 0 && !featureEnabled(project, "history")) return;
       e.preventDefault();
+      if (gesture.handled) return;
+      gesture.total +=
+        e.deltaY *
+        (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
+      if (Math.abs(gesture.total) < 20) return;
+      gesture.handled = true;
+      stopPlayback();
       if (e.deltaY > 0) advance();
       else if (e.deltaY < 0) open("history");
     };
