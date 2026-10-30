@@ -143,6 +143,11 @@ export async function playerBrowser(browser, origin) {
       fullPage: true,
     });
     await button("开始游戏").click();
+    await page.locator(".engine-splash-version").waitFor();
+    assert.equal(
+      (await page.locator(".engine-splash-version").innerText()).trim(),
+      `Magickisa-AVG-webgame-Engine · v${JSON.parse(fs.readFileSync("package.json", "utf8")).version}`,
+    );
     await page.locator(".engine-splash").waitFor({ state: "hidden" });
     await page
       .locator(".dialogue-text")
