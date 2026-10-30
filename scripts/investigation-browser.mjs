@@ -161,6 +161,11 @@ export async function investigationBrowser(browser, origin) {
       .getByLabel("可编辑剧情画布", { exact: true })
       .scrollIntoViewIfNeeded();
     // Use real pointer events for graph wiring; applying is a single undo step.
+    await page.locator('[data-testid="rf__minimap"]').waitFor();
+    await page.getByLabel("显示缩略地图", { exact: true }).uncheck();
+    await page
+      .locator('[data-testid="rf__minimap"]')
+      .waitFor({ state: "detached" });
     const source = page.locator(
       '.react-flow__node[data-id="hub"] .react-flow__handle[data-handleid="new"]',
     );
@@ -196,6 +201,8 @@ export async function investigationBrowser(browser, origin) {
       0,
     );
     const imageDir = path.resolve("docs/images");
+    await page.getByLabel("显示缩略地图", { exact: true }).check();
+    await page.locator('[data-testid="rf__minimap"]').waitFor();
     fs.mkdirSync(imageDir, { recursive: true });
     await page.locator(".st-content").evaluate((e) => (e.scrollTop = 0));
     await page.locator(".st-flow-inspector").evaluate((e) => (e.scrollTop = 0));

@@ -136,3 +136,5 @@ node scripts/magickisa.mjs build --workspace WORKSPACE_ID --base /games/my-game/
 ```
 
 将生成的 `dist/` 内容部署到同一路径。构建入口与游戏素材会使用该前缀；外链、稳定资源 ID 和剧情文本不会改写。不提供 `file://` 双击运行模式，需通过 HTTP 服务打开。
+
+流程图的“显示缩略地图”可随时关闭；缩略图遮挡端口时，关闭后进行连线，再开启查看全局。该开关不修改工程或撤销记录。

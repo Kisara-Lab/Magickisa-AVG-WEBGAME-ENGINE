@@ -123,6 +123,7 @@ function GraphWorkspace({
   runtimeStale,
 }: Props) {
   const flow = useReactFlow();
+  const [showMinimap, setShowMinimap] = useState(true);
   const [prefs, setPrefs] = useState(() =>
     readPreference(scope, project.nodes.length > 300 ? "neighbors" : "all"),
   );
@@ -351,6 +352,11 @@ function GraphWorkspace({
       <AuthoringStatus controller={authoring} />
       {preferenceError && <p role="alert">{preferenceError}</p>}
       <div className="st-graph-tools">
+        <Check
+          label="显示缩略地图"
+          value={showMinimap}
+          onChange={setShowMinimap}
+        />
         <button onClick={() => void flow.fitView({ duration: 0 })}>
           适应视图
         </button>
@@ -635,13 +641,15 @@ function GraphWorkspace({
               maxZoom={2}
             >
               <Controls />
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor="#a86e14"
-                bgColor="#ffedbf"
-                maskColor="#533a1230"
-              />
+              {showMinimap && (
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeColor="#a86e14"
+                  bgColor="#ffedbf"
+                  maskColor="#533a1230"
+                />
+              )}
               <Background />
             </ReactFlow>
           </div>
