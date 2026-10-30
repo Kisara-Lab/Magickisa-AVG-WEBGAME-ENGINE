@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/development-2.0.0--dev.5-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/release-v2.0.0-gold.svg)](CHANGELOG.md)
 
 **MAGICKISA 是一套开源的网页 AVG／视觉小说引擎，附带可视化编辑器 MAGICKISA Studio 和面向终端、AI Agent 的 CLI。** 从连续台词、人物立绘到复杂分支、线索条件和 OP／ED，可以在同一工程中创作、调试并构建为网页游戏。
 
@@ -52,7 +52,7 @@ _在图上组织场景与跳转，在侧栏精确编辑分支、条件和效果�
 ### 方式一：获取源码并启动
 
 ```sh
-git clone https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE.git
+git clone --branch v2.0.0 https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE.git
 cd Magickisa-AVG-WEBGAME-ENGINE
 npm ci
 npm run dev
@@ -68,7 +68,7 @@ npm run dev
 
 ### 方式二：使用仓库中的启动入口
 
-获取并解压完整源码后，也可以使用以下脚本，由启动器检查环境、安装依赖并打开 Studio：
+在 **[v2.0.0 Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v2.0.0)** 下载 `MAGICKISA-v2.0.0-Studio-start.zip` 并完整解压，使用以下脚本。启动器会检查环境、安装依赖并打开 Studio；附件中的 `SHA256SUMS.txt` 可用于校验下载内容。
 
 | 系统    | 启动方式                                                      |
 | ------- | ------------------------------------------------------------- |
@@ -78,7 +78,7 @@ npm run dev
 
 这些入口仍需要预装 Node.js。后续启动复用已安装依赖，锁文件或环境变化时重新安装。同一目录只运行一个 Studio。详见 [启动与故障排查](START-HERE.md)。
 
-> **开发版本：** 本分支为 **2.0.0-dev.5**，仅开发现代版，尚未发布 V2 正式 Release。工程与存档格式升级为 3，工程包格式为 2；旧开发版文件请先保留备份，不提供自动转换。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。详见 [破坏性变更](BREAKING-CHANGES.md)与[本轮实施状态](docs/CREATOR-UPGRADE.md)。
+> **正式版本：** **[v2.0.0](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v2.0.0)**，仅支持现代版。工程与存档格式升级为 3，工程包格式为 2；旧开发版文件请先保留备份，不提供自动转换。需要旧兼容档，请使用冻结的 [v1.0legacy Release](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/releases/tag/v1.0legacy)。详见 [破坏性变更](BREAKING-CHANGES.md)与[本轮实施状态](docs/CREATOR-UPGRADE.md)。
 
 **使用 v1.0legacy？请阅读 [Legacy 专用手册](docs/legacy/README.md)**，涵盖下载安装、双模式创作、剧情逻辑、献词／OP／ED、工程迁移、备份恢复与网页发行。
 
@@ -183,7 +183,7 @@ node scripts/magickisa.mjs edit --workspace WORKSPACE_ID --file story.json --jso
 
 **工程包**携带工程、全部素材（包括未使用素材）、结构稿、同步基线与 Studio 创作资料。默认不携带原始附件，CLI 加 `--include-sources` 才加入；也不包含引擎、依赖、浏览器草稿、玩家存档或历史备份。导入始终创建独立工程，重复导入不会覆盖原项目。
 
-工程包使用格式 2，记录工程格式及最低引擎版本，按文件校验 SHA256；ZIP 上限 2 GiB、解压总量 8 GiB、文件数 50,000。外部资源保留链接，不自动下载。格式 1 工程包请使用原版本 Studio，本开发版不自动转换。
+工程包使用格式 2，记录工程格式及最低引擎版本，按文件校验 SHA256；ZIP 上限 2 GiB、解压总量 8 GiB、文件数 50,000。外部资源保留链接，不自动下载。格式 1 工程包请使用原版本 Studio，本版本不自动转换。
 
 **游戏构建**也可以从命令行执行：
 
@@ -240,11 +240,11 @@ npm run build:studio
 
 使用前请了解这些边界：
 
-- 当前 V2 是开发版；兼容档停留在 `v1.0legacy`，不提供转换工具。
+- 当前正式版为 v2.0.0；兼容档停留在 `v1.0legacy`，不提供转换工具。
 - 当前工程使用 `schemaVersion: 3`，玩家存档按稳定台词 ID 与阶段定位。旧开发版工程、存档与格式 1 工程包需保留原版本读取，不自动迁移。
 - 没有内置模型调用、MCP、专用剧本语言或无界面剧情模拟；剧情效果需要真实预览验收。
 - 当前不提供 npm 发行包或托管 Studio 服务；静态 `dist-studio/` 不能替代完整本地服务。
-- 工程备份管理改进见 [#6](https://github.com/Kisara-Lab/Magickisa-AVG-WEBGAME-ENGINE/issues/6)。玩家端现有作品级多标签页写入保护，安全保存需要支持 Web Locks 的浏览器与 HTTPS／本机环境；其他环境可临时游玩并导出进度。
+- 工程备份提供浏览、差异与协调恢复；升级前仍建议导出完整工程包。玩家端现有作品级多标签页写入保护，安全保存需要支持 Web Locks 的浏览器与 HTTPS／本机环境；其他环境可临时游玩并导出进度。
 
 ## 许可与参与
 

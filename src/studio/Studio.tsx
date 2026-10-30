@@ -2043,7 +2043,7 @@ export function Studio() {
                         </div>
                         <Package size={34} />
                       </div>
-                      <Card title={"现代开发版"}>
+                      <Card title={"现代版"}>
                         <label>
                           网站部署路径
                           <input
@@ -2077,7 +2077,7 @@ export function Studio() {
                         </div>
                         <p>
                           目标工程：
-                          {"现代开发版"} · 输出目录：
+                          {"现代版"} · 输出目录：
                           <code>
                             {workspaceId()
                               ? `workspace-projects/${workspaceId()}/dist/`
