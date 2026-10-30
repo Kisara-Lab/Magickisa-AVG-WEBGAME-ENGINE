@@ -174,10 +174,10 @@ export async function investigationBrowser(browser, origin) {
     const a = await source.boundingBox();
     assert(a);
     await page.mouse.down();
-    await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2, {
+    await page.mouse.move(a.x + a.width + 1, a.y + a.height / 2, {
       steps: 3,
     });
-    await page.locator(".react-flow__connection").waitFor();
+    await page.locator(".react-flow__connection").waitFor({ timeout: 5000 });
     await target.hover();
     await page.mouse.up();
     await page.getByLabel("新分支文案", { exact: true }).fill("图上新增的连接");
