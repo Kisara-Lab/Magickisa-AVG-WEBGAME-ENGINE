@@ -91,6 +91,8 @@ test("preferences isolate projects, migrate music label and clamp values; text s
   );
   assert.equal(readPreferences(storage, "one").fontSize, 40);
   assert.equal(readPreferences(storage, "one").autoDelay, 1);
+  assert.equal(readPreferences(storage, "two").wheel, true);
+  storage.setItem(preferenceKey("two"), JSON.stringify({ wheel: false }));
   assert.equal(readPreferences(storage, "two").wheel, false);
   assert.deepEqual(graphemes("中👨‍👩‍👧‍👦e\u0301𠮷"), ["中", "👨‍👩‍👧‍👦", "e\u0301", "𠮷"]);
 });

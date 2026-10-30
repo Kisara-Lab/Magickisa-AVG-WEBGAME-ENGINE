@@ -153,6 +153,90 @@ export async function playerBrowser(browser, origin) {
       .locator(".dialogue-text")
       .getByText("黄昏时分", { exact: false })
       .waitFor();
+    // Wheel gestures survive React updates, and up opens history without rollback.
+    const wheelStart = await snapshot();
+    const wheel = (deltaY, extra = {}) =>
+      page.locator(".dialogue-text").evaluate(
+        (el, args) =>
+          el.dispatchEvent(
+            new WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              deltaY: args.deltaY,
+              ...args.extra,
+            }),
+          ),
+        { deltaY, extra },
+      );
+    await wheel(80);
+    await page.waitForFunction(
+      () => window.__MAGICKISA_ENGINE__.save.lineIndex === 1,
+    );
+    await wheel(80);
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "momentum cannot skip another line after render",
+    );
+    await wheel(-80);
+    await page.getByRole("dialog").waitFor();
+    await wheel(80);
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "history does not advance or rewind the story",
+    );
+    await close();
+    await wheel(80, { ctrlKey: true });
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "browser zoom is not story input",
+    );
+    await menu("阅读与演出设置");
+    const wheelSetting = page.getByRole("checkbox", {
+      name: "启用滚轮推进／上滚查看历史",
+    });
+    assert.equal(await wheelSetting.isChecked(), true);
+    await wheelSetting.uncheck();
+    await close();
+    await wheel(80);
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "disabled wheel preference is respected",
+    );
+    await menu("阅读与演出设置");
+    await wheelSetting.check();
+    await close();
+    await page.locator(".dialogue-box").evaluate((box) => {
+      box.style.height = "100px";
+      box.style.overflowY = "auto";
+      const filler = document.createElement("div");
+      filler.id = "wheel-scroll-fixture";
+      filler.style.height = "2000px";
+      box.append(filler);
+      box.scrollTop = 100;
+    });
+    await wheel(80);
+    assert.equal(
+      (await snapshot()).lineIndex,
+      1,
+      "scrollable text keeps native scrolling",
+    );
+    await page.locator(".dialogue-box").evaluate((box) => {
+      box.removeAttribute("style");
+      box.querySelector("#wheel-scroll-fixture").remove();
+    });
+    await page.waitForTimeout(280); // A new gesture after the quiet-period boundary.
+    for (let i = 0; i < 5; i++) await wheel(4);
+    await page.waitForFunction(
+      () => window.__MAGICKISA_ENGINE__.save.lineIndex === 2,
+    );
+    await page.evaluate(
+      (state) => window.__MAGICKISA_ENGINE__.restore(state),
+      wheelStart,
+    );
     await menu("证据 · 未读");
     assert.deepEqual((await snapshot()).readMaterials, []);
     assert.equal(
